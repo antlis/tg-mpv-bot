@@ -13,10 +13,11 @@ services:
     build: .
     env_file: .env
     environment:
-      MPVCTL_PATH: /app/mpvctl.sh
       DISPLAY: ":0"
       HOME: /home/lad
       I3SOCK: /run/user/1000/i3/ipc-socket.2012
+      MPV_SOCKET: /tmp/mpv-socket
+      MPV_RUNNER: /tmp/mpv-runner.sh
     volumes:
       # X11 display socket — required for mpv windows
       - /tmp/.X11-unix:/tmp/.X11-unix:rw

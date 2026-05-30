@@ -6,11 +6,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/lad/Projects/tg-mpv-bot
-ExecStart=/usr/bin/python3 bot.py
+ExecStart=/home/lad/Projects/tg-mpv-bot/venv/bin/python3 bot.py
 Restart=on-failure
 RestartSec=5
-EnvironmentFile=%S/environment.d/99-tg-mpv-bot.conf
-# X11 + i3 access for mpv window management
+EnvironmentFile=/home/lad/.config/environment.d/99-tg-mpv-bot.conf
 Environment=DISPLAY=:0
 Environment=I3SOCK=/run/user/1000/i3/ipc-socket.2012
 

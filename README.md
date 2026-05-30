@@ -1,27 +1,32 @@
 # tg-mpv-bot 🎬
 
-Standalone Telegram bot for mpv media control — play, pause, list, seek, volume
-control via Telegram commands. Zero AI token cost (pure subprocess dispatch).
+Standalone Telegram bot for mpv media control — play, pause, browse, seek,
+volume control via Telegram commands. Zero AI token cost (pure IPC dispatch).
 
 Extracted from the Lain bot (Hermes) into its own dedicated bot for independent
-operation. Same `mpvctl.sh` under the hood.
+operation. The bot talks to mpv's JSON IPC socket directly from Python.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
+| `/mpv_list` | Browse playlists with inline buttons (by category) |
+| `/mpv_play <query>` | Search & play by name or number |
+| `/mpv <query>` | Alias for `/mpv_play` |
+| `/mpv_info` | Show current playback status |
 | `/mpv_pause` | Pause playback |
 | `/mpv_unpause` | Resume playback |
 | `/mpv_quit` | Stop mpv and quit |
+| `/mpv_fwd` | Seek forward 30s |
+| `/mpv_back` | Seek backward 10s |
+| `/mpv_next` | Next item in playlist |
+| `/mpv_prev` | Previous item in playlist |
+| `/mpv_sub` | Switch to the next subtitle track |
+| `/mpv_sub_toggle` | Show / hide subtitles |
 | `/mpv_volup` | Volume +10 |
 | `/mpv_voldown` | Volume -10 |
 | `/mpv_mute` | Toggle mute |
-| `/mpv_list` | List playlists (cartoons, movie, shows) |
-| `/mpv_info` | Show current playback status |
-| `/mpv_fwd` | Seek forward 30s |
-| `/mpv_back` | Seek backward 10s |
-| `/mpv_play <query>` | Search & play by name or number |
-| `/mpv <query>` | Alias for `/mpv_play` |
+| `/mpv_doctor` | Report playlists with missing files on disk |
 | `/help` | Show this help |
 
 ## Quick Start
@@ -40,14 +45,25 @@ pip install -r requirements.txt
 python bot.py
 ```
 
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
 ## Files
 
 | Path | Purpose |
 |------|---------|
-| `bot.py` | Entry point — aiogram polling bot |
-| `src/config.py` | Settings dataclass from env |
-| `src/commands.py` | Telegram command handlers → `mpvctl.sh` |
-| `mpvctl.sh` | Zero-token mpv control via IPC socket |
+| `bot.py` | Entry point — aiogram polling bot + auth middleware |
+| `src/config.py` | Settings from env (single source of host paths) |
+| `src/commands.py` | Telegram command + callback handlers |
+| `src/mpv_ipc.py` | Direct JSON-IPC client for mpv (pause/seek/volume/info) |
+| `src/playlists.py` | Playlist discovery, query matching, on-disk validation |
+| `src/player.py` | Launch mpv (pkill + i3 workspace + detached spawn) |
+| `src/keyboards.py` | Inline-keyboard builders for browsing |
+| `mpvctl.sh` | Standalone shell controller (Hermes/CLI use; not used by the bot) |
 | `docker-compose.yml` | Docker deployment (host networking + X11 bind) |
 | `Dockerfile` | Container build (Python 3.12 + mpv) |
 | `scripts/tg-mpvctl.sh` | Hermes control script (start/stop/status) |
@@ -103,10 +119,15 @@ Leave empty to allow everyone.
 ## Architecture
 
 ```
-Telegram ──▶ tg-mpv-bot (polling) ──▶ mpvctl.sh ──▶ mpv IPC (/tmp/mpv-socket)
-                                  │                    └── X11 window
-                                  └── i3-msg workspace 10
+                          ┌─ src/mpv_ipc  ──▶ mpv JSON IPC (/tmp/mpv-socket)   pause/seek/vol/info
+Telegram ─▶ bot.py ─▶ src/commands ─┤
+            (polling)   (+ auth mw)  ├─ src/playlists ──▶ scan ~/Videos/*/playlists/*.m3u
+                                     └─ src/player   ──▶ pkill mpv · i3 workspace 10 · spawn mpv ─▶ X11
 ```
 
-All heavy lifting is in `mpvctl.sh` — the bot is a thin aiogram wrapper.
-For detailed mpvctl.sh reference, see `~/.hermes/skills/productivity/mpv-playlist-controller/`.
+Playback/volume/info commands write straight to mpv's IPC socket from Python.
+Only launching a playlist (`/mpv_play`, tapping a button) spawns a process.
+`src/keyboards` renders the category/paginated browse UI for `/mpv_list`.
+
+`mpvctl.sh` remains as a standalone shell controller for Hermes/CLI use but is
+no longer invoked by the bot.

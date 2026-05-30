@@ -186,7 +186,7 @@ case "$CMD" in
         # (asyncio subprocess, systemd, tmux). nohup+disown can fail when there's
         # no TTY to detach from, causing SIGTERM on script exit.
         # Kill old mpv, switch workspace, then launch via setsid.
-        pkill mpv 2>/dev/null || true
+        pkill -x mpv 2>/dev/null || true
         sleep 0.3
         if [ -e "$I3_SOCKET" ]; then
             I3SOCK="$I3_SOCKET" i3-msg workspace 10 >/dev/null 2>&1 || true
