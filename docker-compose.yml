@@ -1,0 +1,34 @@
+# tg-mpv-bot — standalone Telegram bot for mpv media control
+#
+# Two deployment options:
+#
+# Option A: Docker (recommended)  →  docker compose up -d --build
+# Option B: systemd user service  →  ln -s $PWD/tg-mpv-bot.service ~/.config/systemd/user/
+#
+# The bot needs host X11 display and i3 socket to control mpv windows.
+# Docker uses host networking + bind mounts for this.
+
+services:
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      MPVCTL_PATH: /app/mpvctl.sh
+      DISPLAY: ":0"
+      HOME: /home/lad
+      I3SOCK: /run/user/1000/i3/ipc-socket.2012
+    volumes:
+      # X11 display socket — required for mpv windows
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # mpv IPC socket — shared with host mpv instances
+      - /tmp/mpv-socket:/tmp/mpv-socket:rw
+      # i3 IPC socket — workspace switching to media workspace 10
+      - /run/user/1000/i3:/run/user/1000/i3:rw
+      # Video directories with playlists
+      - ~/Videos/cartoons/playlists:/home/lad/Videos/cartoons/playlists:ro
+      - ~/Videos/movie/playlists:/home/lad/Videos/movie/playlists:ro
+      - ~/Videos/shows/playlists:/home/lad/Videos/shows/playlists:ro
+      # mpv-runner.sh wrapper (recreated on reboot by mpvctl.sh)
+      - /tmp/mpv-runner.sh:/tmp/mpv-runner.sh:rw
+    network_mode: host
+    restart: unless-stopped
