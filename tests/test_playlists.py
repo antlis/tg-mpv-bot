@@ -44,6 +44,24 @@ def test_discover_skips_missing_dirs(tmp_path):
     assert playlists.discover([tmp_path / "nope"]) == []
 
 
+def test_discover_nested_subcategories(tmp_path):
+    pld = tmp_path / "tutorials" / "playlists"
+    pld.mkdir(parents=True)
+    # flat playlist directly in the playlists dir → no subcategory
+    (pld / "direct.m3u").write_text("/x.mkv\n")
+    # nested under a provider folder → subcategory = provider
+    (pld / "frontend-masters").mkdir()
+    (pld / "frontend-masters" / "Course A.m3u").write_text("/a.mkv\n")
+    (pld / "frontend-masters" / "Course B.m3u").write_text("/b.mkv\n")
+
+    pls = playlists.discover([pld])
+    assert all(p.category == "tutorials" for p in pls)
+    by_name = {p.name: p for p in pls}
+    assert by_name["direct"].subcategory is None
+    assert by_name["Course A"].subcategory == "frontend-masters"
+    assert by_name["Course B"].subcategory == "frontend-masters"
+
+
 def test_find_by_index(library):
     _, dirs = library
     pls = playlists.discover(dirs)

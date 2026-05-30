@@ -20,7 +20,13 @@ from aiogram.types import CallbackQuery, Message
 
 from . import player, playlists
 from .config import Settings, get_settings
-from .keyboards import categories_keyboard, category_keyboard
+from . import keyboards
+from .keyboards import (
+    categories_keyboard,
+    has_subcategories,
+    playlists_keyboard,
+    subcategories_keyboard,
+)
 from .mpv_ipc import MpvClient, MpvError, MpvNotRunning
 
 logger = logging.getLogger(__name__)
@@ -223,17 +229,52 @@ async def cb_categories(query: CallbackQuery) -> None:
     await query.answer()
 
 
-@router.callback_query(F.data.startswith("cat:"))
+@router.callback_query(F.data.startswith("c:"))
 async def cb_category(query: CallbackQuery) -> None:
-    # cat:<category>:<page>  — category may itself contain ':' is avoided as
-    # categories are dir names; split from the right for the page number.
-    body = query.data[len("cat:"):]
-    category, _, page_s = body.rpartition(":")
-    page = int(page_s) if page_s.isdigit() else 0
+    # c:<ci>  → subcat menu (if any) or playlist page 0
+    # c:<ci>:<page>  → flat-category playlist page
+    parts = query.data.split(":")
     pls = await asyncio.to_thread(_all_playlists)
+    cats = keyboards.categories(pls)
+    ci = int(parts[1])
+    if not (0 <= ci < len(cats)):
+        await query.answer("Category no longer available", show_alert=True)
+        return
+    cat = cats[ci]
+    if len(parts) == 2 and has_subcategories(pls, cat):
+        await query.message.edit_text(
+            f"{cat} — pick a section:",
+            reply_markup=subcategories_keyboard(pls, ci),
+        )
+    else:
+        page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+        await query.message.edit_text(
+            f"{cat} — tap to play:",
+            reply_markup=playlists_keyboard(pls, ci, None, page),
+        )
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith("s:"))
+async def cb_subcategory(query: CallbackQuery) -> None:
+    # s:<ci>:<si>[:<page>]
+    parts = query.data.split(":")
+    pls = await asyncio.to_thread(_all_playlists)
+    cats = keyboards.categories(pls)
+    ci = int(parts[1])
+    if not (0 <= ci < len(cats)):
+        await query.answer("Section no longer available", show_alert=True)
+        return
+    cat = cats[ci]
+    subs = keyboards.subcategories(pls, cat)
+    si = int(parts[2])
+    if not (0 <= si < len(subs)):
+        await query.answer("Section no longer available", show_alert=True)
+        return
+    page = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
     await query.message.edit_text(
-        f"{category} — tap to play:",
-        reply_markup=category_keyboard(pls, category, page),
+        f"{cat} / {subs[si]} — tap to play:",
+        reply_markup=playlists_keyboard(pls, ci, si, page),
     )
     await query.answer()
 

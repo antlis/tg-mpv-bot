@@ -13,7 +13,8 @@ from pathlib import Path
 
 def _default_playlist_dirs() -> list[Path]:
     videos = Path(os.environ.get("VIDEOS_DIR", str(Path.home() / "Videos")))
-    return [videos / cat / "playlists" for cat in ("cartoons", "movie", "shows")]
+    cats = ("cartoons", "movie", "shows", "tutorials")
+    return [videos / cat / "playlists" for cat in cats]
 
 
 @dataclass(frozen=True)

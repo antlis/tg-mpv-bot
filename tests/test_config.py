@@ -65,4 +65,5 @@ def test_default_playlist_dirs_shape(monkeypatch):
         Path("/media/vids/cartoons/playlists"),
         Path("/media/vids/movie/playlists"),
         Path("/media/vids/shows/playlists"),
+        Path("/media/vids/tutorials/playlists"),
     ]

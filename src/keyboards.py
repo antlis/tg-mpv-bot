@@ -1,15 +1,29 @@
 """Inline-keyboard builders for browsing playlists.
 
-A flat numbered list of 100+ playlists overflows Telegram's message limit and
-the numbers shift whenever a playlist is added. Instead we browse by category,
-then a paginated list of tappable playlist buttons. The pagination/grouping
-maths is kept as pure functions so it can be unit-tested without aiogram.
+A flat numbered list of 100s of playlists overflows Telegram's message limit
+and the numbers shift whenever a playlist is added. Instead we browse a
+hierarchy:
 
-Callback data grammar (must stay ≤64 bytes):
-    cats                 → show category menu
-    cat:<category>:<pg>  → page <pg> of <category>
+    category  →  (subcategory)  →  paginated playlist buttons
+
+Categories with no subcategories (cartoons/movie/shows) jump straight to the
+paginated playlist list. Categories that do have them (tutorials → provider)
+show a subcategory menu first. The grouping/pagination maths is kept as pure,
+unit-testable functions.
+
+Callback data grammar — index-based so it stays short and free of delimiter
+clashes (≤64 bytes):
+    cats                 → category menu
+    c:<ci>               → category #ci tapped (→ subcat menu OR playlist page 0)
+    c:<ci>:<pg>          → page <pg> of a flat category
+    s:<ci>:<si>          → subcategory #si of category #ci (→ playlist page 0)
+    s:<ci>:<si>:<pg>     → page <pg> of that subcategory
     pl:<global_index>    → play playlist at that index in the full sorted list
-    noop                 → inert (page counter button)
+    cats / noop          → back to categories / inert (page counter)
+
+``ci`` / ``si`` index the case-insensitively sorted category / subcategory
+lists, which are deterministic for a fixed library (same stability contract as
+the global ``pl:`` index).
 """
 
 from __future__ import annotations
@@ -20,20 +34,39 @@ from .playlists import Playlist
 
 PER_PAGE = 8
 
-CATEGORY_EMOJI = {"cartoons": "🎨", "movie": "🎬", "shows": "📺"}
+CATEGORY_EMOJI = {
+    "cartoons": "🎨",
+    "movie": "🎬",
+    "shows": "📺",
+    "tutorials": "🎓",
+}
 
 
-def category_counts(playlists: list[Playlist]) -> list[tuple[str, int]]:
-    """Distinct categories with their playlist counts, in first-seen order."""
-    counts: dict[str, int] = {}
-    for pl in playlists:
-        counts[pl.category] = counts.get(pl.category, 0) + 1
-    return list(counts.items())
+# ── pure grouping / pagination helpers ───────────────────────────────
+def categories(playlists: list[Playlist]) -> list[str]:
+    """Distinct categories, case-insensitively sorted."""
+    return sorted({p.category for p in playlists}, key=str.lower)
 
 
-def indices_for_category(playlists: list[Playlist], category: str) -> list[int]:
-    """Global indices (into ``playlists``) belonging to ``category``."""
-    return [i for i, pl in enumerate(playlists) if pl.category == category]
+def subcategories(playlists: list[Playlist], category: str) -> list[str]:
+    """Distinct subcategories within ``category``, case-insensitively sorted."""
+    subs = {p.subcategory for p in playlists if p.category == category and p.subcategory}
+    return sorted(subs, key=str.lower)
+
+
+def has_subcategories(playlists: list[Playlist], category: str) -> bool:
+    return bool(subcategories(playlists, category))
+
+
+def indices_for(
+    playlists: list[Playlist], category: str, subcategory: str | None
+) -> list[int]:
+    """Global indices of playlists in (category, subcategory)."""
+    return [
+        i
+        for i, p in enumerate(playlists)
+        if p.category == category and p.subcategory == subcategory
+    ]
 
 
 def page_count(n_items: int, per_page: int = PER_PAGE) -> int:
@@ -50,50 +83,62 @@ def page_slice(items: list[int], page: int, per_page: int = PER_PAGE) -> list[in
     return items[start:start + per_page]
 
 
+# ── keyboards ────────────────────────────────────────────────────────
 def categories_keyboard(playlists: list[Playlist]) -> InlineKeyboardMarkup:
     rows = []
-    for category, count in category_counts(playlists):
-        emoji = CATEGORY_EMOJI.get(category, "📁")
-        rows.append([
-            InlineKeyboardButton(
-                text=f"{emoji} {category} ({count})",
-                callback_data=f"cat:{category}:0",
-            )
-        ])
+    for ci, cat in enumerate(categories(playlists)):
+        count = sum(1 for p in playlists if p.category == cat)
+        emoji = CATEGORY_EMOJI.get(cat, "📁")
+        rows.append(
+            [InlineKeyboardButton(text=f"{emoji} {cat} ({count})", callback_data=f"c:{ci}")]
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def category_keyboard(
-    playlists: list[Playlist], category: str, page: int
+def subcategories_keyboard(playlists: list[Playlist], ci: int) -> InlineKeyboardMarkup:
+    cat = categories(playlists)[ci]
+    rows = []
+    for si, sub in enumerate(subcategories(playlists, cat)):
+        count = len(indices_for(playlists, cat, sub))
+        rows.append(
+            [InlineKeyboardButton(text=f"{sub} ({count})", callback_data=f"s:{ci}:{si}")]
+        )
+    rows.append([InlineKeyboardButton(text="⬅ Categories", callback_data="cats")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def playlists_keyboard(
+    playlists: list[Playlist], ci: int, si: int | None, page: int
 ) -> InlineKeyboardMarkup:
-    indices = indices_for_category(playlists, category)
+    cat = categories(playlists)[ci]
+    if si is None:
+        indices = indices_for(playlists, cat, None)
+        nav_prefix = f"c:{ci}"
+        back = [InlineKeyboardButton(text="⬅ Categories", callback_data="cats")]
+    else:
+        sub = subcategories(playlists, cat)[si]
+        indices = indices_for(playlists, cat, sub)
+        nav_prefix = f"s:{ci}:{si}"
+        back = [InlineKeyboardButton(text="⬅ Back", callback_data=f"c:{ci}")]
+
     page = clamp_page(page, len(indices))
     rows = [
         [InlineKeyboardButton(text=playlists[i].name, callback_data=f"pl:{i}")]
         for i in page_slice(indices, page)
     ]
 
-    total_pages = page_count(len(indices))
-    nav: list[InlineKeyboardButton] = []
-    if total_pages > 1:
-        nav.append(
+    total = page_count(len(indices))
+    if total > 1:
+        rows.append([
             InlineKeyboardButton(
                 text="◀" if page > 0 else "·",
-                callback_data=f"cat:{category}:{page - 1}" if page > 0 else "noop",
-            )
-        )
-        nav.append(
-            InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop")
-        )
-        nav.append(
+                callback_data=f"{nav_prefix}:{page - 1}" if page > 0 else "noop",
+            ),
+            InlineKeyboardButton(text=f"{page + 1}/{total}", callback_data="noop"),
             InlineKeyboardButton(
-                text="▶" if page < total_pages - 1 else "·",
-                callback_data=f"cat:{category}:{page + 1}"
-                if page < total_pages - 1
-                else "noop",
-            )
-        )
-    if nav:
-        rows.append(nav)
-    rows.append([InlineKeyboardButton(text="⬅ Categories", callback_data="cats")])
+                text="▶" if page < total - 1 else "·",
+                callback_data=f"{nav_prefix}:{page + 1}" if page < total - 1 else "noop",
+            ),
+        ])
+    rows.append(back)
     return InlineKeyboardMarkup(inline_keyboard=rows)

@@ -127,7 +127,10 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 
 Playback/volume/info commands write straight to mpv's IPC socket from Python.
 Only launching a playlist (`/mpv_play`, tapping a button) spawns a process.
-`src/keyboards` renders the category/paginated browse UI for `/mpv_list`.
+`src/keyboards` renders the browse UI for `/mpv_list`: **category → (subcategory)
+→ playlist**. Categories come from the top-level media dirs (cartoons / movie /
+shows / tutorials); a playlists dir may nest one level of folders, which become
+subcategories (tutorials are grouped by provider, e.g. `frontend-masters`).
 
 `mpvctl.sh` remains as a standalone shell controller for Hermes/CLI use but is
 no longer invoked by the bot.

@@ -52,18 +52,23 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   writes one JSON line, and reads newline-delimited replies **skipping async `event` lines** until the
   one matching `request_id`. Raises `MpvNotRunning` (socket dead) / `MpvError` (mpv said not-success).
   `adjust_volume` clamps to 0–130. Pure I/O with an injectable path → testable against a fake server.
-- `src/playlists.py` — `discover()` (case-insensitive **stable** sort so 1-based indices stay valid
-  between a `/mpv_list` render and a later `/mpv_play <n>`), `find()` (numeric index OR case-insensitive
-  substring), and `validate()`/`missing_entries()` (the on-disk checker behind `/mpv_doctor`; resolves
-  relative entries against the playlist's own dir, treats URLs as always-present).
+- `src/playlists.py` — `discover()` (case-insensitive **stable** sort so global indices stay valid
+  between a `/mpv_list` render and a later `/mpv_play <n>`; scans `*.m3u` directly in a playlists dir
+  **and one level of nested folders**, whose name becomes the playlist's `subcategory`), `find()`
+  (numeric index OR case-insensitive substring), and `validate()`/`missing_entries()` (the on-disk
+  checker behind `/mpv_doctor`; resolves relative entries against the playlist's own dir, treats URLs
+  as always-present).
 - `src/player.py` — the only part that spawns a process. `build_launch_command()` is a pure helper
   (used `MPV_RUNNER` if it exists, else falls back to plain `mpv`). `play()` does `pkill -x mpv`,
   optional i3 workspace switch (skipped if `I3SOCK` unset/missing or `i3-msg` absent), then a detached
   `Popen(..., start_new_session=True)` — the Python-native equivalent of the old `setsid` detachment
   for non-TTY contexts (asyncio/systemd).
-- `src/keyboards.py` — inline-keyboard builders for `/mpv_list`: category menu → paginated playlist
-  buttons (`PER_PAGE=8`). Pure pagination helpers (`page_count`/`clamp_page`/`page_slice`) are unit-
-  tested. Callback grammar: `cats`, `cat:<category>:<page>`, `pl:<global_index>`, `noop`.
+- `src/keyboards.py` — inline-keyboard builders for `/mpv_list`: **category → (subcategory) →
+  paginated playlist buttons** (`PER_PAGE=8`). Flat categories (no subcategories) jump straight to the
+  playlist list; categories with subcategories (tutorials → provider) show a subcategory menu first.
+  Pure helpers (`categories`/`subcategories`/`indices_for`/`page_*`) are unit-tested. **Index-based**
+  callback grammar (stable for a fixed library): `cats`, `c:<ci>[:<page>]`, `s:<ci>:<si>[:<page>]`,
+  `pl:<global_index>`, `noop`.
 - `src/commands.py` — handlers push blocking IPC/subprocess work to `asyncio.to_thread`. `_ipc()`
   centralizes error→message translation. Play buttons carry the **global** playlist index.
 

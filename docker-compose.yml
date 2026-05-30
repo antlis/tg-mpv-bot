@@ -29,6 +29,7 @@ services:
       - ~/Videos/cartoons/playlists:/home/lad/Videos/cartoons/playlists:ro
       - ~/Videos/movie/playlists:/home/lad/Videos/movie/playlists:ro
       - ~/Videos/shows/playlists:/home/lad/Videos/shows/playlists:ro
+      - ~/Videos/tutorials/playlists:/home/lad/Videos/tutorials/playlists:ro
       # mpv-runner.sh wrapper (recreated on reboot by mpvctl.sh)
       - /tmp/mpv-runner.sh:/tmp/mpv-runner.sh:rw
     network_mode: host

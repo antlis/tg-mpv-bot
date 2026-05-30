@@ -16,20 +16,26 @@ VIDEO_SUFFIXES = {".mkv", ".mp4", ".avi", ".webm", ".m4v", ".mov", ".flv", ".mpg
 
 @dataclass(frozen=True)
 class Playlist:
-    name: str        # filename without .m3u
-    category: str    # parent-of-playlists dir name, e.g. "cartoons"
+    name: str                      # filename without .m3u
+    category: str                  # parent-of-playlists dir name, e.g. "cartoons"
     path: Path
+    subcategory: str | None = None  # nested folder under the playlists dir, e.g. provider
 
     @property
     def label(self) -> str:
+        if self.subcategory:
+            return f"{self.category}/{self.subcategory}/{self.name}"
         return f"{self.category}/{self.name}"
 
 
 def discover(dirs: list[Path]) -> list[Playlist]:
     """Return all ``*.m3u`` playlists across ``dirs``, sorted by name.
 
-    Sort is case-insensitive and stable, so 1-based indices stay consistent
-    between a ``/mpv_list`` render and a later ``/mpv_play <n>``.
+    ``*.m3u`` directly in a playlists dir have no subcategory. One level of
+    nesting is supported: ``<playlists>/<sub>/*.m3u`` gets ``subcategory=<sub>``
+    (used to group e.g. tutorials by provider). Sort is case-insensitive and
+    stable, so global indices stay consistent between a ``/mpv_list`` render and
+    a later ``/mpv_play <n>``.
     """
     found: list[Playlist] = []
     for d in dirs:
@@ -40,6 +46,18 @@ def discover(dirs: list[Path]) -> list[Playlist]:
         for f in d.glob("*.m3u"):
             if f.is_file():
                 found.append(Playlist(name=f.stem, category=category, path=f))
+        for sub in d.iterdir():
+            if sub.is_dir():
+                for f in sub.glob("*.m3u"):
+                    if f.is_file():
+                        found.append(
+                            Playlist(
+                                name=f.stem,
+                                category=category,
+                                path=f,
+                                subcategory=sub.name,
+                            )
+                        )
     found.sort(key=lambda p: p.name.lower())
     return found
 
