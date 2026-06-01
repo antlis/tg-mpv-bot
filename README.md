@@ -14,6 +14,7 @@ operation. The bot talks to mpv's JSON IPC socket directly from Python.
 | `/mpv_play <query>` | Search & play by name or number |
 | `/mpv <query>` | Alias for `/mpv_play` |
 | `/mpv_info` | Show current playback status |
+| `/mpv_toggle` | Play/pause toggle (one command) |
 | `/mpv_pause` | Pause playback |
 | `/mpv_unpause` | Resume playback |
 | `/mpv_quit` | Stop mpv and quit |

@@ -78,6 +78,12 @@ async def cmd_unpause(message: Message) -> None:
     await _do(message, lambda c: c.set_pause(False), "▶ Resumed")
 
 
+@router.message(Command("mpv_toggle", "mpv_playpause"))
+async def cmd_toggle(message: Message) -> None:
+    paused, err = await _ipc(lambda c: c.toggle_pause())
+    await message.reply(err or ("⏸ Paused" if paused else "▶ Resumed"))
+
+
 @router.message(Command("mpv_quit", "mpv_stop"))
 async def cmd_quit(message: Message) -> None:
     await _do(message, lambda c: c.quit(), "⏹ Stopped")
@@ -368,6 +374,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_list</b> — browse playlists with buttons\n"
         "<b>/mpv_play</b> &lt;query&gt; — play by number or name\n"
         "<b>/mpv_info</b> — now playing\n"
+        "<b>/mpv_toggle</b> — play/pause (one tap)\n"
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s\n"
         "<b>/mpv_next</b> · <b>/mpv_prev</b>\n"

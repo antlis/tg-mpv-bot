@@ -93,6 +93,11 @@ class MpvClient:
     def set_pause(self, paused: bool) -> None:
         self.set_property("pause", paused)
 
+    def toggle_pause(self) -> bool:
+        """Flip pause state; returns the new value (True = now paused)."""
+        self.command("cycle", "pause")
+        return bool(self.get_property("pause"))
+
     def cycle_mute(self) -> None:
         self.command("cycle", "mute")
 

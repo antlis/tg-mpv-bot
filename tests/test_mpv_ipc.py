@@ -64,9 +64,11 @@ class FakeMpv:
             self.props[cmd[1]] = cmd[2]
             return {"error": "success", "request_id": rid}
         if name == "cycle":
-            # emulate `cycle sub` advancing the subtitle track id
-            if cmd[1:2] == ["sub"]:
+            prop = cmd[1] if len(cmd) > 1 else None
+            if prop == "sub":  # advance the subtitle track id
                 self.props["sid"] = (self.props.get("sid") or 0) + 1
+            elif prop == "pause":  # flip the boolean
+                self.props["pause"] = not self.props.get("pause", False)
             return {"error": "success", "request_id": rid}
         if name in ("seek", "quit", "playlist-next", "playlist-prev"):
             return {"error": "success", "request_id": rid}
@@ -106,6 +108,13 @@ def test_set_property_roundtrip(fake_mpv):
     client = MpvClient(fake_mpv.path)
     client.set_pause(True)
     assert client.get_property("pause") is True
+
+
+def test_toggle_pause_flips_and_returns_state(fake_mpv):
+    client = MpvClient(fake_mpv.path)
+    fake_mpv.props["pause"] = False
+    assert client.toggle_pause() is True   # now paused
+    assert client.toggle_pause() is False  # now playing
 
 
 def test_property_unavailable_raises(fake_mpv):
