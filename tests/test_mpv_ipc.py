@@ -20,7 +20,7 @@ class FakeMpv:
         self.emit_event = emit_event
         self.props = {
             "volume": 50.0, "pause": False, "media-title": "Test Clip",
-            "loop-playlist": "no", "playlist-pos": 0,
+            "loop-playlist": "no", "playlist-pos": 0, "mute": False,
         }
         self._srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._srv.bind(path)
@@ -70,8 +70,8 @@ class FakeMpv:
             prop = cmd[1] if len(cmd) > 1 else None
             if prop == "sub":  # advance the subtitle track id
                 self.props["sid"] = (self.props.get("sid") or 0) + 1
-            elif prop == "pause":  # flip the boolean
-                self.props["pause"] = not self.props.get("pause", False)
+            elif prop in ("pause", "mute"):  # flip the boolean
+                self.props[prop] = not self.props.get(prop, False)
             return {"error": "success", "request_id": rid}
         if name in ("seek", "quit", "playlist-next", "playlist-prev", "playlist-shuffle"):
             return {"error": "success", "request_id": rid}
@@ -175,6 +175,26 @@ def test_set_playlist_pos(fake_mpv):
     client = MpvClient(fake_mpv.path)
     client.set_playlist_pos(4)
     assert fake_mpv.props["playlist-pos"] == 4
+
+
+def test_actions_emit_osd(fake_mpv, monkeypatch):
+    # each user-facing action should push an OSD message to mpv (show-text /
+    # show-progress) so there's visual feedback on the video itself.
+    seen: list = []
+    orig = fake_mpv._handle
+
+    def spy(req):
+        seen.append(req.get("command", [])[:1])
+        return orig(req)
+
+    monkeypatch.setattr(fake_mpv, "_handle", spy)
+    client = MpvClient(fake_mpv.path)
+    client.set_pause(True)
+    client.adjust_volume(10)
+    client.seek(30)
+    cmds = [c[0] for c in seen if c]
+    assert "show-text" in cmds      # pause/volume feedback
+    assert "show-progress" in cmds  # seek feedback
 
 
 def test_cycle_sub_advances_track(fake_mpv):
