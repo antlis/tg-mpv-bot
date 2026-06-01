@@ -12,6 +12,8 @@ RestartSec=5
 EnvironmentFile=/home/lad/.config/environment.d/99-tg-mpv-bot.conf
 Environment=DISPLAY=:0
 Environment=I3SOCK=/run/user/1000/i3/ipc-socket.2012
+# The user manager's inherited PATH can be minimal; ensure the std bin dirs are present.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=default.target
