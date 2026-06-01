@@ -110,8 +110,9 @@ def test_subcategories_keyboard():
     assert "s:0:0" in datas and "s:0:1" in datas
     assert "cats" in datas  # back to categories
     texts = [b.text for row in kb.inline_keyboard for b in row]
-    assert any("python (2)" in t for t in texts)
-    assert any("wesbos (3)" in t for t in texts)
+    # subcategory labels are prettified for display
+    assert any("Python (2)" in t for t in texts)
+    assert any("Wesbos (3)" in t for t in texts)
 
 
 def test_subcategory_playlists_use_global_index_and_back():

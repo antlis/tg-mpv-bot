@@ -44,6 +44,41 @@ def test_discover_skips_missing_dirs(tmp_path):
     assert playlists.discover([tmp_path / "nope"]) == []
 
 
+import pytest as _pytest
+
+
+@_pytest.mark.parametrize("raw,expected", [
+    ("28 Years Later (2025) [2160p] [4K] [WEB] [5.1] [YTS.MX]", "28 Years Later (2025)"),
+    ("Clerks III (2022) [1080p] [WEBRip] [5.1] [YTS.MX]", "Clerks III (2022)"),
+    ("Heavy.Metal.1981.1080p.BluRay.DDP5.1.x265.10bit-GalaxyRG265[TGx]", "Heavy Metal 1981"),
+    ("The.Many.Saints.of.Newark.2021.1080p.HMAX.WEBRip.DDP5.1.Atmos.x264-CM",
+     "The Many Saints of Newark 2021"),
+    ("American Psyco (2000) 1080p", "American Psyco (2000)"),
+    ("[CourseClub.NET] FrontendMasters - Responsive Web Typography v2",
+     "FrontendMasters - Responsive Web Typography v2"),
+    ("fight-club", "Fight Club"),
+    ("the-big-lebowski", "The Big Lebowski"),
+    ("28-days-later", "28 Days Later"),
+])
+def test_prettify(raw, expected):
+    assert playlists.prettify(raw) == expected
+
+
+def test_prettify_keeps_plain_titles():
+    # nothing junky → returned essentially unchanged
+    assert playlists.prettify("Laracasts - Testing Vue") == "Laracasts - Testing Vue"
+
+
+def test_prettify_never_empty():
+    assert playlists.prettify("1080p") == "1080p"  # would-be-empty falls back to raw
+
+
+def test_display_property_uses_prettify(tmp_path):
+    p = playlists.Playlist(name="fight-club", category="movie", path=tmp_path / "x.m3u")
+    assert p.display == "Fight Club"
+    assert p.name == "fight-club"  # raw name untouched (matching/callbacks rely on it)
+
+
 def test_discover_nested_subcategories(tmp_path):
     pld = tmp_path / "tutorials" / "playlists"
     pld.mkdir(parents=True)

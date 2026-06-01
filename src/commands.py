@@ -293,7 +293,7 @@ async def cb_subcategory(query: CallbackQuery) -> None:
         return
     page = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
     await query.message.edit_text(
-        f"{cat} / {subs[si]} — tap to play:",
+        f"{cat} / {keyboards.prettify(subs[si])} — tap to play:",
         reply_markup=playlists_keyboard(pls, ci, si, page),
     )
     await query.answer()
@@ -308,8 +308,8 @@ async def cb_play(query: CallbackQuery) -> None:
         return
     pl = pls[idx]
     await asyncio.to_thread(player.play, get_settings(), pl.path)
-    await query.answer(f"▶ {pl.name}")
-    await query.message.reply(f"▶ Playing: {pl.name}")
+    await query.answer(f"▶ {pl.display}")
+    await query.message.reply(f"▶ Playing: {pl.display}")
 
 
 @router.message(Command("mpv_play", "mpv"))
@@ -329,7 +329,7 @@ async def cmd_play(message: Message, command: CommandObject) -> None:
         await message.reply(f"❌ No playlist matching '{query}'. Try /mpv_list")
         return
     await asyncio.to_thread(player.play, get_settings(), pl.path)
-    await message.reply(f"▶ Playing: {pl.name}")
+    await message.reply(f"▶ Playing: {pl.display}")
 
 
 # ── Doctor / help ───────────────────────────────────────────────────

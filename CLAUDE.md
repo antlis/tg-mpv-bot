@@ -55,9 +55,10 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 - `src/playlists.py` — `discover()` (case-insensitive **stable** sort so global indices stay valid
   between a `/mpv_list` render and a later `/mpv_play <n>`; scans `*.m3u` directly in a playlists dir
   **and one level of nested folders**, whose name becomes the playlist's `subcategory`), `find()`
-  (numeric index OR case-insensitive substring), and `validate()`/`missing_entries()` (the on-disk
+  (numeric index OR case-insensitive substring), `validate()`/`missing_entries()` (the on-disk
   checker behind `/mpv_doctor`; resolves relative entries against the playlist's own dir, treats URLs
-  as always-present).
+  as always-present), and `prettify()` (strips release/quality/source junk for **display only** —
+  `Playlist.display` / button text; the raw `name` is what matching, callbacks and files use).
 - `src/player.py` — the only part that spawns a process. `build_launch_command()` is a pure helper
   (used `MPV_RUNNER` if it exists, else falls back to plain `mpv`). `play()` does `pkill -x mpv`,
   optional i3 workspace switch (skipped if `I3SOCK` unset/missing or `i3-msg` absent), then a detached

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from .playlists import Playlist
+from .playlists import Playlist, prettify
 
 PER_PAGE = 8
 
@@ -101,7 +101,7 @@ def subcategories_keyboard(playlists: list[Playlist], ci: int) -> InlineKeyboard
     for si, sub in enumerate(subcategories(playlists, cat)):
         count = len(indices_for(playlists, cat, sub))
         rows.append(
-            [InlineKeyboardButton(text=f"{sub} ({count})", callback_data=f"s:{ci}:{si}")]
+            [InlineKeyboardButton(text=f"{prettify(sub)} ({count})", callback_data=f"s:{ci}:{si}")]
         )
     rows.append([InlineKeyboardButton(text="⬅ Categories", callback_data="cats")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -123,7 +123,7 @@ def playlists_keyboard(
 
     page = clamp_page(page, len(indices))
     rows = [
-        [InlineKeyboardButton(text=playlists[i].name, callback_data=f"pl:{i}")]
+        [InlineKeyboardButton(text=playlists[i].display, callback_data=f"pl:{i}")]
         for i in page_slice(indices, page)
     ]
 
