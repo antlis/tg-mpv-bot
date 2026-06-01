@@ -72,6 +72,18 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 - `src/commands.py` — handlers push blocking IPC/subprocess work to `asyncio.to_thread`. `_ipc()`
   centralizes error→message translation. Play buttons carry the **global** playlist index.
 
+## Running it (operational)
+
+- **Exactly one instance may poll.** Telegram allows a single long-poll per token; a second
+  `python bot.py` makes both fight with `TelegramConflictError: terminated by other getUpdates request`,
+  and taps land on whichever instance wins — often presenting as a "hang". Run via
+  `systemctl --user {restart,status} tg-mpv-bot` **only**; never also launch it by hand. To check for
+  strays: `pgrep -af bot.py`.
+- **Reading logs:** `journalctl --user -u tg-mpv-bot` shows nothing on this host; use
+  `journalctl --user-unit tg-mpv-bot` (or `journalctl _PID=$(systemctl --user show tg-mpv-bot -p MainPID --value)`).
+- The media library is on a spinning external disk (`/mnt/EHDDSG-4`); `commands._all_playlists()` caches
+  `discover()` and only re-scans on `/mpv_list` `/mpv_play` `/mpv_doctor` (not per button tap).
+
 ## Things to know before editing
 
 - Adding a command touches **four** in-sync places: a handler in `src/commands.py`, the menu in

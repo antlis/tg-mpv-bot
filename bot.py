@@ -15,7 +15,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
-from aiogram.types import BotCommand, BotCommandScopeDefault, Message
+from aiogram.types import BotCommand, BotCommandScopeDefault, ErrorEvent, Message
 
 from src.config import get_settings
 from src.commands import router
@@ -41,11 +41,17 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_voldown", description="Volume -10"),
         BotCommand(command="mpv_mute", description="Toggle mute"),
         BotCommand(command="mpv_doctor", description="Check for broken playlists"),
+        BotCommand(command="mpv_scan", description="Create playlists for new media"),
         BotCommand(command="help", description="Show help"),
     ]
 
 
 def _setup_logging() -> None:
+    # Line-buffer stdout so logs reach journald live (no TTY under systemd).
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     level = logging.INFO
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     handler = logging.StreamHandler(sys.stdout)
@@ -72,6 +78,20 @@ async def main() -> None:
 
     dp = Dispatcher()
     dp.include_router(router)
+
+    # ── Global error handler ─────────────────────────────────────
+    # Any unhandled handler error is logged AND the callback spinner is
+    # cleared, so a failure can never present to the user as a hang.
+    @dp.errors()
+    async def on_error(event: ErrorEvent) -> bool:
+        logger.exception("Unhandled error: %s", event.exception)
+        cq = event.update.callback_query
+        if cq:
+            try:
+                await cq.answer("⚠️ Something went wrong", show_alert=False)
+            except Exception:
+                pass
+        return True  # mark handled so polling continues
 
     # ── Auth middleware ──────────────────────────────────────────
     if settings.is_restricted:

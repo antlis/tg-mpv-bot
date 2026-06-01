@@ -27,6 +27,7 @@ operation. The bot talks to mpv's JSON IPC socket directly from Python.
 | `/mpv_voldown` | Volume -10 |
 | `/mpv_mute` | Toggle mute |
 | `/mpv_doctor` | Report playlists with missing files on disk |
+| `/mpv_scan` | Create playlists for newly-added media (idempotent) |
 | `/help` | Show this help |
 
 ## Quick Start

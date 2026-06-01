@@ -18,7 +18,7 @@ from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 
-from . import player, playlists
+from . import generate, player, playlists
 from .config import Settings, get_settings
 from . import keyboards
 from .keyboards import (
@@ -198,13 +198,27 @@ async def cmd_info(message: Message) -> None:
 # ── Browse / play ───────────────────────────────────────────────────
 
 
-def _all_playlists() -> list[playlists.Playlist]:
-    return playlists.discover(get_settings().playlist_dirs)
+_cache: list[playlists.Playlist] | None = None
+
+
+def _all_playlists(*, refresh: bool = False) -> list[playlists.Playlist]:
+    """Discovered playlists, cached.
+
+    The media library lives on a spinning external disk, so re-scanning on
+    every button tap can stall (drive spin-up). We scan on the explicit
+    entry points (``/mpv_list``, ``/mpv_play``, ``/mpv_doctor``) and reuse the
+    cached list for callback navigation — which also keeps the global indices
+    encoded in button callbacks stable for the duration of a browse session.
+    """
+    global _cache
+    if refresh or _cache is None:
+        _cache = playlists.discover(get_settings().playlist_dirs)
+    return _cache
 
 
 @router.message(Command("mpv_list", "mpv_browse"))
 async def cmd_list(message: Message) -> None:
-    pls = await asyncio.to_thread(_all_playlists)
+    pls = await asyncio.to_thread(_all_playlists, refresh=True)
     if not pls:
         await message.reply("❌ No playlists found.")
         return
@@ -303,7 +317,7 @@ async def cmd_play(message: Message, command: CommandObject) -> None:
             "  /mpv_list           — browse with buttons"
         )
         return
-    pls = await asyncio.to_thread(_all_playlists)
+    pls = await asyncio.to_thread(_all_playlists, refresh=True)
     pl = playlists.find(pls, query)
     if pl is None:
         await message.reply(f"❌ No playlist matching '{query}'. Try /mpv_list")
@@ -317,7 +331,7 @@ async def cmd_play(message: Message, command: CommandObject) -> None:
 
 @router.message(Command("mpv_doctor", "mpv_validate"))
 async def cmd_doctor(message: Message) -> None:
-    pls = await asyncio.to_thread(_all_playlists)
+    pls = await asyncio.to_thread(_all_playlists, refresh=True)
     results = await asyncio.to_thread(playlists.validate, pls)
     broken = [r for r in results if not r.ok]
     if not broken:
@@ -328,6 +342,21 @@ async def cmd_doctor(message: Message) -> None:
         lines.append(f"• {r.playlist.name} — {len(r.missing)}/{r.total} missing")
     if len(broken) > 30:
         lines.append(f"…and {len(broken) - 30} more")
+    text = html.escape("\n".join(lines))
+    await message.reply(f"<pre>{text}</pre>", parse_mode=ParseMode.HTML)
+
+
+@router.message(Command("mpv_scan", "mpv_refresh"))
+async def cmd_scan(message: Message) -> None:
+    created = await asyncio.to_thread(generate.generate_missing, get_settings())
+    await asyncio.to_thread(_all_playlists, refresh=True)  # pick the new ones up now
+    if not created:
+        await message.reply("✅ No new media — playlists already up to date.")
+        return
+    lines = [f"➕ Added {len(created)} playlist(s):"]
+    lines += [f"• {c}" for c in created[:30]]
+    if len(created) > 30:
+        lines.append(f"…and {len(created) - 30} more")
     text = html.escape("\n".join(lines))
     await message.reply(f"<pre>{text}</pre>", parse_mode=ParseMode.HTML)
 
@@ -345,5 +374,6 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_sub</b> switch track · <b>/mpv_sub_toggle</b> show/hide\n"
         "<b>/mpv_volup</b> · <b>/mpv_voldown</b> · <b>/mpv_mute</b>\n"
         "<b>/mpv_doctor</b> — check for broken playlists\n"
+        "<b>/mpv_scan</b> — create playlists for newly-added media\n"
     )
     await message.reply(text, parse_mode=ParseMode.HTML)
