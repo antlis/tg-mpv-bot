@@ -62,6 +62,7 @@ def build_launch_command(settings: Settings, playlist: Path) -> list[str]:
         f"--playlist={playlist}",
         f"--input-ipc-server={settings.mpv_socket}",
         "--force-window",
+        "--save-position-on-quit",  # resume each file where you left off
     ]
 
 

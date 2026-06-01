@@ -19,6 +19,7 @@ def test_uses_runner_when_present(tmp_path):
     assert "--playlist=/media/show.m3u" in cmd
     assert "--input-ipc-server=/tmp/sock" in cmd
     assert "--force-window" in cmd
+    assert "--save-position-on-quit" in cmd
 
 
 def test_falls_back_to_mpv_when_runner_absent(tmp_path):
@@ -30,6 +31,7 @@ def test_falls_back_to_mpv_when_runner_absent(tmp_path):
         "--playlist=/media/show.m3u",
         "--input-ipc-server=/tmp/sock",
         "--force-window",
+        "--save-position-on-quit",
     ]
 
 

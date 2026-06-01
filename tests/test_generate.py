@@ -80,8 +80,9 @@ def test_generate_flat_natural_sort(tmp_path):
     for n in (1, 2, 10):
         _mkvid(media / "show" / f"E{n}.mkv")
     generate.generate_flat(pld)
-    lines = [l for l in (pld / "show.m3u").read_text().splitlines() if l and not l.startswith("#")]
-    assert [Path(l).name for l in lines] == ["E1.mkv", "E2.mkv", "E10.mkv"]
+    lines = [ln for ln in (pld / "show.m3u").read_text().splitlines()
+             if ln and not ln.startswith("#")]
+    assert [Path(ln).name for ln in lines] == ["E1.mkv", "E2.mkv", "E10.mkv"]
 
 
 def test_generate_flat_covered_via_symlinked_media(tmp_path):
@@ -144,6 +145,30 @@ def test_is_nested_detection(tmp_path):
     nested = tmp_path / "tutorials" / "playlists"
     (nested / "provider").mkdir(parents=True)
     assert generate._is_nested(nested) is True
+
+
+def test_repair_repoints_and_prunes(tmp_path, monkeypatch):
+    from src import config
+    media = tmp_path / "movie"
+    pld = media / "playlists"
+    pld.mkdir(parents=True)
+    # the file exists at a NEW location; the playlist still points at the OLD path
+    _mkvid(media / "new-folder" / "film.mkv")
+    (pld / "movie.m3u").write_text(
+        str(media / "old-folder" / "film.mkv") + "\n"   # moved → repoint by basename
+        + str(media / "gone" / "nope.mkv") + "\n"        # no match → prune
+    )
+
+    monkeypatch.setenv("BOT_TOKEN", "x")
+    monkeypatch.setenv("PLAYLIST_DIRS", str(pld))
+    config.get_settings.cache_clear()
+    summary = generate.repair_playlists(config.get_settings())
+    config.get_settings.cache_clear()
+
+    assert len(summary) == 1
+    entries = playlists.read_entries(pld / "movie.m3u")
+    assert entries == [str((media / "new-folder" / "film.mkv").resolve())]
+    assert (pld / "movie.m3u.bak").exists()  # backup kept
 
 
 def test_generated_playlists_are_discoverable(tmp_path):

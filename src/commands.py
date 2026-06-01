@@ -11,19 +11,21 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
-from typing import Any, Awaitable, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 
-from . import generate, player, playlists
-from .config import Settings, get_settings
-from . import keyboards
+from . import generate, keyboards, player, playlists
+from .config import get_settings
 from .keyboards import (
     categories_keyboard,
     has_subcategories,
+    now_playing_keyboard,
     playlists_keyboard,
     subcategories_keyboard,
 )
@@ -158,6 +160,26 @@ async def cmd_voldown(message: Message) -> None:
     await message.reply(err or f"🔉 Volume: {vol:.0f}")
 
 
+@router.message(Command("mpv_shuffle"))
+async def cmd_shuffle(message: Message) -> None:
+    await _do(message, lambda c: c.shuffle(), "🔀 Shuffled")
+
+
+@router.message(Command("mpv_loop"))
+async def cmd_loop(message: Message) -> None:
+    looping, err = await _ipc(lambda c: c.toggle_loop())
+    await message.reply(err or ("🔁 Loop on" if looping else "➡ Loop off"))
+
+
+@router.message(Command("mpv_ep", "mpv_episode"))
+async def cmd_ep(message: Message, command: CommandObject) -> None:
+    arg = (command.args or "").strip()
+    if not arg.isdigit() or int(arg) < 1:
+        await message.reply("Usage: /mpv_ep <number>  — jump to that item in the playlist")
+        return
+    await _do(message, lambda c: c.set_playlist_pos(int(arg) - 1), f"▶ Jumped to #{arg}")
+
+
 # ── Status ──────────────────────────────────────────────────────────
 
 
@@ -187,18 +209,73 @@ def _status_text(client: MpvClient) -> str:
     dur = _fmt_time(safe("duration"))
     vol = safe("volume")
     paused = safe("pause")
+    pct = safe("percent-pos")
+    ppos = safe("playlist-pos-1")  # 1-based, -1/None if n/a
+    pcount = safe("playlist-count")
+    looping = safe("loop-playlist") not in (False, "no", None)
 
     state = "⏸ paused" if paused else "▶ playing"
-    parts = [f"🎬 {title}", f"{state}   {pos} / {dur}"]
+    line2 = f"{state}   {pos} / {dur}"
+    if isinstance(pct, (int, float)):
+        line2 += f" ({pct:.0f}%)"
+    parts = [f"🎬 {title}", line2]
+    line3 = []
     if vol is not None:
-        parts[-1] += f"   🔊 {vol:.0f}"
+        line3.append(f"🔊 {vol:.0f}")
+    if isinstance(ppos, int) and ppos > 0 and isinstance(pcount, int) and pcount > 1:
+        line3.append(f"▶ {ppos}/{pcount}")
+    if looping:
+        line3.append("🔁")
+    if line3:
+        parts.append("   ".join(line3))
     return "\n".join(parts)
 
 
-@router.message(Command("mpv_info", "mpv_status"))
-async def cmd_info(message: Message) -> None:
+async def _send_panel(message: Message, *, edit: bool = False) -> None:
+    """Render the now-playing panel (status text + transport buttons)."""
     text, err = await _ipc(_status_text)
-    await message.reply(err or text)
+    body = err or text
+    if edit:
+        try:
+            await message.edit_text(body, reply_markup=now_playing_keyboard())
+        except TelegramBadRequest:
+            pass  # "message is not modified" when nothing changed — ignore
+    else:
+        await message.reply(body, reply_markup=now_playing_keyboard())
+
+
+@router.message(Command("mpv_info", "mpv_status", "mpv_panel"))
+async def cmd_info(message: Message) -> None:
+    await _send_panel(message)
+
+
+_CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
+    "toggle": lambda c: c.toggle_pause(),
+    "back": lambda c: c.seek(-10),
+    "fwd": lambda c: c.seek(30),
+    "prev": lambda c: c.playlist_prev(),
+    "next": lambda c: c.playlist_next(),
+    "volup": lambda c: c.adjust_volume(10),
+    "voldown": lambda c: c.adjust_volume(-10),
+    "mute": lambda c: c.cycle_mute(),
+    "sub": lambda c: c.cycle_sub(),
+    "shuffle": lambda c: c.shuffle(),
+    "loop": lambda c: c.toggle_loop(),
+    "stop": lambda c: c.quit(),
+    "refresh": lambda c: None,
+}
+
+
+@router.callback_query(F.data.startswith("ctl:"))
+async def cb_ctl(query: CallbackQuery) -> None:
+    action = query.data[len("ctl:"):]
+    fn = _CTL_ACTIONS.get(action)
+    if fn is None:
+        await query.answer()
+        return
+    _, err = await _ipc(fn)
+    await query.answer(err.replace("❌ ", "") if err else "✓")
+    await _send_panel(query.message, edit=True)
 
 
 # ── Browse / play ───────────────────────────────────────────────────
@@ -220,6 +297,11 @@ def _all_playlists(*, refresh: bool = False) -> list[playlists.Playlist]:
     if refresh or _cache is None:
         _cache = playlists.discover(get_settings().playlist_dirs)
     return _cache
+
+
+def refresh_cache() -> None:
+    """Force a re-scan of the playlist cache (used by the auto-scan loop)."""
+    _all_playlists(refresh=True)
 
 
 @router.message(Command("mpv_list", "mpv_browse"))
@@ -348,6 +430,22 @@ async def cmd_doctor(message: Message) -> None:
         lines.append(f"• {r.playlist.name} — {len(r.missing)}/{r.total} missing")
     if len(broken) > 30:
         lines.append(f"…and {len(broken) - 30} more")
+    lines.append("\nRun /mpv_fix to re-point moved files and prune dead entries.")
+    text = html.escape("\n".join(lines))
+    await message.reply(f"<pre>{text}</pre>", parse_mode=ParseMode.HTML)
+
+
+@router.message(Command("mpv_fix", "mpv_repair"))
+async def cmd_fix(message: Message) -> None:
+    fixed = await asyncio.to_thread(generate.repair_playlists, get_settings())
+    await asyncio.to_thread(_all_playlists, refresh=True)
+    if not fixed:
+        await message.reply("✅ Nothing to fix — no recoverable broken playlists.")
+        return
+    lines = [f"🔧 Repaired {len(fixed)} playlist(s) (backups saved as *.m3u.bak):\n"]
+    lines += [f"• {f}" for f in fixed[:30]]
+    if len(fixed) > 30:
+        lines.append(f"…and {len(fixed) - 30} more")
     text = html.escape("\n".join(lines))
     await message.reply(f"<pre>{text}</pre>", parse_mode=ParseMode.HTML)
 
@@ -373,14 +471,16 @@ async def cmd_help(message: Message) -> None:
         "🎬 <b>tg-mpv-bot</b> — mpv remote control\n\n"
         "<b>/mpv_list</b> — browse playlists with buttons\n"
         "<b>/mpv_play</b> &lt;query&gt; — play by number or name\n"
-        "<b>/mpv_info</b> — now playing\n"
+        "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s\n"
-        "<b>/mpv_next</b> · <b>/mpv_prev</b>\n"
+        "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> &lt;n&gt; jump\n"
+        "<b>/mpv_shuffle</b> · <b>/mpv_loop</b>\n"
         "<b>/mpv_sub</b> switch track · <b>/mpv_sub_toggle</b> show/hide\n"
         "<b>/mpv_volup</b> · <b>/mpv_voldown</b> · <b>/mpv_mute</b>\n"
         "<b>/mpv_doctor</b> — check for broken playlists\n"
+        "<b>/mpv_fix</b> — repair broken playlists\n"
         "<b>/mpv_scan</b> — create playlists for newly-added media\n"
     )
     await message.reply(text, parse_mode=ParseMode.HTML)

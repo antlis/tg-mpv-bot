@@ -18,7 +18,10 @@ class FakeMpv:
     def __init__(self, path: str, emit_event: bool = False):
         self.path = path
         self.emit_event = emit_event
-        self.props = {"volume": 50.0, "pause": False, "media-title": "Test Clip"}
+        self.props = {
+            "volume": 50.0, "pause": False, "media-title": "Test Clip",
+            "loop-playlist": "no", "playlist-pos": 0,
+        }
         self._srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._srv.bind(path)
         self._srv.listen(8)
@@ -31,7 +34,7 @@ class FakeMpv:
         while not self._stop.is_set():
             try:
                 conn, _ = self._srv.accept()
-            except (socket.timeout, OSError):
+            except (TimeoutError, OSError):
                 break
             with conn:
                 data = b""
@@ -70,7 +73,7 @@ class FakeMpv:
             elif prop == "pause":  # flip the boolean
                 self.props["pause"] = not self.props.get("pause", False)
             return {"error": "success", "request_id": rid}
-        if name in ("seek", "quit", "playlist-next", "playlist-prev"):
+        if name in ("seek", "quit", "playlist-next", "playlist-prev", "playlist-shuffle"):
             return {"error": "success", "request_id": rid}
         return {"error": "success", "request_id": rid}
 
@@ -156,6 +159,22 @@ def test_simple_commands_succeed(fake_mpv):
     client.playlist_next()
     client.playlist_prev()
     client.toggle_sub_visibility()
+    client.shuffle()
+
+
+def test_toggle_loop(fake_mpv):
+    client = MpvClient(fake_mpv.path)
+    fake_mpv.props["loop-playlist"] = "no"
+    assert client.toggle_loop() is True
+    assert fake_mpv.props["loop-playlist"] == "inf"
+    assert client.toggle_loop() is False
+    assert fake_mpv.props["loop-playlist"] == "no"
+
+
+def test_set_playlist_pos(fake_mpv):
+    client = MpvClient(fake_mpv.path)
+    client.set_playlist_pos(4)
+    assert fake_mpv.props["playlist-pos"] == 4
 
 
 def test_cycle_sub_advances_track(fake_mpv):

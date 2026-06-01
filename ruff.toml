@@ -1,0 +1,13 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",   # line length is enforced by the formatter, not the linter
+    "B008",   # function call in default arg — not used in a harmful way here
+    "UP047",  # PEP 695 generic syntax — not adopting it project-wide
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["E402"]  # imports placed mid-file next to the code they exercise

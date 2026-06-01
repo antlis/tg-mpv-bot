@@ -84,6 +84,18 @@ def page_slice(items: list[int], page: int, per_page: int = PER_PAGE) -> list[in
 
 
 # ── keyboards ────────────────────────────────────────────────────────
+def now_playing_keyboard() -> InlineKeyboardMarkup:
+    """Transport controls for the now-playing panel (callback data `ctl:<action>`)."""
+    def b(text: str, action: str) -> InlineKeyboardButton:
+        return InlineKeyboardButton(text=text, callback_data=f"ctl:{action}")
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [b("⏮", "prev"), b("⏪", "back"), b("⏯", "toggle"), b("⏩", "fwd"), b("⏭", "next")],
+        [b("🔉", "voldown"), b("🔇", "mute"), b("🔊", "volup"), b("💬", "sub"), b("⏹", "stop")],
+        [b("🔀", "shuffle"), b("🔁", "loop"), b("🔄 Refresh", "refresh")],
+    ])
+
+
 def categories_keyboard(playlists: list[Playlist]) -> InlineKeyboardMarkup:
     rows = []
     for ci, cat in enumerate(categories(playlists)):

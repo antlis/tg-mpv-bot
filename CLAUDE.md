@@ -17,9 +17,10 @@ pip install -r requirements.txt
 python bot.py                              # standard Telegram API
 API_SERVER_URL=http://localhost:8081 python bot.py   # local Bot API server (2GB uploads)
 
-# Tests
+# Tests + lint
 pip install -r requirements-dev.txt
 pytest                                     # config (pytest.ini): testpaths=tests, asyncio_mode=auto
+ruff check .                               # config in ruff.toml
 
 # Docker (host networking + X11/i3 bind mounts)
 docker compose up -d --build
@@ -42,10 +43,12 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
                                     └─ src/player  ─▶ pkill -x mpv · i3 workspace · spawn mpv ─▶ X11
 ```
 
-- `bot.py` — entry point. Builds the `Bot` (default `parse_mode=None` — replies are plain text;
-  handlers that need formatting set HTML per-message), registers the command menu (`_build_menu`), and
-  installs an `outer_middleware` for auth (rejects users not in `ALLOWED_USERS`) **only when
-  `settings.is_restricted`**. Switches to a local Bot API server when `API_SERVER_URL` is set.
+- `bot.py` — entry point. Acquires a single-instance `flock` (`src/lock.py`) before anything else (a
+  2nd `python bot.py` exits with "already running" instead of fighting over the token). Builds the
+  `Bot` (default `parse_mode=None`), registers the command menu (`_build_menu`), a `@dp.errors()`
+  handler (logs + clears the callback spinner), and auth `outer_middleware` on **both** `message` and
+  `callback_query` **only when `settings.is_restricted`**. Optionally starts `_scan_loop` when
+  `SCAN_INTERVAL_MIN>0`. Switches to a local Bot API server when `API_SERVER_URL` is set.
 - `src/config.py` — frozen `Settings` dataclass loaded once via `@lru_cache get_settings()`. **Single
   source of truth for all host paths.** Tests that exercise env must call `get_settings.cache_clear()`.
 - `src/mpv_ipc.py` — `MpvClient(socket_path)`: opens a short-lived Unix-socket connection per command,
@@ -71,7 +74,16 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   callback grammar (stable for a fixed library): `cats`, `c:<ci>[:<page>]`, `s:<ci>:<si>[:<page>]`,
   `pl:<global_index>`, `noop`.
 - `src/commands.py` — handlers push blocking IPC/subprocess work to `asyncio.to_thread`. `_ipc()`
-  centralizes error→message translation. Play buttons carry the **global** playlist index.
+  centralizes error→message translation. Play buttons carry the **global** playlist index. `/mpv_info`
+  posts the **now-playing panel** (`now_playing_keyboard` + `_status_text`); the `ctl:<action>`
+  callbacks (`cb_ctl`, dispatched via `_CTL_ACTIONS`) run an IPC op then edit the panel in place.
+  `/mpv_fix` calls `generate.repair_playlists`. The playlist scan is cached (`_all_playlists`,
+  `refresh_cache`).
+- `src/generate.py` — idempotent playlist creation (`generate_missing` → `generate_flat`/
+  `generate_nested`, never overwrites, skips items already covered) behind `/mpv_scan`; plus
+  `repair_playlists` (re-point missing entries by unique basename, prune the rest, `.m3u.bak` backup)
+  behind `/mpv_fix`.
+- `src/lock.py` — `acquire(path)` exclusive `flock`; raises `AlreadyRunning` if a second instance starts.
 
 ## Running it (operational)
 
@@ -89,6 +101,8 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 
 - Adding a command touches **four** in-sync places: a handler in `src/commands.py`, the menu in
   `bot.py:_build_menu()`, the help text in `cmd_help`, and the README command table.
+- The now-playing panel's `ctl:<action>` callbacks are a fifth callback grammar alongside
+  `cats`/`c:`/`s:`/`pl:`/`noop`; `_CTL_ACTIONS` maps each to an `MpvClient` call.
 - All host assumptions now flow from `src/config.py` env vars. The deploy files (`docker-compose.yml`,
   `tg-mpv-bot.service`) still set concrete values (UID 1000 i3 socket, `DISPLAY=:0`, `HOME=/home/lad`)
   and must agree with them.

@@ -9,16 +9,24 @@ Usage:
 import asyncio
 import logging
 import sys
-from typing import Any, Awaitable, Callable, Dict
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import TelegramAPIServer
-from aiogram.types import BotCommand, BotCommandScopeDefault, ErrorEvent, Message
+from aiogram.types import (
+    BotCommand,
+    BotCommandScopeDefault,
+    CallbackQuery,
+    ErrorEvent,
+    Message,
+)
 
-from src.config import get_settings
+from src import lock
 from src.commands import router
+from src.config import get_settings
 
 logger = logging.getLogger("tg-mpv-bot")
 
@@ -36,12 +44,16 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_back", description="Seek -10s"),
         BotCommand(command="mpv_next", description="Next in playlist"),
         BotCommand(command="mpv_prev", description="Previous in playlist"),
+        BotCommand(command="mpv_ep", description="Jump to playlist item N"),
+        BotCommand(command="mpv_shuffle", description="Shuffle the playlist"),
+        BotCommand(command="mpv_loop", description="Toggle playlist loop"),
         BotCommand(command="mpv_sub", description="Switch subtitle track"),
         BotCommand(command="mpv_sub_toggle", description="Show/hide subtitles"),
         BotCommand(command="mpv_volup", description="Volume +10"),
         BotCommand(command="mpv_voldown", description="Volume -10"),
         BotCommand(command="mpv_mute", description="Toggle mute"),
         BotCommand(command="mpv_doctor", description="Check for broken playlists"),
+        BotCommand(command="mpv_fix", description="Repair broken playlists"),
         BotCommand(command="mpv_scan", description="Create playlists for new media"),
         BotCommand(command="help", description="Show help"),
     ]
@@ -94,20 +106,31 @@ async def main() -> None:
                 pass
         return True  # mark handled so polling continues
 
-    # ── Auth middleware ──────────────────────────────────────────
+    # ── Auth middleware (messages AND button taps) ───────────────
     if settings.is_restricted:
         allowed = set(settings.allowed_users)
         logger.info("Access restricted to users: %s", allowed)
 
         @dp.message.outer_middleware()
-        async def auth_middleware(
-            handler: Callable[[Message, Dict[str, Any]], Awaitable[Any]],
+        async def auth_messages(
+            handler: Callable[[Message, dict[str, Any]], Awaitable[Any]],
             message: Message,
-            data: Dict[str, Any],
+            data: dict[str, Any],
         ) -> Any:
             if message.from_user and message.from_user.id in allowed:
                 return await handler(message, data)
             await message.reply("⛔ Unauthorized")
+            return None
+
+        @dp.callback_query.outer_middleware()
+        async def auth_callbacks(
+            handler: Callable[[CallbackQuery, dict[str, Any]], Awaitable[Any]],
+            query: CallbackQuery,
+            data: dict[str, Any],
+        ) -> Any:
+            if query.from_user and query.from_user.id in allowed:
+                return await handler(query, data)
+            await query.answer("⛔ Unauthorized", show_alert=True)
             return None
     else:
         logger.warning("ALLOWED_USERS is empty — open to everyone")
@@ -118,12 +141,34 @@ async def main() -> None:
         scope=BotCommandScopeDefault(),
     )
 
+    if settings.scan_interval_min > 0:
+        asyncio.create_task(_scan_loop(settings))
+        logger.info("Auto-scan every %d min", settings.scan_interval_min)
+
     logger.info("tg-mpv-bot starting (polling)...")
     await dp.start_polling(bot)
 
 
+async def _scan_loop(settings) -> None:
+    """Periodically generate playlists for newly-added media."""
+    from src import commands, generate
+
+    while True:
+        await asyncio.sleep(settings.scan_interval_min * 60)
+        try:
+            created = await asyncio.to_thread(generate.generate_missing, settings)
+            if created:
+                await asyncio.to_thread(commands.refresh_cache)
+                logger.info("Auto-scan added %d playlist(s): %s", len(created), created)
+        except Exception:
+            logger.exception("Auto-scan failed")
+
+
 if __name__ == "__main__":
     try:
+        fd = lock.acquire(get_settings().lock_file)  # keep ref → holds the lock
         asyncio.run(main())
+    except lock.AlreadyRunning as exc:
+        raise SystemExit(str(exc)) from exc
     except KeyboardInterrupt:
         logger.info("Shutdown by keyboard interrupt")

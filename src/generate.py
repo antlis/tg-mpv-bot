@@ -147,6 +147,67 @@ def generate_nested(playlists_dir: Path) -> list[str]:
     return created
 
 
+def _media_root(playlist_path: Path, subcategory: str | None) -> Path:
+    # flat:   <root>/playlists/name.m3u        → root
+    # nested: <root>/playlists/<sub>/name.m3u  → root
+    pld = playlist_path.parent.parent if subcategory else playlist_path.parent
+    return pld.parent.resolve()
+
+
+def _basename_index(media_root: Path) -> dict[str, list[str]]:
+    idx: dict[str, list[str]] = {}
+    for dp, dirs, files in os.walk(media_root):
+        dirs[:] = [d for d in dirs if d != "playlists" and not d.startswith("._")]
+        for f in files:
+            if not f.startswith("._") and Path(f).suffix.lower() in VIDEO_SUFFIXES:
+                idx.setdefault(f, []).append(os.path.join(dp, f))
+    return idx
+
+
+def repair_playlists(settings: Settings) -> list[str]:
+    """Fix playlists with missing files: re-point entries to a renamed/moved
+    file (matched by unique basename) and prune entries with no match.
+
+    Backs each changed playlist up to ``<name>.m3u.bak`` first. Returns a
+    per-playlist summary of what changed.
+    """
+    from . import playlists as pl
+
+    broken = [r for r in pl.validate(pl.discover(settings.playlist_dirs)) if not r.ok]
+    indexes: dict[str, dict[str, list[str]]] = {}
+    summary: list[str] = []
+
+    for r in broken:
+        media_root = _media_root(r.playlist.path, r.playlist.subcategory)
+        idx = indexes.setdefault(str(media_root), None) or _basename_index(media_root)
+        indexes[str(media_root)] = idx
+
+        new_lines: list[str] = []
+        repointed = pruned = 0
+        for entry in pl.read_entries(r.playlist.path):
+            resolved = pl._resolve(entry, r.playlist.path.parent)
+            if not isinstance(resolved, Path) or resolved.exists():
+                new_lines.append(entry)
+                continue
+            cands = idx.get(os.path.basename(entry), [])
+            if len(cands) == 1:
+                new_lines.append(cands[0])
+                repointed += 1
+            else:
+                pruned += 1  # 0 matches → drop; >1 ambiguous → also drop
+        if repointed or pruned:
+            r.playlist.path.with_suffix(".m3u.bak").write_text(
+                r.playlist.path.read_text(encoding="utf-8", errors="replace"),
+                encoding="utf-8",
+            )
+            with open(r.playlist.path, "w", encoding="utf-8") as fh:
+                fh.write("#EXTM3U\n")
+                if new_lines:
+                    fh.write("\n".join(new_lines) + "\n")
+            summary.append(f"{r.playlist.label}: repointed {repointed}, pruned {pruned}")
+    return summary
+
+
 def generate_missing(settings: Settings) -> list[str]:
     """Generate playlists for new media across all configured dirs."""
     created: list[str] = []

@@ -126,6 +126,15 @@ def test_subcategory_playlists_use_global_index_and_back():
     assert f"c:{ci}" in datas  # back to subcategory menu
 
 
+def test_now_playing_keyboard():
+    from src.keyboards import now_playing_keyboard
+    kb = now_playing_keyboard()
+    datas = {b.callback_data for row in kb.inline_keyboard for b in row}
+    assert {"ctl:toggle", "ctl:fwd", "ctl:back", "ctl:next", "ctl:prev",
+            "ctl:volup", "ctl:voldown", "ctl:mute", "ctl:sub",
+            "ctl:shuffle", "ctl:loop", "ctl:stop", "ctl:refresh"} <= datas
+
+
 def test_subcategory_pagination_prefix():
     pls = make_nested({"tutorials": {"big": PER_PAGE * 2}})  # 2 pages
     kb = playlists_keyboard(pls, ci=0, si=0, page=0)

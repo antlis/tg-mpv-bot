@@ -13,7 +13,7 @@ operation. The bot talks to mpv's JSON IPC socket directly from Python.
 | `/mpv_list` | Browse playlists with inline buttons (by category) |
 | `/mpv_play <query>` | Search & play by name or number |
 | `/mpv <query>` | Alias for `/mpv_play` |
-| `/mpv_info` | Show current playback status |
+| `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_toggle` | Play/pause toggle (one command) |
 | `/mpv_pause` | Pause playback |
 | `/mpv_unpause` | Resume playback |
@@ -22,12 +22,16 @@ operation. The bot talks to mpv's JSON IPC socket directly from Python.
 | `/mpv_back` | Seek backward 10s |
 | `/mpv_next` | Next item in playlist |
 | `/mpv_prev` | Previous item in playlist |
+| `/mpv_ep <n>` | Jump to item N in the playlist |
+| `/mpv_shuffle` | Shuffle the current playlist |
+| `/mpv_loop` | Toggle looping the playlist |
 | `/mpv_sub` | Switch to the next subtitle track |
 | `/mpv_sub_toggle` | Show / hide subtitles |
 | `/mpv_volup` | Volume +10 |
 | `/mpv_voldown` | Volume -10 |
 | `/mpv_mute` | Toggle mute |
 | `/mpv_doctor` | Report playlists with missing files on disk |
+| `/mpv_fix` | Repair broken playlists (re-point moved files, prune dead) |
 | `/mpv_scan` | Create playlists for newly-added media (idempotent) |
 | `/help` | Show this help |
 
@@ -47,11 +51,12 @@ pip install -r requirements.txt
 python bot.py
 ```
 
-## Tests
+## Tests & lint
 
 ```bash
 pip install -r requirements-dev.txt
 pytest
+ruff check .
 ```
 
 ## Files

@@ -30,6 +30,8 @@ class Settings:
     display: str = ":0"
     i3_socket: str = ""          # empty → don't switch workspaces
     i3_workspace: str = "10"
+    lock_file: str = "/tmp/tg-mpv-bot.lock"
+    scan_interval_min: int = 0   # >0 → auto-scan for new media every N minutes
 
     @property
     def is_restricted(self) -> bool:
@@ -69,4 +71,6 @@ def get_settings() -> Settings:
         display=os.environ.get("DISPLAY", ":0"),
         i3_socket=os.environ.get("I3SOCK", os.environ.get("I3_SOCKET", "")),
         i3_workspace=os.environ.get("I3_WORKSPACE", "10"),
+        lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),
+        scan_interval_min=int(os.environ.get("SCAN_INTERVAL_MIN", "0") or "0"),
     )

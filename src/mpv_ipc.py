@@ -113,6 +113,19 @@ class MpvClient:
     def playlist_prev(self) -> None:
         self.command("playlist-prev")
 
+    def set_playlist_pos(self, index0: int) -> None:
+        """Jump to a 0-based position in the current playlist."""
+        self.set_property("playlist-pos", index0)
+
+    def shuffle(self) -> None:
+        self.command("playlist-shuffle")
+
+    def toggle_loop(self) -> bool:
+        """Toggle looping the whole playlist; returns True if now looping."""
+        looping = self.get_property("loop-playlist") not in (False, "no", None)
+        self.set_property("loop-playlist", "no" if looping else "inf")
+        return not looping
+
     def cycle_sub(self) -> None:
         """Switch to the next subtitle track (cycles through tracks and 'no')."""
         self.command("cycle", "sub")

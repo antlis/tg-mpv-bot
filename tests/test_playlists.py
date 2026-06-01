@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 from src import playlists
-from src.playlists import Playlist
 
 
 @pytest.fixture
