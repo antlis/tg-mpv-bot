@@ -148,6 +148,33 @@ async def cmd_sub_toggle(message: Message) -> None:
     await _do(message, lambda c: c.toggle_sub_visibility(), "💬 Subtitles toggled")
 
 
+def _cycle_audio_text(client: MpvClient) -> str:
+    """Switch to the next audio track and describe the result."""
+
+    def safe(name: str) -> Any:
+        try:
+            return client.get_property(name)
+        except MpvError:
+            return None
+
+    client.cycle_audio()
+    aid = safe("aid")
+    if not aid:
+        return "🎧 Audio: off"
+    label = (
+        safe("current-tracks/audio/title")
+        or safe("current-tracks/audio/lang")
+        or f"track {aid}"
+    )
+    return f"🎧 Audio: {label}"
+
+
+@router.message(Command("mpv_audio", "mpv_atrack"))
+async def cmd_audio(message: Message) -> None:
+    text, err = await _ipc(_cycle_audio_text)
+    await message.reply(err or text)
+
+
 @router.message(Command("mpv_volup"))
 async def cmd_volup(message: Message) -> None:
     vol, err = await _ipc(lambda c: c.adjust_volume(10))
@@ -259,6 +286,7 @@ _CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
     "voldown": lambda c: c.adjust_volume(-10),
     "mute": lambda c: c.cycle_mute(),
     "sub": lambda c: c.cycle_sub(),
+    "audio": lambda c: c.cycle_audio(),
     "shuffle": lambda c: c.shuffle(),
     "loop": lambda c: c.toggle_loop(),
     "stop": lambda c: c.quit(),
@@ -477,7 +505,8 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s\n"
         "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> &lt;n&gt; jump\n"
         "<b>/mpv_shuffle</b> · <b>/mpv_loop</b>\n"
-        "<b>/mpv_sub</b> switch track · <b>/mpv_sub_toggle</b> show/hide\n"
+        "<b>/mpv_audio</b> switch audio track\n"
+        "<b>/mpv_sub</b> switch subtitle · <b>/mpv_sub_toggle</b> show/hide\n"
         "<b>/mpv_volup</b> · <b>/mpv_voldown</b> · <b>/mpv_mute</b>\n"
         "<b>/mpv_doctor</b> — check for broken playlists\n"
         "<b>/mpv_fix</b> — repair broken playlists\n"

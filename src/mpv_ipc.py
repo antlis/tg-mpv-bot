@@ -184,6 +184,20 @@ class MpvClient:
         self.command("cycle", "sub-visibility")
         self.show_text("Subtitles: on" if self._safe_get("sub-visibility") else "Subtitles: off")
 
+    def cycle_audio(self) -> None:
+        """Switch to the next audio track (e.g. Spanish → English)."""
+        self.command("cycle", "aid")
+        aid = self._safe_get("aid")
+        if not aid:
+            self.show_text("Audio: off")
+        else:
+            label = (
+                self._safe_get("current-tracks/audio/title")
+                or self._safe_get("current-tracks/audio/lang")
+                or f"#{aid}"
+            )
+            self.show_text(f"Audio: {label}")
+
     def adjust_volume(self, delta: float, lo: float = 0, hi: float = 130) -> float:
         """Read volume, clamp ``current + delta`` to [lo, hi], write it back."""
         current = self.get_property("volume")

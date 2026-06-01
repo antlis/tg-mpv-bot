@@ -70,6 +70,8 @@ class FakeMpv:
             prop = cmd[1] if len(cmd) > 1 else None
             if prop == "sub":  # advance the subtitle track id
                 self.props["sid"] = (self.props.get("sid") or 0) + 1
+            elif prop == "aid":  # advance the audio track id
+                self.props["aid"] = (self.props.get("aid") or 0) + 1
             elif prop in ("pause", "mute"):  # flip the boolean
                 self.props[prop] = not self.props.get(prop, False)
             return {"error": "success", "request_id": rid}
@@ -202,6 +204,13 @@ def test_cycle_sub_advances_track(fake_mpv):
     fake_mpv.props["sid"] = 1
     client.cycle_sub()
     assert fake_mpv.props["sid"] == 2
+
+
+def test_cycle_audio_advances_track(fake_mpv):
+    client = MpvClient(fake_mpv.path)
+    fake_mpv.props["aid"] = 1
+    client.cycle_audio()
+    assert fake_mpv.props["aid"] == 2
 
 
 def test_cycle_sub_text_reports_track(fake_mpv):

@@ -131,7 +131,7 @@ def test_now_playing_keyboard():
     kb = now_playing_keyboard()
     datas = {b.callback_data for row in kb.inline_keyboard for b in row}
     assert {"ctl:toggle", "ctl:fwd", "ctl:back", "ctl:next", "ctl:prev",
-            "ctl:volup", "ctl:voldown", "ctl:mute", "ctl:sub",
+            "ctl:volup", "ctl:voldown", "ctl:mute", "ctl:sub", "ctl:audio",
             "ctl:shuffle", "ctl:loop", "ctl:stop", "ctl:refresh"} <= datas
 
 

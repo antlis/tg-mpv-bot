@@ -25,6 +25,7 @@ operation. The bot talks to mpv's JSON IPC socket directly from Python.
 | `/mpv_ep <n>` | Jump to item N in the playlist |
 | `/mpv_shuffle` | Shuffle the current playlist |
 | `/mpv_loop` | Toggle looping the playlist |
+| `/mpv_audio` | Switch to the next audio track (e.g. Spanish → English) |
 | `/mpv_sub` | Switch to the next subtitle track |
 | `/mpv_sub_toggle` | Show / hide subtitles |
 | `/mpv_volup` | Volume +10 |
