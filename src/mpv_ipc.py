@@ -87,6 +87,20 @@ class MpvClient:
     def get_property(self, name: str) -> Any:
         return self.command("get_property", name)
 
+    def _safe_get(self, name: str) -> Any:
+        try:
+            return self.get_property(name)
+        except MpvError:
+            return None
+
+    def _track_label(self) -> str:
+        """Reliable playlist-position label (title isn't loaded yet right after a switch)."""
+        pos = self._safe_get("playlist-pos-1")
+        cnt = self._safe_get("playlist-count")
+        if isinstance(pos, int) and isinstance(cnt, int) and pos > 0 and cnt > 1:
+            return f"Track {pos}/{cnt}"
+        return "Playing"
+
     def set_property(self, name: str, value: Any) -> None:
         self.command("set_property", name, value)
 
@@ -129,16 +143,16 @@ class MpvClient:
 
     def playlist_next(self) -> None:
         self.command("playlist-next")
-        self.show_text("${media-title}")  # mpv expands to the now-current title
+        self.show_text(self._track_label())
 
     def playlist_prev(self) -> None:
         self.command("playlist-prev")
-        self.show_text("${media-title}")
+        self.show_text(self._track_label())
 
     def set_playlist_pos(self, index0: int) -> None:
         """Jump to a 0-based position in the current playlist."""
         self.set_property("playlist-pos", index0)
-        self.show_text("${media-title}")
+        self.show_text(self._track_label())
 
     def shuffle(self) -> None:
         self.command("playlist-shuffle")
@@ -155,11 +169,20 @@ class MpvClient:
     def cycle_sub(self) -> None:
         """Switch to the next subtitle track (cycles through tracks and 'no')."""
         self.command("cycle", "sub")
-        self.show_text("Subtitle: ${sub}")
+        sid = self._safe_get("sid")
+        if not sid:
+            self.show_text("Subtitle: off")
+        else:
+            label = (
+                self._safe_get("current-tracks/sub/title")
+                or self._safe_get("current-tracks/sub/lang")
+                or f"#{sid}"
+            )
+            self.show_text(f"Subtitle: {label}")
 
     def toggle_sub_visibility(self) -> None:
         self.command("cycle", "sub-visibility")
-        self.show_text("Subtitles: ${sub-visibility}")
+        self.show_text("Subtitles: on" if self._safe_get("sub-visibility") else "Subtitles: off")
 
     def adjust_volume(self, delta: float, lo: float = 0, hi: float = 130) -> float:
         """Read volume, clamp ``current + delta`` to [lo, hi], write it back."""
