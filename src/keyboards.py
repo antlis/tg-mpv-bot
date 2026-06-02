@@ -84,13 +84,19 @@ def page_slice(items: list[int], page: int, per_page: int = PER_PAGE) -> list[in
 
 
 # ── keyboards ────────────────────────────────────────────────────────
-def now_playing_keyboard() -> InlineKeyboardMarkup:
-    """Transport controls for the now-playing panel (callback data `ctl:<action>`)."""
+def now_playing_keyboard(paused: bool | None = None) -> InlineKeyboardMarkup:
+    """Transport controls for the now-playing panel (callback data `ctl:<action>`).
+
+    The middle button is the play/pause toggle; its label reflects state —
+    ``▶ Play`` when paused, ``⏸ Pause`` when playing, ``⏯`` when unknown.
+    """
     def b(text: str, action: str) -> InlineKeyboardButton:
         return InlineKeyboardButton(text=text, callback_data=f"ctl:{action}")
 
+    toggle = "▶ Play" if paused is True else "⏸ Pause" if paused is False else "⏯"
+
     return InlineKeyboardMarkup(inline_keyboard=[
-        [b("⏮", "prev"), b("⏪", "back"), b("⏯", "toggle"), b("⏩", "fwd"), b("⏭", "next")],
+        [b("⏮", "prev"), b("⏪", "back"), b(toggle, "toggle"), b("⏩", "fwd"), b("⏭", "next")],
         [b("🔉", "voldown"), b("🔇", "mute"), b("🔊", "volup"), b("💬", "sub"), b("🎧", "audio")],
         [b("🔀", "shuffle"), b("🔁", "loop"), b("⏹", "stop"), b("🔄 Refresh", "refresh")],
     ])

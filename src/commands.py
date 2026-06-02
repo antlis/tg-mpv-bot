@@ -258,17 +258,23 @@ def _status_text(client: MpvClient) -> str:
     return "\n".join(parts)
 
 
+def _panel_state(client: MpvClient) -> tuple[str, bool | None]:
+    """Status text plus the current pause state (for the toggle button label)."""
+    return _status_text(client), client._safe_get("pause")
+
+
 async def _send_panel(message: Message, *, edit: bool = False) -> None:
     """Render the now-playing panel (status text + transport buttons)."""
-    text, err = await _ipc(_status_text)
-    body = err or text
+    state, err = await _ipc(_panel_state)
+    body, paused = (state[0], state[1]) if state else (err, None)
+    kb = now_playing_keyboard(paused)
     if edit:
         try:
-            await message.edit_text(body, reply_markup=now_playing_keyboard())
+            await message.edit_text(body, reply_markup=kb)
         except TelegramBadRequest:
             pass  # "message is not modified" when nothing changed — ignore
     else:
-        await message.reply(body, reply_markup=now_playing_keyboard())
+        await message.reply(body, reply_markup=kb)
 
 
 @router.message(Command("mpv_info", "mpv_status", "mpv_panel"))

@@ -135,6 +135,19 @@ def test_now_playing_keyboard():
             "ctl:shuffle", "ctl:loop", "ctl:stop", "ctl:refresh"} <= datas
 
 
+def test_play_pause_toggle_label_reflects_state():
+    from src.keyboards import now_playing_keyboard
+
+    def toggle_text(paused):
+        kb = now_playing_keyboard(paused)
+        return next(b.text for row in kb.inline_keyboard for b in row
+                    if b.callback_data == "ctl:toggle")
+
+    assert toggle_text(True) == "▶ Play"    # paused → offer Play
+    assert toggle_text(False) == "⏸ Pause"  # playing → offer Pause
+    assert toggle_text(None) == "⏯"         # unknown → neutral
+
+
 def test_subcategory_pagination_prefix():
     pls = make_nested({"tutorials": {"big": PER_PAGE * 2}})  # 2 pages
     kb = playlists_keyboard(pls, ci=0, si=0, page=0)
