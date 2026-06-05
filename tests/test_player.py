@@ -152,6 +152,16 @@ def test_probe_escalates_on_degraded_client(monkeypatch, error):
     assert attempts[1] == ["--cookies-from-browser", "firefox"]  # …stock args + cookies
 
 
+def test_probe_reports_escalation_progress(monkeypatch):
+    import src.player as player
+
+    s = _settings(ytdl_cookies_browser="firefox", ytdl_options="extractor-args=x")
+    _probe_attempts(monkeypatch, s, "ERROR: Sign in to confirm you're not a bot.")
+    stages = []
+    player.probe_url(s, "https://youtu.be/x", progress=stages.append)
+    assert stages == ["escalating"]  # the slow rung announces itself
+
+
 def test_probe_escalation_keeps_network_args(monkeypatch):
     # falling back from the lean client must NOT fall back to a dead address
     # family — force-ipv4/proxy flags carry over into the retry.

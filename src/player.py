@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -226,7 +227,12 @@ def _run_probe(
         return None, reason[0][:200]
 
 
-def probe_url(settings: Settings, url: str, timeout: float = 120) -> tuple[dict, Path]:
+def probe_url(
+    settings: Settings,
+    url: str,
+    timeout: float = 120,
+    progress: Callable[[str], None] | None = None,
+) -> tuple[dict, Path]:
     """One yt-dlp extraction: returns the info dict + its JSON on disk.
 
     The saved JSON feeds ``--load-info-json`` downloads, so the actual
@@ -254,6 +260,8 @@ def probe_url(settings: Settings, url: str, timeout: float = 120) -> tuple[dict,
         if stock_args != fast_args:
             logger.info("Probe failed (%s) — escalating with stock args for %s",
                         reason[:80], url)
+            if progress:
+                progress("escalating")
             info, reason = _run_probe(settings, url, stock_args, timeout)
     if info is None:
         raise UrlPlaybackError(reason)
@@ -423,15 +431,23 @@ def _log_file(name: str):
         return subprocess.DEVNULL
 
 
-def play_url(settings: Settings, url: str) -> str:
+def play_url(
+    settings: Settings,
+    url: str,
+    progress: Callable[[str], None] | None = None,
+) -> str:
     """Stream a URL: one yt-dlp extraction, then yt-dlp pipes into mpv.
 
     Single-stream media flows over stdin; split video+audio runs as two
     ``--load-info-json`` downloads (no re-extraction) into two pipe fds that
     mpv muxes itself. Returns the title; raises :class:`UrlPlaybackError`
-    with a user-facing reason when the URL can't be prepared.
+    with a user-facing reason when the URL can't be prepared. ``progress``
+    (called from this worker thread) receives stage names — "escalating"
+    when the cookie retry kicks in, "starting" once the probe succeeded.
     """
-    info, info_path = probe_url(settings, url)
+    info, info_path = probe_url(settings, url, progress=progress)
+    if progress:
+        progress("starting")
     title = info.get("title") or url
     formats = info.get("requested_formats") or [info]
 

@@ -754,12 +754,44 @@ async def cmd_search(message: Message, command: CommandObject) -> None:
 _URL_RE = re.compile(r"^https?://\S+$")
 
 
+_STAGE_TEXT = {
+    "resolving": "⏳ Resolving link…",
+    "escalating": "🍪 Site wants sign-in — retrying with browser cookies…",
+    "starting": "▶ Starting playback…",
+}
+_SPINNER = "◔◑◕●"
+
+
 async def _play_url(message: Message, url: str) -> None:
     _remember_chat(message)
-    note = await message.reply("⏳ Resolving…")
+    note = await message.reply(_STAGE_TEXT["resolving"])
+    stage = {"name": "resolving"}  # written by the worker thread, read here
+    started = time.monotonic()
+
+    task = asyncio.create_task(
+        asyncio.to_thread(
+            player.play_url, get_settings(), url,
+            lambda name: stage.__setitem__("name", name),
+        )
+    )
+    # Live status while the probe runs: stage + spinner + elapsed seconds
+    # (a real percentage doesn't exist — extraction time is up to the site).
+    tick = 0
+    while True:
+        done, _ = await asyncio.wait({task}, timeout=3)
+        if done:
+            break
+        tick += 1
+        status = (
+            f"{_STAGE_TEXT[stage['name']]} {_SPINNER[tick % len(_SPINNER)]} "
+            f"{time.monotonic() - started:.0f}s"
+        )
+        try:
+            await note.edit_text(status)
+        except TelegramBadRequest:
+            pass  # unchanged text / message gone — keep waiting either way
     try:
-        title = await asyncio.to_thread(player.play_url, get_settings(), url)
-        text = f"▶ Streaming: {title}"
+        text = f"▶ Streaming: {task.result()}"
     except player.UrlPlaybackError as exc:
         text = f"❌ Can't play that link: {exc}"
     try:
