@@ -75,6 +75,15 @@ class FakeMpv:
             elif prop in ("pause", "mute"):  # flip the boolean
                 self.props[prop] = not self.props.get(prop, False)
             return {"error": "success", "request_id": rid}
+        if name == "af":  # audio-filter add/remove with @label syntax
+            op, spec = cmd[1], cmd[2]
+            filters = self.props.setdefault("af", [])
+            if op == "add" and spec.startswith("@"):
+                label, _, fname = spec[1:].partition(":")
+                filters.append({"name": fname.split("=")[0], "label": label})
+            elif op == "remove" and spec.startswith("@"):
+                self.props["af"] = [f for f in filters if f.get("label") != spec[1:]]
+            return {"error": "success", "request_id": rid}
         if name in ("seek", "quit", "playlist-next", "playlist-prev", "playlist-shuffle"):
             return {"error": "success", "request_id": rid}
         return {"error": "success", "request_id": rid}
@@ -193,6 +202,14 @@ def test_set_speed_clamps(fake_mpv):
     assert fake_mpv.props["speed"] == 1.5
     assert client.set_speed(99) == 5.0    # clamped high
     assert client.set_speed(0.01) == 0.1  # clamped low
+
+
+def test_toggle_night(fake_mpv):
+    client = MpvClient(fake_mpv.path)
+    assert client.toggle_night() is True   # adds the labelled loudnorm filter
+    assert fake_mpv.props["af"] == [{"name": "loudnorm", "label": "night"}]
+    assert client.toggle_night() is False  # second call removes it
+    assert fake_mpv.props["af"] == []
 
 
 def test_screenshot_to_file(fake_mpv):

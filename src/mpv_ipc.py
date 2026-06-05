@@ -229,6 +229,24 @@ class MpvClient:
         self.show_text(f"Speed: {speed:g}x")
         return speed
 
+    def toggle_night(self) -> bool:
+        """Toggle loudness normalization (night mode); True = now on.
+
+        Adds/removes a labelled ``loudnorm`` audio filter: quiet dialogue up,
+        explosions down — so late-night viewing doesn't wake the house.
+        """
+        filters = self._safe_get("af") or []
+        is_on = any(
+            isinstance(f, dict) and f.get("label") == "night" for f in filters
+        )
+        if is_on:
+            self.command("af", "remove", "@night")
+            self.show_text("Night mode: off")
+            return False
+        self.command("af", "add", "@night:loudnorm=I=-24:LRA=7:TP=-2")
+        self.show_text("Night mode: on")
+        return True
+
     def adjust_volume(self, delta: float, lo: float = 0, hi: float = 130) -> float:
         """Read volume, clamp ``current + delta`` to [lo, hi], write it back."""
         current = self.get_property("volume")

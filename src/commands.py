@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import random
 import re
 import tempfile
 import time
@@ -329,6 +330,40 @@ async def cmd_goto(message: Message, command: CommandObject) -> None:
     else:
         _, err = await _ipc(lambda c: c.seek_absolute(value))
         await message.reply(err or f"⏩ → {_fmt_time(value)}")
+
+
+@router.message(Command("mpv_random", "mpv_surprise"))
+async def cmd_random(message: Message, command: CommandObject) -> None:
+    """Play a random playlist — optionally from one category."""
+    arg = (command.args or "").strip()
+    pls = await asyncio.to_thread(_all_playlists, refresh=True)
+    if not pls:
+        await message.reply("❌ No playlists found.")
+        return
+    pool = pls
+    if arg:
+        cats = {c.lower(): c for c in keyboards.categories(pls)}
+        cat = cats.get(arg.lower())
+        if cat is None:
+            await message.reply(
+                f"❌ No category '{arg}'. Have: {', '.join(sorted(cats.values()))}"
+            )
+            return
+        pool = [p for p in pls if p.category == cat]
+    pl = random.choice(pool)
+    _remember_chat(message)
+    await asyncio.to_thread(player.play, get_settings(), pl.path)
+    await message.reply(f"🎲 Random pick: {pl.display}  ({pl.category})")
+
+
+@router.message(Command("mpv_night"))
+async def cmd_night(message: Message) -> None:
+    """Toggle loudness normalization for late-night viewing."""
+    on, err = await _ipc(lambda c: c.toggle_night())
+    await message.reply(
+        err or ("🌙 Night mode ON — quiet dialogue up, explosions down"
+                if on else "🔊 Night mode off")
+    )
 
 
 # ── Sleep timer ─────────────────────────────────────────────────────
@@ -994,6 +1029,8 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> [n] episode picker/jump\n"
         "<b>/mpv_speed</b> [x] — playback speed (buttons or value)\n"
         "<b>/mpv_sleep</b> &lt;time&gt; — stop playback after e.g. 45m / 1.5h\n"
+        "<b>/mpv_random</b> [category] — play a random playlist\n"
+        "<b>/mpv_night</b> — loudness normalization for late-night viewing\n"
         "<b>/mpv_shuffle</b> · <b>/mpv_loop</b>\n"
         "<b>/mpv_audio</b> switch audio track\n"
         "<b>/mpv_sub</b> switch subtitle · <b>/mpv_sub_toggle</b> show/hide\n"
