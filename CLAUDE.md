@@ -33,9 +33,11 @@ Required env: `BOT_TOKEN` (missing → `SystemExit` with a friendly message, not
 `ALLOWED_USERS` (comma-separated Telegram user IDs — **empty means open to everyone**, logged as a
 warning), `API_SERVER_URL`, host paths `MPV_SOCKET` / `PLAYLIST_DIRS` / `VIDEOS_DIR` / `MPV_RUNNER` /
 `DISPLAY`, and launch hooks `PRE_PLAY_HOOK` / `POST_PLAY_HOOK` (shell commands run around the mpv
-spawn — WM glue like `i3-msg workspace 10` lives there, not in the bot), and `YTDL_OPTIONS`
-(comma-separated `key=value` passed to mpv as `--ytdl-raw-options` for URL playback, e.g.
-`cookies-from-browser=firefox`). See `.env.example`.
+spawn — WM glue like `i3-msg workspace 10` lives there, not in the bot), `YTDL_OPTIONS`
+(comma-separated `key=value` passed to mpv as `--ytdl-raw-options` for every URL), and
+`YTDL_COOKIES_BROWSER` (browser cookies applied **only** to gated hosts — Instagram/Facebook;
+logged-in YouTube cookies make yt-dlp extraction hang, so never make cookies global). See
+`.env.example`.
 
 ## Architecture
 

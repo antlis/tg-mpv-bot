@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 from . import state
 from .config import Settings
@@ -76,14 +77,25 @@ def build_launch_command(settings: Settings, playlist: Path) -> list[str]:
     ]
 
 
-def build_url_command(settings: Settings, url: str) -> list[str]:
-    """Construct the argv for streaming ``url`` via mpv's ytdl hook.
+# Hosts that require a logged-in session for most content. Browser cookies
+# are applied ONLY here: with YouTube, account cookies make yt-dlp stall on
+# bot checks (observed as mpv hanging at "? / ?" then dying), so a global
+# cookies option would break the common case to serve the rare one.
+GATED_HOSTS = ("instagram.com", "facebook.com", "fb.watch")
 
-    mpv shells out to yt-dlp for anything that isn't a direct media URL, so
-    YouTube/SoundCloud/Twitter/etc. work like in any yt-dlp tool. Optional
-    ``YTDL_OPTIONS`` (comma-separated ``key=value``) become
-    ``--ytdl-raw-options`` — e.g. ``cookies-from-browser=firefox`` for
-    login-gated Instagram/Facebook content.
+
+def _is_gated_host(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return any(host == h or host.endswith("." + h) for h in GATED_HOSTS)
+
+
+def build_url_command(settings: Settings, url: str) -> list[str]:
+    """Fallback argv: stream ``url`` via mpv's *built-in* ytdl hook.
+
+    Only used when :func:`resolve_stream` fails — the hook is unreliable on
+    some mpv/ffmpeg combinations ("EDL: Could not open source file" even for
+    URLs that play fine directly), which is why the bot normally resolves
+    URLs itself.
     """
     cmd = [
         _mpv_base(settings),
@@ -92,8 +104,81 @@ def build_url_command(settings: Settings, url: str) -> list[str]:
         "--force-window",
         "--save-position-on-quit",
     ]
-    if settings.ytdl_options:
-        cmd.append(f"--ytdl-raw-options={settings.ytdl_options}")
+    raw = [o for o in (settings.ytdl_options,) if o]
+    if settings.ytdl_cookies_browser and _is_gated_host(url):
+        raw.append(f"cookies-from-browser={settings.ytdl_cookies_browser}")
+    if raw:
+        cmd.append(f"--ytdl-raw-options={','.join(raw)}")
+    return cmd
+
+
+def _ytdl_cli_args(settings: Settings, url: str) -> list[str]:
+    """Translate the YTDL_* settings into yt-dlp CLI flags."""
+    args: list[str] = []
+    for opt in filter(None, settings.ytdl_options.split(",")):
+        key, _, value = opt.partition("=")
+        args.append(f"--{key}")
+        if value:
+            args.append(value)
+    if settings.ytdl_cookies_browser and _is_gated_host(url):
+        args += ["--cookies-from-browser", settings.ytdl_cookies_browser]
+    return args
+
+
+def resolve_stream(
+    settings: Settings, url: str, timeout: float = 90
+) -> tuple[str, list[str]] | None:
+    """Resolve ``url`` with yt-dlp to ``(title, direct stream URL(s))``.
+
+    Returns one URL for muxed formats, two (video + audio) when yt-dlp picks
+    separate streams, or ``None`` when yt-dlp is missing/fails (caller falls
+    back to mpv's hook).
+    """
+    ytdlp = _which("yt-dlp")
+    if ytdlp is None:
+        return None
+    cmd = [
+        ytdlp, "--no-warnings", "--no-playlist",
+        "-f", "bv*+ba/b",
+        "--print", "title", "--print", "urls",
+        *_ytdl_cli_args(settings, url),
+        "--", url,
+    ]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, check=False,
+            env={**os.environ, "PATH": _augmented_path()},
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("yt-dlp resolution failed for %s: %s", url, exc)
+        return None
+    lines = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+    if result.returncode != 0 or len(lines) < 2:
+        logger.warning(
+            "yt-dlp could not resolve %s: %s", url, result.stderr.strip()[:300]
+        )
+        return None
+    return lines[0], lines[1:]
+
+
+def build_direct_command(
+    settings: Settings, urls: list[str], title: str
+) -> list[str]:
+    """argv for playing pre-resolved stream URL(s) without the ytdl hook.
+
+    ``--save-position-on-quit`` is pointless here (resolved URLs expire after
+    hours, so the position would be keyed to a dead URL); ``/mpv_last``
+    re-resolves the original page URL instead.
+    """
+    cmd = [
+        _mpv_base(settings),
+        urls[0],
+        f"--input-ipc-server={settings.mpv_socket}",
+        "--force-window",
+        f"--force-media-title={title}",  # /mpv_info shows the title, not a hash
+    ]
+    if len(urls) > 1:
+        cmd.append(f"--audio-file={urls[1]}")
     return cmd
 
 
@@ -189,8 +274,25 @@ def play(settings: Settings, playlist: Path) -> None:
     state.record_last_played(settings.state_file, playlist)  # for /mpv_last
 
 
-def play_url(settings: Settings, url: str) -> None:
-    """Stream a URL (YouTube/SoundCloud/… via mpv's ytdl hook), same launch path."""
+def play_url(settings: Settings, url: str) -> str | None:
+    """Stream a URL (YouTube/SoundCloud/…), same kill→hooks→spawn path.
+
+    The bot resolves the page URL to direct stream URL(s) with yt-dlp itself
+    and hands those to mpv — mpv's built-in ytdl hook is broken on some
+    mpv/ffmpeg combos (EDL open failures) and hides errors. The hook remains
+    as a fallback when resolution fails (e.g. yt-dlp not installed).
+
+    Returns the resolved title, or ``None`` when the hook fallback was used.
+    """
+    resolved = resolve_stream(settings, url)
+    if resolved:
+        title, urls = resolved
+        cmd = build_direct_command(settings, urls, title)
+    else:
+        title = None
+        logger.warning("Falling back to mpv's ytdl hook for %s", url)
+        cmd = build_url_command(settings, url)
     env = _hook_env(settings, url, url)
-    _kill_and_launch(settings, build_url_command(settings, url), env)
+    _kill_and_launch(settings, cmd, env)
     state.record_last_played(settings.state_file, url)  # for /mpv_last
+    return title

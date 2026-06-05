@@ -5,6 +5,8 @@ from src.player import (
     _hook_env,
     _run_hook,
     _stop_current,
+    _ytdl_cli_args,
+    build_direct_command,
     build_launch_command,
     build_url_command,
 )
@@ -57,9 +59,61 @@ def test_url_command_basic():
 
 
 def test_url_command_with_ytdl_options():
-    s = _settings(mpv_runner="", ytdl_options="cookies-from-browser=firefox")
-    cmd = build_url_command(s, "https://instagram.com/reel/x")
-    assert "--ytdl-raw-options=cookies-from-browser=firefox" in cmd
+    s = _settings(mpv_runner="", ytdl_options="format-sort=res:1080")
+    cmd = build_url_command(s, "https://youtu.be/x")
+    assert "--ytdl-raw-options=format-sort=res:1080" in cmd
+
+
+def test_cookies_only_for_gated_hosts():
+    s = _settings(mpv_runner="", ytdl_cookies_browser="firefox")
+    gated = build_url_command(s, "https://www.instagram.com/reel/x")
+    assert "--ytdl-raw-options=cookies-from-browser=firefox" in gated
+    # Logged-in YouTube cookies stall yt-dlp's extraction → must NOT be sent.
+    open_site = build_url_command(s, "https://youtu.be/6gRXToZhO1A")
+    assert not any("cookies" in a for a in open_site)
+    # Not fooled by a lookalike domain.
+    fake = build_url_command(s, "https://evilinstagram.com/x")
+    assert not any("cookies" in a for a in fake)
+
+
+def test_cookies_combine_with_global_options():
+    s = _settings(
+        mpv_runner="", ytdl_options="format-sort=res:1080", ytdl_cookies_browser="firefox"
+    )
+    cmd = build_url_command(s, "https://facebook.com/watch?v=1")
+    assert "--ytdl-raw-options=format-sort=res:1080,cookies-from-browser=firefox" in cmd
+
+
+def test_direct_command_single_url():
+    s = _settings(mpv_runner="")
+    cmd = build_direct_command(s, ["https://cdn.example/v.mp4"], "My Title")
+    assert cmd[1] == "https://cdn.example/v.mp4"
+    assert "--force-media-title=My Title" in cmd
+    assert not any(a.startswith("--audio-file") for a in cmd)
+    # resolved URLs expire — never key a resume position to one
+    assert "--save-position-on-quit" not in cmd
+
+
+def test_direct_command_split_streams():
+    s = _settings(mpv_runner="")
+    cmd = build_direct_command(s, ["https://v.example/v", "https://a.example/a"], "T")
+    assert cmd[1] == "https://v.example/v"
+    assert "--audio-file=https://a.example/a" in cmd
+
+
+def test_ytdl_cli_args_translation():
+    s = _settings(ytdl_options="format-sort=res:1080,no-check-certificates")
+    assert _ytdl_cli_args(s, "https://youtu.be/x") == [
+        "--format-sort", "res:1080", "--no-check-certificates",
+    ]
+
+
+def test_ytdl_cli_args_cookies_gated_only():
+    s = _settings(ytdl_cookies_browser="firefox")
+    assert _ytdl_cli_args(s, "https://www.instagram.com/reel/x") == [
+        "--cookies-from-browser", "firefox",
+    ]
+    assert _ytdl_cli_args(s, "https://youtu.be/x") == []
 
 
 def test_stop_current_dead_socket_no_pkill(tmp_path):

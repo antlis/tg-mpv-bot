@@ -707,8 +707,15 @@ _URL_RE = re.compile(r"^https?://\S+$")
 
 
 async def _play_url(message: Message, url: str) -> None:
-    await asyncio.to_thread(player.play_url, get_settings(), url)
-    await message.reply("▶ Streaming — give it a few seconds, then /mpv_info")
+    note = await message.reply("⏳ Resolving…")
+    title = await asyncio.to_thread(player.play_url, get_settings(), url)
+    try:
+        await note.edit_text(
+            f"▶ Streaming: {title}" if title
+            else "▶ Streaming — give it a few seconds, then /mpv_info"
+        )
+    except TelegramBadRequest:
+        pass
 
 
 @router.message(Command("mpv_url", "mpv_stream"))

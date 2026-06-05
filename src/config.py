@@ -34,9 +34,13 @@ class Settings:
     pre_play_hook: str = ""
     post_play_hook: str = ""
     # Extra yt-dlp options for URL playback, passed as --ytdl-raw-options
-    # (comma-separated key=value). E.g. "cookies-from-browser=firefox" to
-    # play login-gated Instagram/Facebook content.
+    # (comma-separated key=value), applied to every URL.
     ytdl_options: str = ""
+    # Browser whose cookies unlock login-gated sites (Instagram/Facebook).
+    # Applied ONLY to those hosts: with YouTube, logged-in cookies make
+    # yt-dlp's extraction hang/stall on bot checks, so cookies must not be
+    # global (learned the hard way).
+    ytdl_cookies_browser: str = ""
     # Also pkill stray mpv instances (ones not started by the bot) before
     # playing. Guarantees a single player on screen, but is rude on machines
     # where mpv is used manually — set KILL_STRAY_MPV=0 there; the bot's own
@@ -87,6 +91,7 @@ def get_settings() -> Settings:
         pre_play_hook=os.environ.get("PRE_PLAY_HOOK", ""),
         post_play_hook=os.environ.get("POST_PLAY_HOOK", ""),
         ytdl_options=os.environ.get("YTDL_OPTIONS", ""),
+        ytdl_cookies_browser=os.environ.get("YTDL_COOKIES_BROWSER", ""),
         kill_stray_mpv=os.environ.get("KILL_STRAY_MPV", "1").lower()
         in ("1", "true", "yes"),
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),
