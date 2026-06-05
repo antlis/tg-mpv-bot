@@ -14,7 +14,6 @@ may not contain ``/usr/bin`` at all), so relying on it would break ``pkill`` /
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import shutil
@@ -22,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -132,78 +132,50 @@ def _ytdl_cli_args(settings: Settings, url: str) -> list[str]:
     return args
 
 
-def resolve_stream(
-    settings: Settings, url: str, timeout: float = 180
-) -> tuple[str, list[str], dict[str, str]] | None:
-    """Resolve ``url`` with yt-dlp to ``(title, stream URL(s), http headers)``.
-
-    One URL for muxed formats, two (video + audio) when yt-dlp picks separate
-    streams. The headers matter: CDNs like googlevideo reject fetches whose
-    User-Agent doesn't match the client yt-dlp minted the URL for — that's
-    why yt-dlp downloads the same video fine while a header-less player 403s.
-    Returns ``None`` when yt-dlp is missing/fails (caller falls back to mpv's
-    hook).
-    """
-    # Prefer the venv's yt-dlp: YouTube breaks faster than distro releases,
-    # so a nightly is pip-installed next to the bot's interpreter.
+def _ytdlp_bin() -> str | None:
+    """Prefer the venv's yt-dlp: YouTube breaks faster than distro releases,
+    so a nightly is pip-installed next to the bot's interpreter."""
     venv_ytdlp = Path(sys.executable).parent / "yt-dlp"
-    ytdlp = str(venv_ytdlp) if venv_ytdlp.exists() else _which("yt-dlp")
+    return str(venv_ytdlp) if venv_ytdlp.exists() else _which("yt-dlp")
+
+
+def build_pipe_commands(
+    settings: Settings, url: str, title_file: Path | None = None
+) -> tuple[list[str], list[str]] | None:
+    """argv pair for ``yt-dlp -o - <url> | mpv -``.
+
+    yt-dlp does ALL the network fetching (exactly like a plain download), so
+    every quirk of modern CDNs — IP-locked URLs, client-bound User-Agents,
+    PO-token formats — is handled by the one tool that keeps up with them.
+    Handing mpv pre-resolved stream URLs looks cleaner but breaks whenever
+    the CDN treats mpv's fetch differently from yt-dlp's (googlevideo does).
+
+    The pipe isn't seekable beyond mpv's cache, so generous demuxer buffers
+    keep back-seeking and ~minutes of forward-seeking working.
+    """
+    ytdlp = _ytdlp_bin()
     if ytdlp is None:
         return None
-    cmd = [
-        ytdlp, "--no-warnings", "--no-playlist", "-j",
-        "-f", "bv*+ba/b",
+    ytdl_cmd = [
+        ytdlp, "--no-warnings", "--no-playlist",
+        "-f", settings.ytdl_format,
+        "-o", "-",
         *_ytdl_cli_args(settings, url),
-        "--", url,
     ]
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, check=False,
-            env={**os.environ, "PATH": _augmented_path()},
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        logger.warning("yt-dlp resolution failed for %s: %s", url, exc)
-        return None
-    try:
-        info = json.loads(result.stdout)
-    except ValueError:
-        logger.warning(
-            "yt-dlp could not resolve %s: %s", url, result.stderr.strip()[:300]
-        )
-        return None
-    formats = info.get("requested_formats") or [info]
-    urls = [f["url"] for f in formats if f.get("url")]
-    if not urls:
-        logger.warning("yt-dlp returned no stream URLs for %s", url)
-        return None
-    headers = formats[0].get("http_headers") or {}
-    return info.get("title") or url, urls, headers
-
-
-def build_direct_command(
-    settings: Settings, urls: list[str], title: str, headers: dict[str, str]
-) -> list[str]:
-    """argv for playing pre-resolved stream URL(s) without the ytdl hook.
-
-    The User-Agent/Referer from yt-dlp are forwarded so the CDN accepts the
-    fetch. ``--save-position-on-quit`` is pointless here (resolved URLs
-    expire after hours, so the position would be keyed to a dead URL);
-    ``/mpv_last`` re-resolves the original page URL instead.
-    """
-    cmd = [
+    if title_file is not None:
+        # Written during the same invocation — no extra metadata request.
+        ytdl_cmd += ["--print-to-file", "%(title)s", str(title_file)]
+    ytdl_cmd += ["--", url]
+    mpv_cmd = [
         _mpv_base(settings),
-        urls[0],
+        "-",  # read the media from stdin
         f"--input-ipc-server={settings.mpv_socket}",
         "--force-window",
-        f"--force-media-title={title}",  # /mpv_info shows the title, not a hash
+        "--cache=yes",
+        "--demuxer-max-bytes=600MiB",
+        "--demuxer-max-back-bytes=600MiB",
     ]
-    if len(urls) > 1:
-        cmd.append(f"--audio-file={urls[1]}")
-    if headers.get("User-Agent"):
-        cmd.append(f"--user-agent={headers['User-Agent']}")
-    if headers.get("Referer"):
-        cmd.append(f"--referrer={headers['Referer']}")
-    return cmd
+    return ytdl_cmd, mpv_cmd
 
 
 HOOK_TIMEOUT = 15  # seconds — a hung hook must not block playback for long
@@ -281,11 +253,7 @@ def _kill_and_launch(settings: Settings, cmd: list[str], env: dict[str, str]) ->
     logger.info("Launching: %s", " ".join(cmd))
     # mpv's output goes to a per-launch log, not /dev/null — when a stream
     # fails to open, this file is the only place the reason exists.
-    log_path = Path(tempfile.gettempdir()) / "tg-mpv-bot-mpv.log"
-    try:
-        log_file = open(log_path, "wb")  # noqa: SIM115 — handed to Popen
-    except OSError:
-        log_file = subprocess.DEVNULL
+    log_file = _log_file("tg-mpv-bot-mpv.log")
     subprocess.Popen(
         cmd,
         env=env,
@@ -307,25 +275,62 @@ def play(settings: Settings, playlist: Path) -> None:
     state.record_last_played(settings.state_file, playlist)  # for /mpv_last
 
 
+def _log_file(name: str):
+    """Truncate-and-open a per-launch log in tmp (DEVNULL if that fails)."""
+    try:
+        return open(Path(tempfile.gettempdir()) / name, "wb")  # noqa: SIM115
+    except OSError:
+        return subprocess.DEVNULL
+
+
 def play_url(settings: Settings, url: str) -> str | None:
-    """Stream a URL (YouTube/SoundCloud/…), same kill→hooks→spawn path.
+    """Stream a URL via ``yt-dlp -o - | mpv -``, same kill→hooks→spawn path.
 
-    The bot resolves the page URL to direct stream URL(s) with yt-dlp itself
-    and hands those to mpv — mpv's built-in ytdl hook is broken on some
-    mpv/ffmpeg combos (EDL open failures) and hides errors. The hook remains
-    as a fallback when resolution fails (e.g. yt-dlp not installed).
-
-    Returns the resolved title, or ``None`` when the hook fallback was used.
+    Returns the media title if yt-dlp wrote it in time (best-effort), else
+    ``None``. Playback continues regardless.
     """
-    resolved = resolve_stream(settings, url)
-    if resolved:
-        title, urls, headers = resolved
-        cmd = build_direct_command(settings, urls, title, headers)
-    else:
+    title_file = Path(tempfile.gettempdir()) / f"tg-mpv-title-{uuid.uuid4().hex}"
+    cmds = build_pipe_commands(settings, url, title_file)
+    if cmds is None:
+        logger.warning("yt-dlp not found — falling back to mpv's ytdl hook")
         title = None
-        logger.warning("Falling back to mpv's ytdl hook for %s", url)
-        cmd = build_url_command(settings, url)
-    env = _hook_env(settings, url, url)
-    _kill_and_launch(settings, cmd, env)
+        env = _hook_env(settings, url, url)
+        _kill_and_launch(settings, build_url_command(settings, url), env)
+    else:
+        ytdl_cmd, mpv_cmd = cmds
+        env = _hook_env(settings, url, url)
+        _stop_current(settings)
+        _run_hook("pre-play", settings.pre_play_hook, env)
+        logger.info("Launching pipe: %s | %s", " ".join(ytdl_cmd), " ".join(mpv_cmd))
+        ytdl_log, mpv_log = _log_file("tg-mpv-bot-ytdl.log"), _log_file("tg-mpv-bot-mpv.log")
+        fetcher = subprocess.Popen(
+            ytdl_cmd, env=env, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=ytdl_log, start_new_session=True,
+        )
+        subprocess.Popen(
+            mpv_cmd, env=env, stdin=fetcher.stdout,
+            stdout=mpv_log, stderr=mpv_log, start_new_session=True,
+        )
+        fetcher.stdout.close()  # mpv's exit must SIGPIPE yt-dlp, not us
+        for f in (ytdl_log, mpv_log):
+            if f is not subprocess.DEVNULL:
+                f.close()  # children hold their own duplicates
+        _run_hook("post-play", settings.post_play_hook, env)
+        title = _read_title(title_file)
     state.record_last_played(settings.state_file, url)  # for /mpv_last
     return title
+
+
+def _read_title(title_file: Path, wait: float = 10.0) -> str | None:
+    """Poll briefly for the title yt-dlp prints at extraction time."""
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        try:
+            text = title_file.read_text().strip()
+        except OSError:
+            text = ""
+        if text:
+            title_file.unlink(missing_ok=True)
+            return text
+        time.sleep(0.5)
+    return None

@@ -6,8 +6,8 @@ from src.player import (
     _run_hook,
     _stop_current,
     _ytdl_cli_args,
-    build_direct_command,
     build_launch_command,
+    build_pipe_commands,
     build_url_command,
 )
 
@@ -92,31 +92,27 @@ def test_cookies_combine_with_global_options():
     assert "--ytdl-raw-options=format-sort=res:1080,cookies-from-browser=firefox" in cmd
 
 
-def test_direct_command_single_url():
-    s = _settings(mpv_runner="")
-    cmd = build_direct_command(s, ["https://cdn.example/v.mp4"], "My Title", {})
-    assert cmd[1] == "https://cdn.example/v.mp4"
-    assert "--force-media-title=My Title" in cmd
-    assert not any(a.startswith("--audio-file") for a in cmd)
-    # resolved URLs expire — never key a resume position to one
-    assert "--save-position-on-quit" not in cmd
+def test_pipe_commands_shape(tmp_path):
+    s = _settings(mpv_runner="", ytdl_format="bv*[height<=1080]+ba/b")
+    tf = tmp_path / "title"
+    ytdl_cmd, mpv_cmd = build_pipe_commands(s, "https://youtu.be/x", tf)
+    # yt-dlp fetches and writes the stream to stdout…
+    assert "-o" in ytdl_cmd and "-" in ytdl_cmd
+    assert ytdl_cmd[ytdl_cmd.index("-f") + 1] == "bv*[height<=1080]+ba/b"
+    assert ytdl_cmd[-1] == "https://youtu.be/x"  # after "--": never an option
+    assert str(tf) in ytdl_cmd  # title side-channel
+    # …and mpv reads stdin with seek-friendly cache buffers.
+    assert mpv_cmd[1] == "-"
+    assert "--cache=yes" in mpv_cmd
+    assert "--input-ipc-server=/tmp/sock" in mpv_cmd
 
 
-def test_direct_command_split_streams():
-    s = _settings(mpv_runner="")
-    cmd = build_direct_command(s, ["https://v.example/v", "https://a.example/a"], "T", {})
-    assert cmd[1] == "https://v.example/v"
-    assert "--audio-file=https://a.example/a" in cmd
-
-
-def test_direct_command_forwards_cdn_headers():
-    # googlevideo 403s fetches whose UA doesn't match the minting client —
-    # yt-dlp's http_headers must reach mpv.
-    s = _settings(mpv_runner="")
-    headers = {"User-Agent": "com.google.android.youtube/19", "Referer": "https://yt.example/w"}
-    cmd = build_direct_command(s, ["https://v.example/v"], "T", headers)
-    assert "--user-agent=com.google.android.youtube/19" in cmd
-    assert "--referrer=https://yt.example/w" in cmd
+def test_pipe_commands_cookies_gated_only():
+    s = _settings(mpv_runner="", ytdl_cookies_browser="firefox")
+    ytdl_cmd, _ = build_pipe_commands(s, "https://www.instagram.com/reel/x")
+    assert "--cookies-from-browser" in ytdl_cmd
+    ytdl_cmd, _ = build_pipe_commands(s, "https://youtu.be/x")
+    assert "--cookies-from-browser" not in ytdl_cmd
 
 
 def test_ytdl_cli_args_translation():

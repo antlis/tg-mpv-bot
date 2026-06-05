@@ -41,6 +41,9 @@ class Settings:
     # yt-dlp's extraction hang/stall on bot checks, so cookies must not be
     # global (learned the hard way).
     ytdl_cookies_browser: str = ""
+    # yt-dlp format selection for URL playback. Capped at 1080p by default so
+    # streaming starts fast; raise it if your pipe and screen can take it.
+    ytdl_format: str = "bv*[height<=1080]+ba/b"
     # Also pkill stray mpv instances (ones not started by the bot) before
     # playing. Guarantees a single player on screen, but is rude on machines
     # where mpv is used manually — set KILL_STRAY_MPV=0 there; the bot's own
@@ -92,6 +95,7 @@ def get_settings() -> Settings:
         post_play_hook=os.environ.get("POST_PLAY_HOOK", ""),
         ytdl_options=os.environ.get("YTDL_OPTIONS", ""),
         ytdl_cookies_browser=os.environ.get("YTDL_COOKIES_BROWSER", ""),
+        ytdl_format=os.environ.get("YTDL_FORMAT", "bv*[height<=1080]+ba/b"),
         kill_stray_mpv=os.environ.get("KILL_STRAY_MPV", "1").lower()
         in ("1", "true", "yes"),
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),

@@ -68,9 +68,14 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   as always-present), and `prettify()` (strips release/quality/source junk for **display only** —
   `Playlist.display` / button text; the raw `name` is what matching, callbacks and files use).
 - `src/player.py` — the only part that spawns a process. `build_launch_command()` /
-  `build_url_command()` are pure helpers (use `MPV_RUNNER` if it exists, else plain `mpv`);
-  `play_url()` streams a URL via mpv's ytdl hook (bare-URL messages and `/mpv_url` route here, gated
-  by the anchored `_URL_RE`). `play()` does `pkill -x mpv`,
+  `build_pipe_commands()` are pure helpers (use `MPV_RUNNER` if it exists, else plain `mpv`);
+  `play_url()` streams a URL as `yt-dlp -o - | mpv -` (bare-URL messages and `/mpv_url` route here,
+  gated by the anchored `_URL_RE`). **yt-dlp must do the fetching itself** — handing mpv resolved
+  stream URLs or using mpv's ytdl hook breaks on IP-locked/client-bound CDN URLs (googlevideo) and
+  on split-brain proxy egress; the pipe is the one shape that matches a plain download. The venv's
+  yt-dlp (pip-installed nightly) is preferred over the system one; title arrives via
+  `--print-to-file` during the same invocation; yt-dlp/mpv output → `/tmp/tg-mpv-bot-{ytdl,mpv}.log`.
+  `play()` does `pkill -x mpv`,
   runs the optional `PRE_PLAY_HOOK` shell command, then a detached
   `Popen(..., start_new_session=True)` — the Python-native equivalent of the old `setsid` detachment
   for non-TTY contexts (asyncio/systemd) — then `POST_PLAY_HOOK`. Hooks get `PLAYLIST` /
