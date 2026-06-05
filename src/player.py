@@ -173,3 +173,4 @@ def play_url(settings: Settings, url: str) -> None:
     """Stream a URL (YouTube/SoundCloud/… via mpv's ytdl hook), same launch path."""
     env = _hook_env(settings, url, url)
     _kill_and_launch(settings, build_url_command(settings, url), env)
+    state.record_last_played(settings.state_file, url)  # for /mpv_last

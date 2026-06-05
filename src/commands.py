@@ -650,13 +650,17 @@ async def cmd_play(message: Message, command: CommandObject) -> None:
 
 @router.message(Command("mpv_last", "mpv_continue"))
 async def cmd_last(message: Message) -> None:
-    """Relaunch the last-played playlist (mpv restores the position itself)."""
+    """Relaunch the last-played playlist or URL (mpv restores the position)."""
     last = state.last_played(get_settings().state_file)
     if last is None:
         await message.reply("❌ No watch history yet — play something first.")
         return
-    await asyncio.to_thread(player.play, get_settings(), last)
-    await message.reply(f"▶ Resuming: {playlists.prettify(last.stem)}")
+    if last.startswith(("http://", "https://")):
+        await asyncio.to_thread(player.play_url, get_settings(), last)
+        await message.reply(f"▶ Resuming stream: {last}")
+    else:
+        await asyncio.to_thread(player.play, get_settings(), Path(last))
+        await message.reply(f"▶ Resuming: {playlists.prettify(Path(last).stem)}")
 
 
 @router.message(Command("mpv_search", "mpv_find"))
@@ -784,7 +788,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_list</b> — browse playlists with buttons\n"
         "<b>/mpv_play</b> &lt;query&gt; — play by number or name\n"
         "<b>/mpv_search</b> [category] &lt;text&gt; — find playlists, tap to play\n"
-        "<b>/mpv_last</b> — resume the last-played playlist\n"
+        "<b>/mpv_last</b> — resume the last-played playlist/stream\n"
         "<b>/mpv_url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"

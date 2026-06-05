@@ -6,7 +6,14 @@ def test_roundtrip(tmp_path):
     pl = tmp_path / "show.m3u"
     pl.write_text("/x.mkv\n")
     state.record_last_played(sf, pl)
-    assert state.last_played(sf) == pl
+    assert state.last_played(sf) == str(pl)
+
+
+def test_url_roundtrip(tmp_path):
+    sf = tmp_path / "state.json"
+    url = "https://soundcloud.com/forss/flickermood"
+    state.record_last_played(sf, url)
+    assert state.last_played(sf) == url  # URLs skip the on-disk existence check
 
 
 def test_last_played_missing_state_file(tmp_path):
