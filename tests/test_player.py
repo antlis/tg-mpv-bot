@@ -86,7 +86,7 @@ def test_cookies_combine_with_global_options():
 
 def test_direct_command_single_url():
     s = _settings(mpv_runner="")
-    cmd = build_direct_command(s, ["https://cdn.example/v.mp4"], "My Title")
+    cmd = build_direct_command(s, ["https://cdn.example/v.mp4"], "My Title", {})
     assert cmd[1] == "https://cdn.example/v.mp4"
     assert "--force-media-title=My Title" in cmd
     assert not any(a.startswith("--audio-file") for a in cmd)
@@ -96,9 +96,19 @@ def test_direct_command_single_url():
 
 def test_direct_command_split_streams():
     s = _settings(mpv_runner="")
-    cmd = build_direct_command(s, ["https://v.example/v", "https://a.example/a"], "T")
+    cmd = build_direct_command(s, ["https://v.example/v", "https://a.example/a"], "T", {})
     assert cmd[1] == "https://v.example/v"
     assert "--audio-file=https://a.example/a" in cmd
+
+
+def test_direct_command_forwards_cdn_headers():
+    # googlevideo 403s fetches whose UA doesn't match the minting client —
+    # yt-dlp's http_headers must reach mpv.
+    s = _settings(mpv_runner="")
+    headers = {"User-Agent": "com.google.android.youtube/19", "Referer": "https://yt.example/w"}
+    cmd = build_direct_command(s, ["https://v.example/v"], "T", headers)
+    assert "--user-agent=com.google.android.youtube/19" in cmd
+    assert "--referrer=https://yt.example/w" in cmd
 
 
 def test_ytdl_cli_args_translation():
