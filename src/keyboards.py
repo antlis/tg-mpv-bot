@@ -19,6 +19,8 @@ clashes (≤64 bytes):
     s:<ci>:<si>          → subcategory #si of category #ci (→ playlist page 0)
     s:<ci>:<si>:<pg>     → page <pg> of that subcategory
     pl:<global_index>    → play playlist at that index in the full sorted list
+    ep:<n>               → jump to 0-based item <n> of mpv's *current* playlist
+    eps:<pg>             → page <pg> of the episode picker
     cats / noop          → back to categories / inert (page counter)
 
 ``/mpv_search`` results reuse the same ``pl:<global_index>`` buttons, so a
@@ -126,6 +128,39 @@ def search_results_keyboard(
         for i in indices[:MAX_SEARCH_RESULTS]
     ]
     rows.append([InlineKeyboardButton(text="⬅ Categories", callback_data="cats")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def episodes_keyboard(
+    names: list[str], current: int | None, page: int
+) -> InlineKeyboardMarkup:
+    """Picker over mpv's *current* playlist items (callback ``ep:<n>``).
+
+    Unlike the browse keyboards this indexes the live mpv playlist, not the
+    library — indices come straight from the ``playlist`` IPC property. The
+    current item is marked and unclickable (jumping to it would restart it).
+    """
+    page = clamp_page(page, len(names))
+    rows = []
+    for i in page_slice(list(range(len(names))), page):
+        if i == current:
+            rows.append([InlineKeyboardButton(text=f"▶ {i + 1}. {names[i]}", callback_data="noop")])
+        else:
+            rows.append([InlineKeyboardButton(text=f"{i + 1}. {names[i]}", callback_data=f"ep:{i}")])
+
+    total = page_count(len(names))
+    if total > 1:
+        rows.append([
+            InlineKeyboardButton(
+                text="◀" if page > 0 else "·",
+                callback_data=f"eps:{page - 1}" if page > 0 else "noop",
+            ),
+            InlineKeyboardButton(text=f"{page + 1}/{total}", callback_data="noop"),
+            InlineKeyboardButton(
+                text="▶" if page < total - 1 else "·",
+                callback_data=f"eps:{page + 1}" if page < total - 1 else "noop",
+            ),
+        ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

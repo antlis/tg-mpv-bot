@@ -149,6 +149,11 @@ class MpvClient:
         self.command("playlist-prev")
         self.show_text(self._track_label())
 
+    def get_playlist(self) -> list[dict]:
+        """The current playlist: ``{filename, current?, title?}`` dicts."""
+        items = self.get_property("playlist")
+        return items if isinstance(items, list) else []
+
     def set_playlist_pos(self, index0: int) -> None:
         """Jump to a 0-based position in the current playlist."""
         self.set_property("playlist-pos", index0)

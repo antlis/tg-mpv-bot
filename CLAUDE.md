@@ -105,8 +105,9 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 
 - Adding a command touches **four** in-sync places: a handler in `src/commands.py`, the menu in
   `bot.py:_build_menu()`, the help text in `cmd_help`, and the README command table.
-- The now-playing panel's `ctl:<action>` callbacks are a fifth callback grammar alongside
-  `cats`/`c:`/`s:`/`pl:`/`noop`; `_CTL_ACTIONS` maps each to an `MpvClient` call.
+- The now-playing panel's `ctl:<action>` callbacks are one more callback grammar alongside
+  `cats`/`c:`/`s:`/`pl:`/`noop` and the episode picker's `ep:<n>`/`eps:<page>`; `_CTL_ACTIONS` maps
+  each panel action to an `MpvClient` call. (`ep:` indexes mpv's *live* playlist, not the library.)
 - All host assumptions now flow from `src/config.py` env vars. The deploy files (`docker-compose.yml`,
   `tg-mpv-bot.service`) still set concrete values (`PRE_PLAY_HOOK=i3-msg workspace 10`, `DISPLAY=:0`, `HOME=/home/lad`)
   and must agree with them.

@@ -168,6 +168,25 @@ def test_search_results_keyboard_caps_results():
     assert len(plays) == MAX_SEARCH_RESULTS
 
 
+def test_episodes_keyboard_marks_current_and_jumps():
+    from src.keyboards import episodes_keyboard
+    names = [f"Ep {i}" for i in range(1, 4)]
+    kb = episodes_keyboard(names, current=1, page=0)
+    buttons = [b for row in kb.inline_keyboard for b in row]
+    by_text = {b.text: b.callback_data for b in buttons}
+    assert by_text["1. Ep 1"] == "ep:0"
+    assert by_text["▶ 2. Ep 2"] == "noop"  # current item is marked, not clickable
+    assert by_text["3. Ep 3"] == "ep:2"
+
+
+def test_episodes_keyboard_pagination():
+    from src.keyboards import episodes_keyboard
+    names = [f"Ep {i}" for i in range(PER_PAGE * 2 + 1)]  # 3 pages
+    kb = episodes_keyboard(names, current=None, page=1)
+    datas = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert "eps:0" in datas and "eps:2" in datas
+
+
 def test_subcategory_pagination_prefix():
     pls = make_nested({"tutorials": {"big": PER_PAGE * 2}})  # 2 pages
     kb = playlists_keyboard(pls, ci=0, si=0, page=0)

@@ -12,6 +12,7 @@ import asyncio
 import html
 import logging
 from collections.abc import Callable
+from pathlib import PurePath
 from typing import Any, TypeVar
 
 from aiogram import F, Router
@@ -23,7 +24,9 @@ from aiogram.types import CallbackQuery, Message
 from . import generate, keyboards, player, playlists, state
 from .config import get_settings
 from .keyboards import (
+    PER_PAGE,
     categories_keyboard,
+    episodes_keyboard,
     has_subcategories,
     now_playing_keyboard,
     playlists_keyboard,
@@ -199,13 +202,79 @@ async def cmd_loop(message: Message) -> None:
     await message.reply(err or ("🔁 Loop on" if looping else "➡ Loop off"))
 
 
+def _episode_list(client: MpvClient) -> tuple[list[str], int | None]:
+    """Display names + current index of mpv's playlist (for the picker)."""
+    names: list[str] = []
+    current: int | None = None
+    for i, item in enumerate(client.get_playlist()):
+        if item.get("current"):
+            current = i
+        title = item.get("title") or PurePath(item.get("filename", "")).stem
+        names.append(playlists.prettify(title)[:48] if title else f"item {i + 1}")
+    return names, current
+
+
+def _episodes_text(names: list[str], current: int | None) -> str:
+    where = f" (now: #{current + 1})" if current is not None else ""
+    return f"📜 {len(names)} items{where} — tap to jump:"
+
+
 @router.message(Command("mpv_ep", "mpv_episode"))
 async def cmd_ep(message: Message, command: CommandObject) -> None:
     arg = (command.args or "").strip()
-    if not arg.isdigit() or int(arg) < 1:
-        await message.reply("Usage: /mpv_ep <number>  — jump to that item in the playlist")
+    if arg.isdigit() and int(arg) >= 1:
+        await _do(message, lambda c: c.set_playlist_pos(int(arg) - 1), f"▶ Jumped to #{arg}")
         return
-    await _do(message, lambda c: c.set_playlist_pos(int(arg) - 1), f"▶ Jumped to #{arg}")
+    if arg:
+        await message.reply(
+            "Usage:\n"
+            "  /mpv_ep           — pick an episode with buttons\n"
+            "  /mpv_ep <number>  — jump straight to that item"
+        )
+        return
+    res, err = await _ipc(_episode_list)
+    if err:
+        await message.reply(err)
+        return
+    names, current = res
+    if not names:
+        await message.reply("⏹ Playlist is empty")
+        return
+    page = (current or 0) // PER_PAGE  # open on the page with the current item
+    await message.reply(
+        _episodes_text(names, current),
+        reply_markup=episodes_keyboard(names, current, page),
+    )
+
+
+async def _refresh_episode_picker(query: CallbackQuery, page: int) -> None:
+    """Re-render the picker message (current marker / page changed)."""
+    res, err = await _ipc(_episode_list)
+    if err or not res[0]:
+        return  # leave the old picker; the tap itself was already answered
+    names, current = res
+    try:
+        await query.message.edit_text(
+            _episodes_text(names, current),
+            reply_markup=episodes_keyboard(names, current, page),
+        )
+    except TelegramBadRequest:
+        pass  # "message is not modified" — ignore
+
+
+@router.callback_query(F.data.startswith("eps:"))
+async def cb_episodes_page(query: CallbackQuery) -> None:
+    await _refresh_episode_picker(query, int(query.data[len("eps:"):]))
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith("ep:"))
+async def cb_episode(query: CallbackQuery) -> None:
+    n = int(query.data[len("ep:"):])
+    _, err = await _ipc(lambda c: c.set_playlist_pos(n))
+    await query.answer(err.replace("❌ ", "") if err else f"▶ #{n + 1}")
+    if not err:
+        await _refresh_episode_picker(query, n // PER_PAGE)
 
 
 # ── Status ──────────────────────────────────────────────────────────
@@ -561,7 +630,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s\n"
-        "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> &lt;n&gt; jump\n"
+        "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> [n] episode picker/jump\n"
         "<b>/mpv_shuffle</b> · <b>/mpv_loop</b>\n"
         "<b>/mpv_audio</b> switch audio track\n"
         "<b>/mpv_sub</b> switch subtitle · <b>/mpv_sub_toggle</b> show/hide\n"
