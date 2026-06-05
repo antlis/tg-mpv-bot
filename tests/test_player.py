@@ -108,6 +108,45 @@ def test_ytdl_cli_args_cookies_gated_only():
     assert _ytdl_cli_args(s, "https://youtu.be/x") == []
 
 
+def test_probe_escalates_to_cookies_on_bot_check(monkeypatch):
+    import src.player as player
+
+    s = _settings(ytdl_cookies_browser="firefox", ytdl_options="extractor-args=x")
+    attempts = []
+
+    def fake_probe(settings, url, extra_args, timeout):
+        attempts.append(extra_args)
+        if "--cookies-from-browser" in extra_args:
+            return {"title": "ok"}, ""
+        return None, "ERROR: Sign in to confirm you're not a bot."
+
+    monkeypatch.setattr(player, "_run_probe", fake_probe)
+    info, _ = player.probe_url(s, "https://youtu.be/x")
+    assert info == {"title": "ok"}
+    assert len(attempts) == 2
+    assert "--extractor-args" in attempts[0]          # fast path first…
+    assert "--cookies-from-browser" not in attempts[0]
+    assert attempts[1] == ["--cookies-from-browser", "firefox"]  # …stock args + cookies
+
+
+def test_probe_no_cookie_retry_for_other_errors(monkeypatch):
+    import pytest
+
+    import src.player as player
+
+    s = _settings(ytdl_cookies_browser="firefox")
+    attempts = []
+
+    def fake_probe(settings, url, extra_args, timeout):
+        attempts.append(extra_args)
+        return None, "ERROR: Video unavailable"
+
+    monkeypatch.setattr(player, "_run_probe", fake_probe)
+    with pytest.raises(player.UrlPlaybackError, match="unavailable"):
+        player.probe_url(s, "https://youtu.be/x")
+    assert len(attempts) == 1  # cookies are an escalation, not a blanket retry
+
+
 def test_stop_current_dead_socket_no_pkill(tmp_path):
     # No mpv at the socket and stray-killing off → must be a quiet no-op.
     s = _settings(mpv_socket=str(tmp_path / "no.sock"), kill_stray_mpv=False)

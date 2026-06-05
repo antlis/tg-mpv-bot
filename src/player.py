@@ -119,21 +119,19 @@ class UrlPlaybackError(Exception):
 _INFO_JSON = "tg-mpv-bot-info.json"  # one play at a time → fixed, self-cleaning
 
 
-def probe_url(settings: Settings, url: str, timeout: float = 120) -> tuple[dict, Path]:
-    """One yt-dlp extraction: returns the info dict + its JSON on disk.
+def _is_bot_check(error: str) -> bool:
+    return "Sign in to confirm" in error or "not a bot" in error
 
-    The saved JSON feeds ``--load-info-json`` downloads, so the actual
-    streaming spawns do zero network extraction — they reuse the minted URLs
-    immediately. Raises :class:`UrlPlaybackError` with a user-facing message
-    on failure.
-    """
-    ytdlp = _ytdlp_bin()
-    if ytdlp is None:
-        raise UrlPlaybackError("yt-dlp is not installed on the host")
+
+def _run_probe(
+    settings: Settings, url: str, extra_args: list[str], timeout: float
+) -> tuple[dict | None, str]:
+    """One yt-dlp -j attempt; returns ``(info, "")`` or ``(None, reason)``."""
     cmd = [
-        ytdlp, "--no-warnings", "--no-playlist", "-j",
+        _ytdlp_bin() or "yt-dlp",
+        "--no-warnings", "--no-playlist", "-j",
         "-f", settings.ytdl_format,
-        *_ytdl_cli_args(settings, url),
+        *extra_args,
         "--", url,
     ]
     try:
@@ -142,18 +140,50 @@ def probe_url(settings: Settings, url: str, timeout: float = 120) -> tuple[dict,
             env={**os.environ, "PATH": _augmented_path()},
         )
     except subprocess.TimeoutExpired:
-        raise UrlPlaybackError(
-            f"site did not respond within {timeout:.0f}s (rate-limited?)"
-        ) from None
+        return None, f"site did not respond within {timeout:.0f}s (rate-limited?)"
     except OSError as exc:
-        raise UrlPlaybackError(str(exc)) from exc
+        return None, str(exc)
     try:
-        info = json.loads(result.stdout)
+        return json.loads(result.stdout), ""
     except ValueError:
         reason = result.stderr.strip().splitlines()[-1:] or ["unknown error"]
-        raise UrlPlaybackError(reason[0][:200]) from None
+        return None, reason[0][:200]
+
+
+def probe_url(settings: Settings, url: str, timeout: float = 120) -> tuple[dict, Path]:
+    """One yt-dlp extraction: returns the info dict + its JSON on disk.
+
+    The saved JSON feeds ``--load-info-json`` downloads, so the actual
+    streaming spawns do zero network extraction — they reuse the minted URLs
+    immediately. Raises :class:`UrlPlaybackError` with a user-facing message
+    on failure.
+
+    Cookies escalation (same shape as tg-media-bot's geo-retry): the first
+    attempt runs cookie-less with the fast YTDL_OPTIONS — logged-in YouTube
+    cookies stall *normal* extraction, so they must not be the default. Only
+    when the site answers with a sign-in/bot-check demand do we retry with
+    browser cookies — and with stock client args, since the lean pinned
+    client doesn't support cookies.
+    """
+    if _ytdlp_bin() is None:
+        raise UrlPlaybackError("yt-dlp is not installed on the host")
+    info, reason = _run_probe(settings, url, _ytdl_cli_args(settings, url), timeout)
+    if (
+        info is None
+        and settings.ytdl_cookies_browser
+        and _is_bot_check(reason)
+    ):
+        logger.info("Bot check for %s — retrying with %s cookies",
+                    url, settings.ytdl_cookies_browser)
+        info, reason = _run_probe(
+            settings, url,
+            ["--cookies-from-browser", settings.ytdl_cookies_browser],
+            timeout,
+        )
+    if info is None:
+        raise UrlPlaybackError(reason)
     info_path = Path(tempfile.gettempdir()) / _INFO_JSON
-    info_path.write_text(result.stdout)
+    info_path.write_text(json.dumps(info))
     return info, info_path
 
 
