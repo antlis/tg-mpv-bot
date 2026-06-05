@@ -35,6 +35,7 @@ def _build_menu() -> list[BotCommand]:
     return [
         BotCommand(command="mpv_list", description="Browse playlists with buttons"),
         BotCommand(command="mpv_play", description="Play a playlist by name or number"),
+        BotCommand(command="mpv_search", description="Search playlists (optionally by category)"),
         BotCommand(command="mpv_info", description="Show current status"),
         BotCommand(command="mpv_toggle", description="Play/pause toggle"),
         BotCommand(command="mpv_pause", description="Pause playback"),

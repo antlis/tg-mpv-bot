@@ -148,6 +148,26 @@ def test_play_pause_toggle_label_reflects_state():
     assert toggle_text(None) == "⏯"         # unknown → neutral
 
 
+def test_search_results_keyboard_uses_global_indices():
+    from src.keyboards import search_results_keyboard
+    pls = make_flat({"cartoons": 2, "movie": 2})
+    kb = search_results_keyboard(pls, [1, 3])
+    datas = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert datas == ["pl:1", "pl:3", "cats"]  # play buttons + back to categories
+    texts = [b.text for row in kb.inline_keyboard for b in row]
+    assert texts[0].startswith("🎨")  # category emoji prefixes each hit
+    assert texts[1].startswith("🎬")
+
+
+def test_search_results_keyboard_caps_results():
+    from src.keyboards import MAX_SEARCH_RESULTS, search_results_keyboard
+    pls = make_flat({"movie": MAX_SEARCH_RESULTS * 2})
+    kb = search_results_keyboard(pls, list(range(len(pls))))
+    plays = [b for row in kb.inline_keyboard for b in row
+             if b.callback_data.startswith("pl:")]
+    assert len(plays) == MAX_SEARCH_RESULTS
+
+
 def test_subcategory_pagination_prefix():
     pls = make_nested({"tutorials": {"big": PER_PAGE * 2}})  # 2 pages
     kb = playlists_keyboard(pls, ci=0, si=0, page=0)

@@ -144,6 +144,29 @@ def find(playlists: list[Playlist], query: str) -> Playlist | None:
     return None
 
 
+def search(
+    playlists: list[Playlist], query: str, category: str | None = None
+) -> list[int]:
+    """Global indices of playlists matching ``query``, optionally per-category.
+
+    Every whitespace-separated token must appear (case-insensitively) in the
+    raw name, the prettified display name or the subcategory — so "big
+    lebowski" matches "the-big-lebowski" and "office us" matches scene-dotted
+    names. Returns *global* indices so results can drive ``pl:<i>`` callbacks.
+    """
+    tokens = [t.lower() for t in query.split()]
+    if not tokens:
+        return []
+    matches: list[int] = []
+    for i, pl in enumerate(playlists):
+        if category is not None and pl.category.lower() != category.lower():
+            continue
+        hay = " ".join((pl.name, pl.display, pl.subcategory or "")).lower()
+        if all(t in hay for t in tokens):
+            matches.append(i)
+    return matches
+
+
 def read_entries(playlist: Path) -> list[str]:
     """Return the non-comment, non-blank lines of an m3u file."""
     entries: list[str] = []

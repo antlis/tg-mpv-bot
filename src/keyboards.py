@@ -21,6 +21,9 @@ clashes (≤64 bytes):
     pl:<global_index>    → play playlist at that index in the full sorted list
     cats / noop          → back to categories / inert (page counter)
 
+``/mpv_search`` results reuse the same ``pl:<global_index>`` buttons, so a
+search hit plays through the exact same callback path as a browse tap.
+
 ``ci`` / ``si`` index the case-insensitively sorted category / subcategory
 lists, which are deterministic for a fixed library (same stability contract as
 the global ``pl:`` index).
@@ -33,6 +36,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from .playlists import Playlist, prettify
 
 PER_PAGE = 8
+MAX_SEARCH_RESULTS = 12
 
 CATEGORY_EMOJI = {
     "cartoons": "🎨",
@@ -100,6 +104,29 @@ def now_playing_keyboard(paused: bool | None = None) -> InlineKeyboardMarkup:
         [b("🔉", "voldown"), b("🔇", "mute"), b("🔊", "volup"), b("💬", "sub"), b("🎧", "audio")],
         [b("🔀", "shuffle"), b("🔁", "loop"), b("⏹", "stop"), b("🔄 Refresh", "refresh")],
     ])
+
+
+def search_results_keyboard(
+    playlists: list[Playlist], indices: list[int]
+) -> InlineKeyboardMarkup:
+    """One play button per search hit (callback ``pl:<global_index>``).
+
+    Search results are a one-shot reply (not a browse session), so there is no
+    pagination — the handler caps ``indices`` at ``MAX_SEARCH_RESULTS`` and
+    tells the user to refine. The category emoji disambiguates same-named
+    playlists across categories.
+    """
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{CATEGORY_EMOJI.get(playlists[i].category, '📁')} {playlists[i].display}",
+                callback_data=f"pl:{i}",
+            )
+        ]
+        for i in indices[:MAX_SEARCH_RESULTS]
+    ]
+    rows.append([InlineKeyboardButton(text="⬅ Categories", callback_data="cats")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def categories_keyboard(playlists: list[Playlist]) -> InlineKeyboardMarkup:

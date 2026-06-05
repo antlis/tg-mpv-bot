@@ -124,6 +124,55 @@ def test_find_no_match(library):
     assert playlists.find(pls, "") is None
 
 
+def test_search_returns_all_matching_indices(library):
+    _, dirs = library
+    pls = playlists.discover(dirs)
+    hits = playlists.search(pls, "a")  # broad — several names contain "a"
+    assert hits == [i for i, p in enumerate(pls) if "a" in p.name.lower()]
+    assert len(hits) > 1  # unlike find(), search returns every match
+
+
+def test_search_scoped_to_category(library):
+    _, dirs = library
+    pls = playlists.discover(dirs)
+    hits = playlists.search(pls, "a", category="cartoons")
+    assert hits and all(pls[i].category == "cartoons" for i in hits)
+    assert playlists.search(pls, "futurama", category="movie") == []
+    # category match is case-insensitive
+    assert playlists.search(pls, "futurama", category="CARTOONS")
+
+
+def test_search_all_tokens_must_match(library):
+    _, dirs = library
+    pls = playlists.discover(dirs)
+    [i] = playlists.search(pls, "adventure time")
+    assert pls[i].name == "Adventure Time"
+    assert playlists.search(pls, "adventure nonexistent") == []
+
+
+def test_search_matches_display_name(tmp_path):
+    # query with spaces matches a slugged raw name via its prettified display
+    pls = [playlists.Playlist(name="the-big-lebowski", category="movie", path=tmp_path / "x.m3u")]
+    assert playlists.search(pls, "big lebowski") == [0]
+
+
+def test_search_matches_subcategory(tmp_path):
+    pls = [
+        playlists.Playlist(
+            name="Course A", category="tutorials", path=tmp_path / "a.m3u",
+            subcategory="frontend-masters",
+        )
+    ]
+    assert playlists.search(pls, "frontend") == [0]
+
+
+def test_search_empty_query(library):
+    _, dirs = library
+    pls = playlists.discover(dirs)
+    assert playlists.search(pls, "") == []
+    assert playlists.search(pls, "   ") == []
+
+
 def test_validate_all_ok(library):
     _, dirs = library
     results = playlists.validate(playlists.discover(dirs))

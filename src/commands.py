@@ -27,6 +27,7 @@ from .keyboards import (
     has_subcategories,
     now_playing_keyboard,
     playlists_keyboard,
+    search_results_keyboard,
     subcategories_keyboard,
 )
 from .mpv_ipc import MpvClient, MpvError, MpvNotRunning
@@ -448,6 +449,44 @@ async def cmd_play(message: Message, command: CommandObject) -> None:
     await message.reply(f"▶ Playing: {pl.display}")
 
 
+@router.message(Command("mpv_search", "mpv_find"))
+async def cmd_search(message: Message, command: CommandObject) -> None:
+    """Search playlists and show every hit as a play button.
+
+    Unlike ``/mpv_play <name>`` (plays the *first* match), this lists all
+    matches. A leading category name scopes the search:
+    ``/mpv_search tutorials docker``.
+    """
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.reply(
+            "Usage:\n"
+            "  /mpv_search <text>             — search all playlists\n"
+            "  /mpv_search <category> <text>  — search one category\n"
+            "                e.g. /mpv_search tutorials docker"
+        )
+        return
+    pls = await asyncio.to_thread(_all_playlists, refresh=True)
+
+    # A first word naming a category scopes the search to it.
+    category: str | None = None
+    text = raw
+    head, _, rest = raw.partition(" ")
+    cats = {c.lower(): c for c in keyboards.categories(pls)}
+    if rest.strip() and head.lower() in cats:
+        category, text = cats[head.lower()], rest.strip()
+
+    indices = playlists.search(pls, text, category=category)
+    scope = f" in {category}" if category else ""
+    if not indices:
+        await message.reply(f"❌ Nothing matching '{text}'{scope}. Try /mpv_list")
+        return
+    title = f"🔍 {len(indices)} match(es) for '{text}'{scope} — tap to play:"
+    if len(indices) > keyboards.MAX_SEARCH_RESULTS:
+        title += f"\nShowing the first {keyboards.MAX_SEARCH_RESULTS} — refine your search."
+    await message.reply(title, reply_markup=search_results_keyboard(pls, indices))
+
+
 # ── Doctor / help ───────────────────────────────────────────────────
 
 
@@ -505,6 +544,7 @@ async def cmd_help(message: Message) -> None:
         "🎬 <b>tg-mpv-bot</b> — mpv remote control\n\n"
         "<b>/mpv_list</b> — browse playlists with buttons\n"
         "<b>/mpv_play</b> &lt;query&gt; — play by number or name\n"
+        "<b>/mpv_search</b> [category] &lt;text&gt; — find playlists, tap to play\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"

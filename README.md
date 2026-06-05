@@ -13,6 +13,7 @@ operation. The bot talks to mpv's JSON IPC socket directly from Python.
 | `/mpv_list` | Browse playlists with inline buttons (by category) |
 | `/mpv_play <query>` | Search & play by name or number |
 | `/mpv <query>` | Alias for `/mpv_play` |
+| `/mpv_search [category] <text>` | List all matching playlists as play buttons (e.g. `/mpv_search tutorials docker`) |
 | `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_toggle` | Play/pause toggle (one command) |
 | `/mpv_pause` | Pause playback |
