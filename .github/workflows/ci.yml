@@ -18,5 +18,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - run: pip install -r requirements-dev.txt
+      # Real mpv for the integration tests in tests/test_real_mpv.py
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mpv
       - run: ruff check .
       - run: pytest
