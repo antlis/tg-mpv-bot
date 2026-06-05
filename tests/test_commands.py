@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.commands import _URL_RE, _episode_list, _episodes_text, _parse_goto
+from src.commands import _URL_RE, _episode_list, _episodes_text, _parse_goto, _parse_sleep
 
 
 class FakePlaylistClient:
@@ -60,6 +60,14 @@ def test_parse_goto_invalid(raw):
 ])
 def test_url_re(text, matches):
     assert bool(_URL_RE.match(text)) is matches
+
+
+@pytest.mark.parametrize("raw,minutes", [
+    ("45", 45), ("45m", 45), ("90min", 90), ("2h", 120), ("1.5h", 90),
+    ("0", None), ("25h", None), ("soon", None), ("", None), ("-5", None),
+])
+def test_parse_sleep(raw, minutes):
+    assert _parse_sleep(raw) == minutes
 
 
 def test_episodes_text():

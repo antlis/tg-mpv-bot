@@ -331,6 +331,72 @@ async def cmd_goto(message: Message, command: CommandObject) -> None:
         await message.reply(err or f"⏩ → {_fmt_time(value)}")
 
 
+# ── Sleep timer ─────────────────────────────────────────────────────
+
+_sleep_task: asyncio.Task | None = None
+_sleep_until: float = 0.0  # event-loop clock; meaningful while _sleep_task runs
+
+
+def _parse_sleep(arg: str) -> int | None:
+    """``45`` / ``45m`` / ``90min`` / ``2h`` / ``1.5h`` → whole minutes."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(m|min|h|hour)?", arg)
+    if not m:
+        return None
+    value = float(m.group(1)) * (60 if m.group(2) in ("h", "hour") else 1)
+    minutes = round(value)
+    return minutes if 1 <= minutes <= 24 * 60 else None
+
+
+async def _sleep_fire(message: Message, minutes: int) -> None:
+    global _sleep_task
+    try:
+        await asyncio.sleep(minutes * 60)
+        _, err = await _ipc(lambda c: c.quit())
+        await message.answer(
+            "😴 Sleep timer: stopped playback" if not err
+            else "😴 Sleep timer fired — nothing was playing"
+        )
+    finally:
+        _sleep_task = None
+
+
+@router.message(Command("mpv_sleep"))
+async def cmd_sleep(message: Message, command: CommandObject) -> None:
+    """Stop playback after N minutes (fall-asleep mode)."""
+    global _sleep_task, _sleep_until
+    arg = (command.args or "").strip().lower()
+    if not arg:
+        if _sleep_task:
+            left = max(0, _sleep_until - asyncio.get_running_loop().time())
+            await message.reply(
+                f"😴 Sleep timer active — stopping in {left / 60:.0f} min. "
+                "/mpv_sleep off to cancel."
+            )
+        else:
+            await message.reply(
+                "Usage: /mpv_sleep <time>  — stop playback after e.g. 45m, 1.5h\n"
+                "  /mpv_sleep off — cancel"
+            )
+        return
+    if arg in ("off", "cancel", "stop"):
+        if _sleep_task:
+            _sleep_task.cancel()
+            _sleep_task = None
+            await message.reply("⏰ Sleep timer cancelled")
+        else:
+            await message.reply("No sleep timer is set")
+        return
+    minutes = _parse_sleep(arg)
+    if minutes is None:
+        await message.reply("Can't parse that — try 30, 45m or 1.5h (max 24h)")
+        return
+    if _sleep_task:
+        _sleep_task.cancel()
+    _sleep_until = asyncio.get_running_loop().time() + minutes * 60
+    _sleep_task = asyncio.create_task(_sleep_fire(message, minutes))
+    await message.reply(f"😴 Will stop playback in {minutes} min (/mpv_sleep off to cancel)")
+
+
 def _speed_text(speed: float) -> str:
     return f"⏩ Speed: {speed:g}× — pick:"
 
@@ -927,6 +993,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s · <b>/mpv_goto</b> &lt;pos&gt;\n"
         "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> [n] episode picker/jump\n"
         "<b>/mpv_speed</b> [x] — playback speed (buttons or value)\n"
+        "<b>/mpv_sleep</b> &lt;time&gt; — stop playback after e.g. 45m / 1.5h\n"
         "<b>/mpv_shuffle</b> · <b>/mpv_loop</b>\n"
         "<b>/mpv_audio</b> switch audio track\n"
         "<b>/mpv_sub</b> switch subtitle · <b>/mpv_sub_toggle</b> show/hide\n"

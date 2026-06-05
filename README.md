@@ -69,6 +69,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_speed [x]` | Playback speed — buttons (no arg) or a value like `1.5` |
 | `/mpv_shuffle` | Shuffle the current playlist |
 | `/mpv_loop` | Toggle looping the playlist |
+| `/mpv_sleep <time>` | Sleep timer — stop playback after `45m` / `1.5h` (`off` to cancel) |
 | `/mpv_audio` | Switch to the next audio track (e.g. Spanish → English) |
 | `/mpv_sub` | Switch to the next subtitle track |
 | `/mpv_sub_toggle` | Show / hide subtitles |

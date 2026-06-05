@@ -56,6 +56,7 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_speed", description="Playback speed (buttons or value)"),
         BotCommand(command="mpv_shuffle", description="Shuffle the playlist"),
         BotCommand(command="mpv_loop", description="Toggle playlist loop"),
+        BotCommand(command="mpv_sleep", description="Stop playback after N minutes"),
         BotCommand(command="mpv_audio", description="Switch audio track"),
         BotCommand(command="mpv_sub", description="Switch subtitle track"),
         BotCommand(command="mpv_sub_toggle", description="Show/hide subtitles"),
