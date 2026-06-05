@@ -877,6 +877,57 @@ async def cb_yt(query: CallbackQuery) -> None:
     await _play_url(query.message, f"https://www.youtube.com/watch?v={video_id}")
 
 
+# ── Telegram media files ────────────────────────────────────────────
+
+_FILES_DIR = Path(tempfile.gettempdir()) / "tg-mpv-files"
+
+
+@router.message(F.video | F.audio | F.document)
+async def msg_media_file(message: Message) -> None:
+    """Send/forward a video or audio file → it plays on the TV."""
+    media = message.video or message.audio or message.document
+    if message.document and not (
+        (message.document.mime_type or "").startswith(("video/", "audio/"))
+    ):
+        return  # not a media document — none of our business
+    name = Path(getattr(media, "file_name", None) or f"file-{media.file_unique_id}.mp4").name
+    size_mb = (media.file_size or 0) / 1_000_000
+    note = await message.reply(f"⬇️ Downloading {name} ({size_mb:.0f} MB)…")
+
+    _FILES_DIR.mkdir(exist_ok=True)
+    for old in _FILES_DIR.iterdir():  # one file plays at a time — drop the previous
+        old.unlink(missing_ok=True)
+    dest = _FILES_DIR / name
+
+    task = asyncio.create_task(message.bot.download(media, destination=dest))
+    started = time.monotonic()
+    while True:  # live elapsed while a big file transfers
+        done, _ = await asyncio.wait({task}, timeout=4)
+        if done:
+            break
+        try:
+            await note.edit_text(
+                f"⬇️ Downloading {name} ({size_mb:.0f} MB)… {time.monotonic() - started:.0f}s"
+            )
+        except TelegramBadRequest:
+            pass
+    try:
+        task.result()
+    except Exception as exc:  # noqa: BLE001 — surface the reason (e.g. 20MB API cap)
+        hint = (
+            "\nFiles over 20 MB need a local Bot API server (API_SERVER_URL)."
+            if not get_settings().api_server_url and size_mb > 19
+            else ""
+        )
+        await note.edit_text(f"❌ Download failed: {exc}{hint}")
+        return
+
+    _remember_chat(message)
+    title = Path(name).stem
+    await asyncio.to_thread(player.play_file, get_settings(), dest, title)
+    await note.edit_text(f"▶ Playing: {title}")
+
+
 # Anchored and whitespace-free: only a message that *is* a URL triggers
 # playback, and the scheme anchor means it can never be parsed as an mpv flag.
 _URL_RE = re.compile(r"^https?://\S+$")
@@ -1021,6 +1072,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_notify</b> — toggle episode-finished notifications\n"
         "<b>/mpv_url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
         "<b>/mpv_yt</b> &lt;search&gt; — search YouTube, tap a result to play\n"
+        "…or just <b>send a video/audio file</b> — it plays on the TV\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"

@@ -270,6 +270,25 @@ def probe_url(
     return info, info_path
 
 
+def build_file_command(settings: Settings, path: Path, title: str) -> list[str]:
+    """argv for playing a single local file (not a playlist)."""
+    return [
+        _mpv_base(settings),
+        str(path),
+        f"--input-ipc-server={settings.mpv_socket}",
+        "--force-window",
+        "--save-position-on-quit",
+        f"--force-media-title={title}",
+    ]
+
+
+def play_file(settings: Settings, path: Path, title: str) -> None:
+    """Play one local file (e.g. downloaded from a Telegram message)."""
+    env = _hook_env(settings, str(path), title)
+    _kill_and_launch(settings, build_file_command(settings, path, title), env)
+    state.record_last_played(settings.state_file, path, name=title)
+
+
 def search_youtube(settings: Settings, query: str, n: int = 5) -> list[dict]:
     """Top-``n`` YouTube results as ``{id, title, duration, channel}`` dicts.
 

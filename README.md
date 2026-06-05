@@ -10,6 +10,7 @@ bot talks to mpv's JSON IPC socket directly from Python.
 
 - 📋 **Browse** playlists by category with inline keyboards, or search
 - 🔗 **Stream URLs** — send a link, mpv plays it via yt-dlp (1000+ sites)
+- 📨 **Send a file** — forward any video/audio from Telegram, it plays on the TV
 - 🎛 **Now-playing panel** — transport, seek-to-%, volume, tracks, one message
 - 📜 **Episode picker**, ▶ **continue watching**, 📸 **frame screenshots**
 - 🪝 **Hooks** instead of WM assumptions — `i3-msg`/`swaymsg`/`notify-send`, your call
@@ -54,6 +55,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_notify` | Toggle notifications: "⏭ Now playing: 5/12 — …" on episode change, "✅ Finished" at the end |
 | `/mpv_url <link>` | Stream a URL via yt-dlp — or just **send a link** as a message |
 | `/mpv_yt <search>` | Search YouTube from chat — top results as tap-to-play buttons |
+| *(send a video/audio file)* | Downloads and plays it — >20 MB needs `API_SERVER_URL` (local Bot API server) |
 | `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_shot` | Send a screenshot of the current frame to the chat |
 | `/mpv_toggle` | Play/pause toggle (one command) |

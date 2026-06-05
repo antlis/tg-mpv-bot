@@ -75,6 +75,16 @@ def test_fetch_command_keeps_network_args(tmp_path):
     assert "--extractor-args" not in cmd  # no extraction happens here
 
 
+def test_file_command_shape():
+    from src.player import build_file_command
+    s = _settings(mpv_runner="")
+    cmd = build_file_command(s, Path("/tmp/tg-mpv-files/movie.mkv"), "movie")
+    assert cmd[1] == "/tmp/tg-mpv-files/movie.mkv"  # positional file, not --playlist
+    assert "--force-media-title=movie" in cmd
+    assert "--save-position-on-quit" in cmd
+    assert "--input-ipc-server=/tmp/sock" in cmd
+
+
 def test_pipe_player_single_stream_stdin():
     s = _settings(mpv_runner="")
     cmd = build_pipe_player_command(s, "My Title")
