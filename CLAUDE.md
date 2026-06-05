@@ -113,7 +113,8 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   `cats`/`c:`/`s:`/`pl:`/`noop` and the episode picker's `ep:<n>`/`eps:<page>`; `_CTL_ACTIONS` maps
   each panel action to an `MpvClient` call. (`ep:` indexes mpv's *live* playlist, not the library.)
 - All host assumptions now flow from `src/config.py` env vars. The deploy files (`docker-compose.yml`,
-  `tg-mpv-bot.service`) still set concrete values (`PRE_PLAY_HOOK=i3-msg workspace 10`, `DISPLAY=:0`, `HOME=/home/lad`)
+  `tg-mpv-bot.service`) still set concrete values (`PRE_PLAY_HOOK=i3-msg workspace 10`, `DISPLAY=:0`,
+  `%h`/`${HOME}`-relative paths)
   and must agree with them.
 - `mpvctl.sh` is now **standalone/legacy** — kept for Hermes/CLI use (`./mpvctl.sh list|play|info`) but
   the bot no longer invokes it. It still hardcodes its own paths; it is *not* driven by `config.py`.

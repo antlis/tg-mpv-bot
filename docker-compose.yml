@@ -14,7 +14,7 @@ services:
     env_file: .env
     environment:
       DISPLAY: ":0"
-      HOME: /home/lad
+      HOME: ${HOME}
       MPV_SOCKET: /tmp/mpv-socket
       MPV_RUNNER: /tmp/mpv-runner.sh
       # Optional WM glue (runs inside the container — add the tool to the
@@ -25,11 +25,12 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       # mpv IPC socket — shared with host mpv instances
       - /tmp/mpv-socket:/tmp/mpv-socket:rw
-      # Video directories with playlists
-      - ~/Videos/cartoons/playlists:/home/lad/Videos/cartoons/playlists:ro
-      - ~/Videos/movie/playlists:/home/lad/Videos/movie/playlists:ro
-      - ~/Videos/shows/playlists:/home/lad/Videos/shows/playlists:ro
-      - ~/Videos/tutorials/playlists:/home/lad/Videos/tutorials/playlists:ro
+      # Video directories with playlists — the container path mirrors the host
+      # path so absolute entries inside the .m3u files resolve unchanged.
+      - ~/Videos/cartoons/playlists:${HOME}/Videos/cartoons/playlists:ro
+      - ~/Videos/movie/playlists:${HOME}/Videos/movie/playlists:ro
+      - ~/Videos/shows/playlists:${HOME}/Videos/shows/playlists:ro
+      - ~/Videos/tutorials/playlists:${HOME}/Videos/tutorials/playlists:ro
       # mpv-runner.sh wrapper (recreated on reboot by mpvctl.sh)
       - /tmp/mpv-runner.sh:/tmp/mpv-runner.sh:rw
     network_mode: host

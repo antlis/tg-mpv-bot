@@ -101,7 +101,7 @@ ln -s ~/Projects/tg-mpv-bot/tg-mpv-bot.service ~/.config/systemd/user/
 mkdir -p ~/.config/environment.d
 cat > ~/.config/environment.d/99-tg-mpv-bot.conf << EOF
 BOT_TOKEN=your_token_here
-ALLOWED_USERS=418870313
+ALLOWED_USERS=123456789
 EOF
 systemctl --user daemon-reload
 systemctl --user start tg-mpv-bot
@@ -125,10 +125,12 @@ ln -s ~/Projects/tg-mpv-bot/scripts/tg-mpvctl.sh ~/.hermes/scripts/tg-mpvctl.sh
 Set `ALLOWED_USERS` in `.env` as comma-separated Telegram user IDs:
 
 ```env
-ALLOWED_USERS=418870313,123456789
+ALLOWED_USERS=123456789,987654321
 ```
 
-Leave empty to allow everyone.
+Get your ID from [@userinfobot](https://t.me/userinfobot). Leave empty to allow
+everyone — **not recommended**, since anyone who finds the bot could control
+your player.
 
 ## Architecture
 
