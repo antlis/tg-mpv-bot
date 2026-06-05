@@ -874,10 +874,19 @@ async def cmd_yt(message: Message, command: CommandObject) -> None:
     except player.UrlPlaybackError as exc:
         await note.edit_text(f"❌ Search failed: {exc}")
         return
-    await note.edit_text(
-        f"🔎 Results for '{query}' — tap to play:",
-        reply_markup=yt_results_keyboard(results),
-    )
+    caption = f"🔎 Results for '{query}' — tap to play:"
+    kb = yt_results_keyboard(results)
+    # Lead with the top hit's thumbnail (Telegram fetches the URL itself);
+    # a text message can't become a photo, so replace the placeholder.
+    thumb = results[0].get("thumb")
+    if thumb:
+        try:
+            await message.reply_photo(thumb, caption=caption, reply_markup=kb)
+            await note.delete()
+            return
+        except TelegramBadRequest:
+            pass  # bad/oversized thumbnail — fall back to plain text
+    await note.edit_text(caption, reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("yt:"))

@@ -319,11 +319,13 @@ def search_youtube(settings: Settings, query: str, n: int = 5) -> list[dict]:
         except ValueError:
             continue
         if e.get("id"):
+            thumbs = e.get("thumbnails") or []
             results.append({
                 "id": e["id"],
                 "title": e.get("title") or e["id"],
                 "duration": e.get("duration"),
                 "channel": e.get("channel") or e.get("uploader") or "",
+                "thumb": thumbs[-1]["url"] if thumbs else None,  # largest last
             })
     if not results:
         reason = result.stderr.strip().splitlines()[-1:] or ["no results"]
