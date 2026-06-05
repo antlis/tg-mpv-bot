@@ -21,6 +21,7 @@ clashes (≤64 bytes):
     pl:<global_index>    → play playlist at that index in the full sorted list
     ep:<n>               → jump to 0-based item <n> of mpv's *current* playlist
     eps:<pg>             → page <pg> of the episode picker
+    spd:<value>          → set playback speed (e.g. spd:1.5)
     cats / noop          → back to categories / inert (page counter)
 
 ``/mpv_search`` results reuse the same ``pl:<global_index>`` buttons, so a
@@ -129,6 +130,21 @@ def search_results_keyboard(
     ]
     rows.append([InlineKeyboardButton(text="⬅ Categories", callback_data="cats")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+SPEEDS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+
+
+def speed_keyboard(current: float | None = None) -> InlineKeyboardMarkup:
+    """Speed presets (callback ``spd:<value>``); the active one is marked."""
+    buttons = [
+        InlineKeyboardButton(
+            text=f"{'• ' if current is not None and abs(s - current) < 0.01 else ''}{s:g}×",
+            callback_data=f"spd:{s:g}",
+        )
+        for s in SPEEDS
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=[buttons[:3], buttons[3:]])
 
 
 def episodes_keyboard(

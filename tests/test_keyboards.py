@@ -187,6 +187,17 @@ def test_episodes_keyboard_pagination():
     assert "eps:0" in datas and "eps:2" in datas
 
 
+def test_speed_keyboard_marks_current():
+    from src.keyboards import SPEEDS, speed_keyboard
+    kb = speed_keyboard(1.5)
+    buttons = [b for row in kb.inline_keyboard for b in row]
+    assert len(buttons) == len(SPEEDS)
+    by_data = {b.callback_data: b.text for b in buttons}
+    assert by_data["spd:1.5"] == "• 1.5×"   # active speed marked
+    assert by_data["spd:1"] == "1×"
+    assert by_data["spd:0.75"] == "0.75×"
+
+
 def test_subcategory_pagination_prefix():
     pls = make_nested({"tutorials": {"big": PER_PAGE * 2}})  # 2 pages
     kb = playlists_keyboard(pls, ci=0, si=0, page=0)

@@ -187,6 +187,14 @@ def test_get_playlist(fake_mpv):
     assert client.get_playlist() == []
 
 
+def test_set_speed_clamps(fake_mpv):
+    client = MpvClient(fake_mpv.path)
+    assert client.set_speed(1.5) == 1.5
+    assert fake_mpv.props["speed"] == 1.5
+    assert client.set_speed(99) == 5.0    # clamped high
+    assert client.set_speed(0.01) == 0.1  # clamped low
+
+
 def test_screenshot_to_file(fake_mpv):
     client = MpvClient(fake_mpv.path)
     client.screenshot_to_file("/tmp/x.jpg")            # flags: subtitles

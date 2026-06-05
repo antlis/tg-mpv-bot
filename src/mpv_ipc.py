@@ -212,6 +212,13 @@ class MpvClient:
             )
             self.show_text(f"Audio: {label}")
 
+    def set_speed(self, speed: float, lo: float = 0.1, hi: float = 5.0) -> float:
+        """Set playback speed (clamped); returns the value actually set."""
+        speed = max(lo, min(hi, speed))
+        self.set_property("speed", speed)
+        self.show_text(f"Speed: {speed:g}x")
+        return speed
+
     def adjust_volume(self, delta: float, lo: float = 0, hi: float = 130) -> float:
         """Read volume, clamp ``current + delta`` to [lo, hi], write it back."""
         current = self.get_property("volume")

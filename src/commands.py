@@ -34,6 +34,7 @@ from .keyboards import (
     now_playing_keyboard,
     playlists_keyboard,
     search_results_keyboard,
+    speed_keyboard,
     subcategories_keyboard,
 )
 from .mpv_ipc import MpvClient, MpvError, MpvNotRunning
@@ -278,6 +279,41 @@ async def cb_episode(query: CallbackQuery) -> None:
     await query.answer(err.replace("❌ ", "") if err else f"▶ #{n + 1}")
     if not err:
         await _refresh_episode_picker(query, n // PER_PAGE)
+
+
+def _speed_text(speed: float) -> str:
+    return f"⏩ Speed: {speed:g}× — pick:"
+
+
+@router.message(Command("mpv_speed"))
+async def cmd_speed(message: Message, command: CommandObject) -> None:
+    arg = (command.args or "").strip().rstrip("x×")
+    if arg:
+        try:
+            val = float(arg)
+        except ValueError:
+            await message.reply("Usage: /mpv_speed [value]  — e.g. /mpv_speed 1.5, or no arg for buttons")
+            return
+        speed, err = await _ipc(lambda c: c.set_speed(val))
+        await message.reply(err or f"⏩ Speed: {speed:g}×")
+        return
+    speed, err = await _ipc(lambda c: c.get_property("speed"))
+    if err:
+        await message.reply(err)
+        return
+    await message.reply(_speed_text(speed), reply_markup=speed_keyboard(speed))
+
+
+@router.callback_query(F.data.startswith("spd:"))
+async def cb_speed(query: CallbackQuery) -> None:
+    val = float(query.data[len("spd:"):])
+    speed, err = await _ipc(lambda c: c.set_speed(val))
+    await query.answer(err.replace("❌ ", "") if err else f"{speed:g}×")
+    if not err:
+        try:
+            await query.message.edit_text(_speed_text(speed), reply_markup=speed_keyboard(speed))
+        except TelegramBadRequest:
+            pass  # same speed tapped twice — nothing to update
 
 
 # ── Screenshot ──────────────────────────────────────────────────────
@@ -674,6 +710,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s\n"
         "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> [n] episode picker/jump\n"
+        "<b>/mpv_speed</b> [x] — playback speed (buttons or value)\n"
         "<b>/mpv_shuffle</b> · <b>/mpv_loop</b>\n"
         "<b>/mpv_audio</b> switch audio track\n"
         "<b>/mpv_sub</b> switch subtitle · <b>/mpv_sub_toggle</b> show/hide\n"
