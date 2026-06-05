@@ -33,7 +33,9 @@ Required env: `BOT_TOKEN` (missing → `SystemExit` with a friendly message, not
 `ALLOWED_USERS` (comma-separated Telegram user IDs — **empty means open to everyone**, logged as a
 warning), `API_SERVER_URL`, host paths `MPV_SOCKET` / `PLAYLIST_DIRS` / `VIDEOS_DIR` / `MPV_RUNNER` /
 `DISPLAY`, and launch hooks `PRE_PLAY_HOOK` / `POST_PLAY_HOOK` (shell commands run around the mpv
-spawn — WM glue like `i3-msg workspace 10` lives there, not in the bot). See `.env.example`.
+spawn — WM glue like `i3-msg workspace 10` lives there, not in the bot), and `YTDL_OPTIONS`
+(comma-separated `key=value` passed to mpv as `--ytdl-raw-options` for URL playback, e.g.
+`cookies-from-browser=firefox`). See `.env.example`.
 
 ## Architecture
 
@@ -63,8 +65,10 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   checker behind `/mpv_doctor`; resolves relative entries against the playlist's own dir, treats URLs
   as always-present), and `prettify()` (strips release/quality/source junk for **display only** —
   `Playlist.display` / button text; the raw `name` is what matching, callbacks and files use).
-- `src/player.py` — the only part that spawns a process. `build_launch_command()` is a pure helper
-  (used `MPV_RUNNER` if it exists, else falls back to plain `mpv`). `play()` does `pkill -x mpv`,
+- `src/player.py` — the only part that spawns a process. `build_launch_command()` /
+  `build_url_command()` are pure helpers (use `MPV_RUNNER` if it exists, else plain `mpv`);
+  `play_url()` streams a URL via mpv's ytdl hook (bare-URL messages and `/mpv_url` route here, gated
+  by the anchored `_URL_RE`). `play()` does `pkill -x mpv`,
   runs the optional `PRE_PLAY_HOOK` shell command, then a detached
   `Popen(..., start_new_session=True)` — the Python-native equivalent of the old `setsid` detachment
   for non-TTY contexts (asyncio/systemd) — then `POST_PLAY_HOOK`. Hooks get `PLAYLIST` /

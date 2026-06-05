@@ -15,6 +15,7 @@ operation. The bot talks to mpv's JSON IPC socket directly from Python.
 | `/mpv <query>` | Alias for `/mpv_play` |
 | `/mpv_search [category] <text>` | List all matching playlists as play buttons (e.g. `/mpv_search tutorials docker`) |
 | `/mpv_last` | Resume the last-played playlist (position is restored by mpv) |
+| `/mpv_url <link>` | Stream a URL via yt-dlp — or just **send a link** as a message |
 | `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_shot` | Send a screenshot of the current frame to the chat |
 | `/mpv_toggle` | Play/pause toggle (one command) |

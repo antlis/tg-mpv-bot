@@ -50,18 +50,24 @@ def _augmented_path() -> str:
     return os.pathsep.join(parts)
 
 
-def build_launch_command(settings: Settings, playlist: Path) -> list[str]:
-    """Construct the argv for launching mpv on ``playlist``.
+def _mpv_base(settings: Settings) -> str:
+    """The mpv binary (or wrapper) to launch.
 
     Uses ``MPV_RUNNER`` if it exists (the original ``/tmp/mpv-runner.sh``
     wrapper), otherwise falls back to ``mpv`` (resolved absolutely) so the bot
-    works even when the wrapper hasn't been recreated after a reboot. No
-    ``setsid`` prefix is needed — ``Popen(start_new_session=True)`` detaches.
+    works even when the wrapper hasn't been recreated after a reboot.
     """
     runner = settings.mpv_runner
-    base = runner if runner and Path(runner).exists() else (_which("mpv") or "mpv")
+    return runner if runner and Path(runner).exists() else (_which("mpv") or "mpv")
+
+
+def build_launch_command(settings: Settings, playlist: Path) -> list[str]:
+    """Construct the argv for launching mpv on ``playlist``.
+
+    No ``setsid`` prefix is needed — ``Popen(start_new_session=True)`` detaches.
+    """
     return [
-        base,
+        _mpv_base(settings),
         f"--playlist={playlist}",
         f"--input-ipc-server={settings.mpv_socket}",
         "--force-window",
@@ -69,17 +75,38 @@ def build_launch_command(settings: Settings, playlist: Path) -> list[str]:
     ]
 
 
+def build_url_command(settings: Settings, url: str) -> list[str]:
+    """Construct the argv for streaming ``url`` via mpv's ytdl hook.
+
+    mpv shells out to yt-dlp for anything that isn't a direct media URL, so
+    YouTube/SoundCloud/Twitter/etc. work like in any yt-dlp tool. Optional
+    ``YTDL_OPTIONS`` (comma-separated ``key=value``) become
+    ``--ytdl-raw-options`` — e.g. ``cookies-from-browser=firefox`` for
+    login-gated Instagram/Facebook content.
+    """
+    cmd = [
+        _mpv_base(settings),
+        url,
+        f"--input-ipc-server={settings.mpv_socket}",
+        "--force-window",
+        "--save-position-on-quit",
+    ]
+    if settings.ytdl_options:
+        cmd.append(f"--ytdl-raw-options={settings.ytdl_options}")
+    return cmd
+
+
 HOOK_TIMEOUT = 15  # seconds — a hung hook must not block playback for long
 
 
-def _hook_env(settings: Settings, playlist: Path) -> dict[str, str]:
+def _hook_env(settings: Settings, target: str, name: str) -> dict[str, str]:
     """Environment for hooks and mpv: X11 display, sane PATH, playlist info."""
     return {
         **os.environ,
         "DISPLAY": settings.display,
         "PATH": _augmented_path(),
-        "PLAYLIST": str(playlist),
-        "PLAYLIST_NAME": playlist.stem,
+        "PLAYLIST": target,
+        "PLAYLIST_NAME": name,
         "MPV_SOCKET": settings.mpv_socket,
     }
 
@@ -109,8 +136,8 @@ def _run_hook(label: str, command: str, env: dict[str, str]) -> None:
         logger.warning("%s hook failed: %s", label, exc)
 
 
-def play(settings: Settings, playlist: Path) -> None:
-    """Stop any current mpv, run hooks around a detached launch of ``playlist``."""
+def _kill_and_launch(settings: Settings, cmd: list[str], env: dict[str, str]) -> None:
+    """Shared launch path: stop mpv, pre-hook, detached spawn, post-hook."""
     # Exact-match kill so we don't take down unrelated processes (mpv-runner etc).
     pkill = _which("pkill")
     if pkill:
@@ -120,10 +147,8 @@ def play(settings: Settings, playlist: Path) -> None:
         except OSError as exc:  # don't let a kill failure abort playback
             logger.warning("pkill failed: %s", exc)
 
-    env = _hook_env(settings, playlist)
     _run_hook("pre-play", settings.pre_play_hook, env)
 
-    cmd = build_launch_command(settings, playlist)
     logger.info("Launching: %s", " ".join(cmd))
     subprocess.Popen(
         cmd,
@@ -135,4 +160,16 @@ def play(settings: Settings, playlist: Path) -> None:
     )
 
     _run_hook("post-play", settings.post_play_hook, env)
+
+
+def play(settings: Settings, playlist: Path) -> None:
+    """Stop any current mpv, run hooks around a detached launch of ``playlist``."""
+    env = _hook_env(settings, str(playlist), playlist.stem)
+    _kill_and_launch(settings, build_launch_command(settings, playlist), env)
     state.record_last_played(settings.state_file, playlist)  # for /mpv_last
+
+
+def play_url(settings: Settings, url: str) -> None:
+    """Stream a URL (YouTube/SoundCloud/… via mpv's ytdl hook), same launch path."""
+    env = _hook_env(settings, url, url)
+    _kill_and_launch(settings, build_url_command(settings, url), env)

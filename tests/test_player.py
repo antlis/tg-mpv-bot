@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from src.config import Settings
-from src.player import _hook_env, _run_hook, build_launch_command
+from src.player import _hook_env, _run_hook, build_launch_command, build_url_command
 
 
 def _settings(**kw) -> Settings:
@@ -41,12 +41,27 @@ def test_empty_runner_uses_mpv():
     assert cmd[0] == "mpv" or cmd[0].endswith("/mpv")
 
 
+def test_url_command_basic():
+    s = _settings(mpv_runner="")
+    cmd = build_url_command(s, "https://soundcloud.com/artist/track")
+    assert cmd[1] == "https://soundcloud.com/artist/track"
+    assert "--input-ipc-server=/tmp/sock" in cmd
+    assert "--save-position-on-quit" in cmd
+    assert not any(a.startswith("--ytdl-raw-options") for a in cmd)
+
+
+def test_url_command_with_ytdl_options():
+    s = _settings(mpv_runner="", ytdl_options="cookies-from-browser=firefox")
+    cmd = build_url_command(s, "https://instagram.com/reel/x")
+    assert "--ytdl-raw-options=cookies-from-browser=firefox" in cmd
+
+
 # ── pre/post-play hooks ──────────────────────────────────────────────
 
 
 def test_hook_env_exposes_playlist_info():
     s = _settings(display=":7")
-    env = _hook_env(s, Path("/media/shows/playlists/deadwood.m3u"))
+    env = _hook_env(s, "/media/shows/playlists/deadwood.m3u", "deadwood")
     assert env["PLAYLIST"] == "/media/shows/playlists/deadwood.m3u"
     assert env["PLAYLIST_NAME"] == "deadwood"
     assert env["MPV_SOCKET"] == "/tmp/sock"
@@ -55,7 +70,7 @@ def test_hook_env_exposes_playlist_info():
 
 def test_run_hook_executes_with_env(tmp_path):
     out = tmp_path / "out"
-    env = _hook_env(_settings(), Path("/x/futurama.m3u"))
+    env = _hook_env(_settings(), "/x/futurama.m3u", "futurama")
     _run_hook("pre-play", f'echo "$PLAYLIST_NAME" > {out}', env)
     assert out.read_text().strip() == "futurama"
 
@@ -65,7 +80,7 @@ def test_run_hook_empty_is_noop():
 
 
 def test_run_hook_failure_never_raises(caplog):
-    env = _hook_env(_settings(), Path("/x.m3u"))
+    env = _hook_env(_settings(), "/x.m3u", "x")
     _run_hook("pre-play", "exit 3", env)            # non-zero exit
     _run_hook("pre-play", "/nonexistent-cmd-xyz", env)  # command not found
     assert any("hook" in r.message for r in caplog.records)

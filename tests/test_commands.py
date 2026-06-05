@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.commands import _episode_list, _episodes_text, _parse_goto
+from src.commands import _URL_RE, _episode_list, _episodes_text, _parse_goto
 
 
 class FakePlaylistClient:
@@ -47,6 +47,19 @@ def test_parse_goto_valid(raw, expected):
 ])
 def test_parse_goto_invalid(raw):
     assert _parse_goto(raw) is None
+
+
+@pytest.mark.parametrize("text,matches", [
+    ("https://soundcloud.com/forss/flickermood", True),
+    ("http://youtu.be/xyz", True),
+    ("watch this https://youtu.be/xyz", False),   # URL must be the whole message
+    ("https://a.com/x and more", False),
+    ("ftp://a.com/x", False),
+    ("/mpv_play deadwood", False),
+    ("-not-a-url", False),
+])
+def test_url_re(text, matches):
+    assert bool(_URL_RE.match(text)) is matches
 
 
 def test_episodes_text():

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import re
 import tempfile
 import time
 import uuid
@@ -696,6 +697,35 @@ async def cmd_search(message: Message, command: CommandObject) -> None:
     await message.reply(title, reply_markup=search_results_keyboard(pls, indices))
 
 
+# Anchored and whitespace-free: only a message that *is* a URL triggers
+# playback, and the scheme anchor means it can never be parsed as an mpv flag.
+_URL_RE = re.compile(r"^https?://\S+$")
+
+
+async def _play_url(message: Message, url: str) -> None:
+    await asyncio.to_thread(player.play_url, get_settings(), url)
+    await message.reply("▶ Streaming — give it a few seconds, then /mpv_info")
+
+
+@router.message(Command("mpv_url", "mpv_stream"))
+async def cmd_url(message: Message, command: CommandObject) -> None:
+    url = (command.args or "").strip()
+    if not _URL_RE.match(url):
+        await message.reply(
+            "Usage: /mpv_url <link>\n"
+            "Plays YouTube / SoundCloud / Twitter / Instagram / … via yt-dlp.\n"
+            "Tip: just sending a link as a message works too."
+        )
+        return
+    await _play_url(message, url)
+
+
+@router.message(F.text.regexp(_URL_RE))
+async def msg_url(message: Message) -> None:
+    """A bare URL message plays it directly — no command needed."""
+    await _play_url(message, message.text.strip())
+
+
 # ── Doctor / help ───────────────────────────────────────────────────
 
 
@@ -755,6 +785,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_play</b> &lt;query&gt; — play by number or name\n"
         "<b>/mpv_search</b> [category] &lt;text&gt; — find playlists, tap to play\n"
         "<b>/mpv_last</b> — resume the last-played playlist\n"
+        "<b>/mpv_url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"

@@ -33,6 +33,10 @@ class Settings:
     # e.g. PRE_PLAY_HOOK="i3-msg workspace 10" or a notify-send script.
     pre_play_hook: str = ""
     post_play_hook: str = ""
+    # Extra yt-dlp options for URL playback, passed as --ytdl-raw-options
+    # (comma-separated key=value). E.g. "cookies-from-browser=firefox" to
+    # play login-gated Instagram/Facebook content.
+    ytdl_options: str = ""
     lock_file: str = "/tmp/tg-mpv-bot.lock"
     scan_interval_min: int = 0   # >0 → auto-scan for new media every N minutes
     state_file: Path = field(  # remembers the last-played playlist (/mpv_last)
@@ -77,6 +81,7 @@ def get_settings() -> Settings:
         display=os.environ.get("DISPLAY", ":0"),
         pre_play_hook=os.environ.get("PRE_PLAY_HOOK", ""),
         post_play_hook=os.environ.get("POST_PLAY_HOOK", ""),
+        ytdl_options=os.environ.get("YTDL_OPTIONS", ""),
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),
         scan_interval_min=int(os.environ.get("SCAN_INTERVAL_MIN", "0") or "0"),
         state_file=Path(os.environ["STATE_FILE"]).expanduser()
