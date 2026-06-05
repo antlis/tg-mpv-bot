@@ -23,6 +23,7 @@ from pathlib import Path
 
 from . import state
 from .config import Settings
+from .mpv_ipc import MpvClient
 
 logger = logging.getLogger(__name__)
 
@@ -136,8 +137,22 @@ def _run_hook(label: str, command: str, env: dict[str, str]) -> None:
         logger.warning("%s hook failed: %s", label, exc)
 
 
-def _kill_and_launch(settings: Settings, cmd: list[str], env: dict[str, str]) -> None:
-    """Shared launch path: stop mpv, pre-hook, detached spawn, post-hook."""
+def _stop_current(settings: Settings) -> None:
+    """Stop whatever is playing before launching the next thing.
+
+    The bot's own instance is asked to quit over IPC first — a graceful exit,
+    so ``--save-position-on-quit`` records the resume point reliably. Stray
+    instances (started by hand, no IPC socket of ours) are then pkill'ed,
+    unless ``KILL_STRAY_MPV=0`` opts out of that.
+    """
+    try:
+        MpvClient(settings.mpv_socket, timeout=1.0).quit()
+        time.sleep(0.3)  # let it release the window/audio device
+    except Exception:  # noqa: BLE001 — dead socket / no mpv: nothing to quit
+        pass
+
+    if not settings.kill_stray_mpv:
+        return
     # Exact-match kill so we don't take down unrelated processes (mpv-runner etc).
     pkill = _which("pkill")
     if pkill:
@@ -146,6 +161,11 @@ def _kill_and_launch(settings: Settings, cmd: list[str], env: dict[str, str]) ->
             time.sleep(0.3)
         except OSError as exc:  # don't let a kill failure abort playback
             logger.warning("pkill failed: %s", exc)
+
+
+def _kill_and_launch(settings: Settings, cmd: list[str], env: dict[str, str]) -> None:
+    """Shared launch path: stop mpv, pre-hook, detached spawn, post-hook."""
+    _stop_current(settings)
 
     _run_hook("pre-play", settings.pre_play_hook, env)
 

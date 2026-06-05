@@ -37,6 +37,11 @@ class Settings:
     # (comma-separated key=value). E.g. "cookies-from-browser=firefox" to
     # play login-gated Instagram/Facebook content.
     ytdl_options: str = ""
+    # Also pkill stray mpv instances (ones not started by the bot) before
+    # playing. Guarantees a single player on screen, but is rude on machines
+    # where mpv is used manually — set KILL_STRAY_MPV=0 there; the bot's own
+    # instance is always stopped gracefully over IPC first.
+    kill_stray_mpv: bool = True
     lock_file: str = "/tmp/tg-mpv-bot.lock"
     scan_interval_min: int = 0   # >0 → auto-scan for new media every N minutes
     state_file: Path = field(  # remembers the last-played playlist (/mpv_last)
@@ -82,6 +87,8 @@ def get_settings() -> Settings:
         pre_play_hook=os.environ.get("PRE_PLAY_HOOK", ""),
         post_play_hook=os.environ.get("POST_PLAY_HOOK", ""),
         ytdl_options=os.environ.get("YTDL_OPTIONS", ""),
+        kill_stray_mpv=os.environ.get("KILL_STRAY_MPV", "1").lower()
+        in ("1", "true", "yes"),
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),
         scan_interval_min=int(os.environ.get("SCAN_INTERVAL_MIN", "0") or "0"),
         state_file=Path(os.environ["STATE_FILE"]).expanduser()

@@ -1,7 +1,13 @@
 from pathlib import Path
 
 from src.config import Settings
-from src.player import _hook_env, _run_hook, build_launch_command, build_url_command
+from src.player import (
+    _hook_env,
+    _run_hook,
+    _stop_current,
+    build_launch_command,
+    build_url_command,
+)
 
 
 def _settings(**kw) -> Settings:
@@ -54,6 +60,12 @@ def test_url_command_with_ytdl_options():
     s = _settings(mpv_runner="", ytdl_options="cookies-from-browser=firefox")
     cmd = build_url_command(s, "https://instagram.com/reel/x")
     assert "--ytdl-raw-options=cookies-from-browser=firefox" in cmd
+
+
+def test_stop_current_dead_socket_no_pkill(tmp_path):
+    # No mpv at the socket and stray-killing off → must be a quiet no-op.
+    s = _settings(mpv_socket=str(tmp_path / "no.sock"), kill_stray_mpv=False)
+    _stop_current(s)  # must not raise
 
 
 # ── pre/post-play hooks ──────────────────────────────────────────────

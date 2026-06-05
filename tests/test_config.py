@@ -49,6 +49,7 @@ def test_get_settings_reads_env(monkeypatch):
     monkeypatch.setenv("PLAYLIST_DIRS", "/x/playlists")
     monkeypatch.setenv("PRE_PLAY_HOOK", "i3-msg workspace 7")
     monkeypatch.setenv("POST_PLAY_HOOK", "notify-send hi")
+    monkeypatch.setenv("KILL_STRAY_MPV", "0")
     get_settings.cache_clear()
     s = get_settings()
     assert s.bot_token == "tok"
@@ -57,6 +58,7 @@ def test_get_settings_reads_env(monkeypatch):
     assert s.playlist_dirs == [Path("/x/playlists")]
     assert s.pre_play_hook == "i3-msg workspace 7"
     assert s.post_play_hook == "notify-send hi"
+    assert s.kill_stray_mpv is False  # default is True
     get_settings.cache_clear()
 
 
