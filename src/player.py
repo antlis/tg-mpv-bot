@@ -105,6 +105,23 @@ def _ytdl_cli_args(settings: Settings, url: str) -> list[str]:
     return args
 
 
+# YTDL_OPTIONS keys that describe how to *reach* the network rather than how
+# to extract — these must survive into escalation retries (falling back to a
+# dead address family would just trade one failure for another).
+_NETWORK_KEYS = {"force-ipv4", "force-ipv6", "proxy", "source-address", "socket-timeout"}
+
+
+def _network_cli_args(settings: Settings) -> list[str]:
+    args: list[str] = []
+    for opt in filter(None, settings.ytdl_options.split(",")):
+        key, _, value = opt.partition("=")
+        if key in _NETWORK_KEYS:
+            args.append(f"--{key}")
+            if value:
+                args.append(value)
+    return args
+
+
 def _ytdlp_bin() -> str | None:
     """Prefer the venv's yt-dlp: YouTube breaks faster than distro releases,
     so a nightly is pip-installed next to the bot's interpreter."""
@@ -184,7 +201,7 @@ def probe_url(settings: Settings, url: str, timeout: float = 120) -> tuple[dict,
     fast_args = _ytdl_cli_args(settings, url)
     info, reason = _run_probe(settings, url, fast_args, timeout)
     if info is None and _should_escalate(reason):
-        stock_args = (
+        stock_args = _network_cli_args(settings) + (
             ["--cookies-from-browser", settings.ytdl_cookies_browser]
             if settings.ytdl_cookies_browser
             else []
@@ -216,6 +233,10 @@ def build_fetch_command(
         "--no-warnings",
         "--load-info-json", str(info_path),
         "-o", "-",
+        # The probe minted the URLs over this network path; fetching over a
+        # different one (e.g. v6 when the URLs are bound to the v4 proxy IP)
+        # gets tarpitted by IP-locked CDNs.
+        *_network_cli_args(settings),
     ]
     if format_id:
         cmd += ["-f", format_id]

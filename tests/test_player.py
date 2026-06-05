@@ -67,6 +67,14 @@ def test_fetch_command_per_format(tmp_path):
     assert cmd[cmd.index("-f") + 1] == "303"
 
 
+def test_fetch_command_keeps_network_args(tmp_path):
+    # URLs are minted for the probe's network path — fetchers must use it too
+    s = _settings(mpv_runner="", ytdl_options="force-ipv4,extractor-args=x=y")
+    cmd = build_fetch_command(s, tmp_path / "i.json")
+    assert "--force-ipv4" in cmd
+    assert "--extractor-args" not in cmd  # no extraction happens here
+
+
 def test_pipe_player_single_stream_stdin():
     s = _settings(mpv_runner="")
     cmd = build_pipe_player_command(s, "My Title")
@@ -142,6 +150,21 @@ def test_probe_escalates_on_degraded_client(monkeypatch, error):
     assert "--extractor-args" in attempts[0]          # fast path first…
     assert "--cookies-from-browser" not in attempts[0]
     assert attempts[1] == ["--cookies-from-browser", "firefox"]  # …stock args + cookies
+
+
+def test_probe_escalation_keeps_network_args(monkeypatch):
+    # falling back from the lean client must NOT fall back to a dead address
+    # family — force-ipv4/proxy flags carry over into the retry.
+    import src.player as player
+
+    s = _settings(
+        ytdl_cookies_browser="firefox",
+        ytdl_options="force-ipv4,extractor-args=youtube:player_client=android_vr",
+    )
+    attempts = _probe_attempts(monkeypatch, s, "ERROR: Requested format is not available")
+    player.probe_url(s, "https://youtu.be/x")
+    assert attempts[1] == ["--force-ipv4", "--cookies-from-browser", "firefox"]
+    assert "--extractor-args" not in attempts[1]  # client pinning is dropped
 
 
 def test_probe_fails_fast_on_terminal_errors(monkeypatch):

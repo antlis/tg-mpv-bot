@@ -20,14 +20,13 @@ Environment="PRE_PLAY_HOOK=i3-msg workspace 10"
 # URL playback: Firefox cookies for gated Instagram/Facebook ONLY — never
 # global (logged-in YouTube cookies make yt-dlp hang on bot checks).
 Environment=YTDL_COOKIES_BROWSER=firefox
-# NOTE: do NOT force an address family here (e.g. force-ipv6). The pipe
-# architecture makes IP-locked URLs a non-issue (yt-dlp fetches everything
-# itself), and forcing v6 breaks v4-only CDNs outright (SoundCloud) while
-# this host's v6 path to YouTube is flaky. Let yt-dlp pick per connection.
-# Lean YouTube extraction: one client, skip the (slow, retry-prone) webpage.
-# Measured: default client mix timed out at 60s where this took 22s.
-# If YouTube playback ever breaks, try removing this first.
-Environment=YTDL_OPTIONS=extractor-args=youtube:player_client=android_vr;player_skip=webpage
+# force-ipv4: this host's IPv6 path to YouTube TLS-stalls (flagged/limited),
+# while IPv4 goes through the hysteria2 TUN — the same proven path the
+# browser uses for YouTube daily. (v4 is also universally supported, unlike
+# the force-ipv6 experiment that broke v4-only SoundCloud.)
+# extractor-args: lean single-client extraction, skip the slow webpage —
+# measured 22s vs a 60s timeout. Remove it first if YouTube changes break it.
+Environment=YTDL_OPTIONS=force-ipv4,extractor-args=youtube:player_client=android_vr;player_skip=webpage
 # The user manager's inherited PATH can be minimal; ensure the std bin dirs are present.
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
