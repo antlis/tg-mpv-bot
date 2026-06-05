@@ -6,9 +6,9 @@ from src.player import (
     _run_hook,
     _stop_current,
     _ytdl_cli_args,
+    build_fetch_command,
     build_launch_command,
-    build_pipe_commands,
-    build_url_command,
+    build_pipe_player_command,
 )
 
 
@@ -49,70 +49,39 @@ def test_empty_runner_uses_mpv():
     assert cmd[0] == "mpv" or cmd[0].endswith("/mpv")
 
 
-def test_url_command_basic():
+def test_fetch_command_shape(tmp_path):
     s = _settings(mpv_runner="")
-    cmd = build_url_command(s, "https://soundcloud.com/artist/track")
-    assert cmd[1] == "https://soundcloud.com/artist/track"
+    info = tmp_path / "info.json"
+    cmd = build_fetch_command(s, info)
+    # downloads from the saved info JSON (no re-extraction), streams to stdout
+    assert "--load-info-json" in cmd and str(info) in cmd
+    assert cmd[-2:] == ["-o", "-"]
+    assert "-f" not in cmd  # single-stream: yt-dlp uses the probed format
+
+
+def test_fetch_command_per_format(tmp_path):
+    s = _settings(mpv_runner="")
+    cmd = build_fetch_command(s, tmp_path / "i.json", format_id="303")
+    assert cmd[cmd.index("-f") + 1] == "303"
+
+
+def test_pipe_player_single_stream_stdin():
+    s = _settings(mpv_runner="")
+    cmd = build_pipe_player_command(s, "My Title")
+    assert cmd[1] == "-"  # stdin
+    assert "--force-media-title=My Title" in cmd
+    assert "--cache=yes" in cmd
     assert "--input-ipc-server=/tmp/sock" in cmd
-    assert "--save-position-on-quit" in cmd
-    assert not any(a.startswith("--ytdl-raw-options") for a in cmd)
+    assert not any(a.startswith("--audio-file") for a in cmd)
 
 
-def test_url_command_with_ytdl_options():
-    s = _settings(mpv_runner="", ytdl_options="format-sort=res:1080")
-    cmd = build_url_command(s, "https://youtu.be/x")
-    assert "--ytdl-raw-options=format-sort=res:1080" in cmd
-
-
-def test_url_command_normalizes_bare_flags():
-    # mpv's ytdl-raw-options requires key=value; a bare "force-ipv6" makes
-    # mpv exit with a fatal parse error — it must be emitted as "force-ipv6=".
-    s = _settings(mpv_runner="", ytdl_options="force-ipv6")
-    cmd = build_url_command(s, "https://youtu.be/x")
-    assert "--ytdl-raw-options=force-ipv6=" in cmd
-
-
-def test_cookies_only_for_gated_hosts():
-    s = _settings(mpv_runner="", ytdl_cookies_browser="firefox")
-    gated = build_url_command(s, "https://www.instagram.com/reel/x")
-    assert "--ytdl-raw-options=cookies-from-browser=firefox" in gated
-    # Logged-in YouTube cookies stall yt-dlp's extraction → must NOT be sent.
-    open_site = build_url_command(s, "https://youtu.be/6gRXToZhO1A")
-    assert not any("cookies" in a for a in open_site)
-    # Not fooled by a lookalike domain.
-    fake = build_url_command(s, "https://evilinstagram.com/x")
-    assert not any("cookies" in a for a in fake)
-
-
-def test_cookies_combine_with_global_options():
-    s = _settings(
-        mpv_runner="", ytdl_options="format-sort=res:1080", ytdl_cookies_browser="firefox"
-    )
-    cmd = build_url_command(s, "https://facebook.com/watch?v=1")
-    assert "--ytdl-raw-options=format-sort=res:1080,cookies-from-browser=firefox" in cmd
-
-
-def test_pipe_commands_shape(tmp_path):
-    s = _settings(mpv_runner="", ytdl_format="bv*[height<=1080]+ba/b")
-    tf = tmp_path / "title"
-    ytdl_cmd, mpv_cmd = build_pipe_commands(s, "https://youtu.be/x", tf)
-    # yt-dlp fetches and writes the stream to stdout…
-    assert "-o" in ytdl_cmd and "-" in ytdl_cmd
-    assert ytdl_cmd[ytdl_cmd.index("-f") + 1] == "bv*[height<=1080]+ba/b"
-    assert ytdl_cmd[-1] == "https://youtu.be/x"  # after "--": never an option
-    assert str(tf) in ytdl_cmd  # title side-channel
-    # …and mpv reads stdin with seek-friendly cache buffers.
-    assert mpv_cmd[1] == "-"
-    assert "--cache=yes" in mpv_cmd
-    assert "--input-ipc-server=/tmp/sock" in mpv_cmd
-
-
-def test_pipe_commands_cookies_gated_only():
-    s = _settings(mpv_runner="", ytdl_cookies_browser="firefox")
-    ytdl_cmd, _ = build_pipe_commands(s, "https://www.instagram.com/reel/x")
-    assert "--cookies-from-browser" in ytdl_cmd
-    ytdl_cmd, _ = build_pipe_commands(s, "https://youtu.be/x")
-    assert "--cookies-from-browser" not in ytdl_cmd
+def test_pipe_player_split_streams_use_fds():
+    # split A/V can't share one pipe (interleaved bytes = garbage): each
+    # stream gets its own fd and mpv muxes them itself.
+    s = _settings(mpv_runner="")
+    cmd = build_pipe_player_command(s, "T", video_fd=7, audio_fd=9)
+    assert cmd[1] == "fd://7"
+    assert "--audio-file=fd://9" in cmd
 
 
 def test_ytdl_cli_args_translation():

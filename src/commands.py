@@ -708,12 +708,13 @@ _URL_RE = re.compile(r"^https?://\S+$")
 
 async def _play_url(message: Message, url: str) -> None:
     note = await message.reply("⏳ Resolving…")
-    title = await asyncio.to_thread(player.play_url, get_settings(), url)
     try:
-        await note.edit_text(
-            f"▶ Streaming: {title}" if title
-            else "▶ Streaming — give it a few seconds, then /mpv_info"
-        )
+        title = await asyncio.to_thread(player.play_url, get_settings(), url)
+        text = f"▶ Streaming: {title}"
+    except player.UrlPlaybackError as exc:
+        text = f"❌ Can't play that link: {exc}"
+    try:
+        await note.edit_text(text)
     except TelegramBadRequest:
         pass
 
