@@ -123,8 +123,6 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   `tg-mpv-bot.service`) still set concrete values (`PRE_PLAY_HOOK=i3-msg workspace 10`, `DISPLAY=:0`,
   `%h`/`${HOME}`-relative paths)
   and must agree with them.
-- `mpvctl.sh` is now **standalone/legacy** — kept for Hermes/CLI use (`./mpvctl.sh list|play|info`) but
-  the bot no longer invokes it. It still hardcodes its own paths; it is *not* driven by `config.py`.
 - The bot does not start mpv itself except via `src/player.play()`. IPC commands surface
   "mpv is not running" when the socket is dead.
 </content>

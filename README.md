@@ -14,6 +14,8 @@ bot talks to mpv's JSON IPC socket directly from Python.
 - 📜 **Episode picker**, ▶ **continue watching**, 📸 **frame screenshots**
 - 🪝 **Hooks** instead of WM assumptions — `i3-msg`/`swaymsg`/`notify-send`, your call
 
+![tg-mpv-bot demo](docs/demo.svg)
+
 ## Commands
 
 | Command | Description |
@@ -87,10 +89,8 @@ ruff check .
 | `src/playlists.py` | Playlist discovery, query matching, on-disk validation |
 | `src/player.py` | Launch mpv (pkill + pre/post-play hooks + detached spawn) |
 | `src/keyboards.py` | Inline-keyboard builders for browsing |
-| `mpvctl.sh` | Standalone shell controller (Hermes/CLI use; not used by the bot) |
 | `docker-compose.yml` | Docker deployment (host networking + X11 bind) |
 | `Dockerfile` | Container build (Python 3.12 + mpv) |
-| `scripts/tg-mpvctl.sh` | Hermes control script (start/stop/status) |
 
 ## Deployment Options
 
@@ -116,18 +116,6 @@ EOF
 systemctl --user daemon-reload
 systemctl --user start tg-mpv-bot
 systemctl --user enable tg-mpv-bot
-```
-
-### Hermes integration (via control script)
-
-```bash
-# Symlink control script to hermes scripts dir
-ln -s ~/Projects/tg-mpv-bot/scripts/tg-mpvctl.sh ~/.hermes/scripts/tg-mpvctl.sh
-
-# Then via quick_commands:
-# /tg_mpv_start   — docker compose up -d --build
-# /tg_mpv_stop    — docker compose down
-# /tg_mpv_status  — check if running
 ```
 
 ## Access Control
@@ -170,9 +158,6 @@ Hook failures are logged and never block playback (15s timeout).
 → playlist**. Categories come from the top-level media dirs (cartoons / movie /
 shows / tutorials); a playlists dir may nest one level of folders, which become
 subcategories (tutorials are grouped by provider, e.g. `frontend-masters`).
-
-`mpvctl.sh` remains as a standalone shell controller for Hermes/CLI use but is
-no longer invoked by the bot.
 
 ## License
 
