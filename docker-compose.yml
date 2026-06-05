@@ -25,6 +25,8 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       # mpv IPC socket — shared with host mpv instances
       - /tmp/mpv-socket:/tmp/mpv-socket:rw
+      # watch history / notification target — survives container recreation
+      - ~/.local/state/tg-mpv-bot:${HOME}/.local/state/tg-mpv-bot:rw
       # Video directories with playlists — the container path mirrors the host
       # path so absolute entries inside the .m3u files resolve unchanged.
       - ~/Videos/cartoons/playlists:${HOME}/Videos/cartoons/playlists:ro
