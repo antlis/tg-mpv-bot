@@ -27,6 +27,8 @@ Environment=YTDL_COOKIES_BROWSER=firefox
 # extractor-args: lean single-client extraction, skip the slow webpage —
 # measured 22s vs a 60s timeout. Remove it first if YouTube changes break it.
 Environment=YTDL_OPTIONS=force-ipv4,extractor-args=youtube:player_client=android_vr;player_skip=webpage
+# Refresh the yt-dlp nightly weekly, before YouTube breakage bites.
+Environment=YTDL_UPDATE_DAYS=7
 # The user manager's inherited PATH can be minimal; ensure the std bin dirs are present.
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 

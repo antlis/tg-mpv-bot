@@ -210,6 +210,7 @@ required.
 | `YTDL_COOKIES_BROWSER` | *(none)* | Browser whose cookies unlock Instagram/Facebook and YouTube bot-checks (e.g. `firefox`); applied only to gated hosts / as an escalation, never globally |
 | `API_SERVER_URL` | *(none)* | Local [Bot API server](https://github.com/tdlib/telegram-bot-api) — needed to receive Telegram files over 20 MB |
 | `SCAN_INTERVAL_MIN` | `0` | If >0, auto-run the playlist generator every N minutes |
+| `YTDL_UPDATE_DAYS` | `0` | If >0, auto-update yt-dlp every N days (recommended: `7`) and report version bumps in chat |
 | `STATE_FILE` | `~/.local/state/tg-mpv-bot/state.json` | Watch history / notification target |
 | `LOCK_FILE` | `/tmp/tg-mpv-bot.lock` | Single-instance lock |
 

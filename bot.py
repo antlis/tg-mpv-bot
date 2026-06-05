@@ -163,8 +163,30 @@ async def main() -> None:
     from src import notify
     asyncio.create_task(notify.run(bot, settings))
 
+    if settings.ytdlp_update_days > 0:
+        asyncio.create_task(_ytdlp_update_loop(bot, settings))
+        logger.info("yt-dlp auto-update every %d day(s)", settings.ytdlp_update_days)
+
     logger.info("tg-mpv-bot starting (polling)...")
     await dp.start_polling(bot)
+
+
+async def _ytdlp_update_loop(bot: Bot, settings) -> None:
+    """Periodically refresh the venv's yt-dlp nightly (YouTube breaks it
+    every few months — better to update before it bites mid-movie). Reports
+    actual version bumps to the chat that last started playback."""
+    from src import player, state
+
+    while True:
+        await asyncio.sleep(settings.ytdlp_update_days * 86400)
+        try:
+            result = await asyncio.to_thread(player.update_ytdlp)
+            logger.info("yt-dlp auto-update: %s", result)
+            chat = state.notify_chat(settings.state_file)
+            if chat and "updated" in result:
+                await bot.send_message(chat, f"🔄 Auto-update: {result}")
+        except Exception:
+            logger.exception("yt-dlp auto-update failed")
 
 
 async def _scan_loop(settings) -> None:

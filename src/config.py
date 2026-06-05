@@ -51,6 +51,7 @@ class Settings:
     kill_stray_mpv: bool = True
     lock_file: str = "/tmp/tg-mpv-bot.lock"
     scan_interval_min: int = 0   # >0 → auto-scan for new media every N minutes
+    ytdlp_update_days: int = 0   # >0 → auto-update yt-dlp nightly every N days
     state_file: Path = field(  # remembers the last-played playlist (/mpv_last)
         default_factory=lambda: Path.home() / ".local/state/tg-mpv-bot/state.json"
     )
@@ -100,6 +101,7 @@ def get_settings() -> Settings:
         in ("1", "true", "yes"),
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),
         scan_interval_min=int(os.environ.get("SCAN_INTERVAL_MIN", "0") or "0"),
+        ytdlp_update_days=int(os.environ.get("YTDL_UPDATE_DAYS", "0") or "0"),
         state_file=Path(os.environ["STATE_FILE"]).expanduser()
         if os.environ.get("STATE_FILE")
         else Path.home() / ".local/state/tg-mpv-bot/state.json",
