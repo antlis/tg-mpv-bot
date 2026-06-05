@@ -21,6 +21,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from . import state
 from .config import Settings
 
 logger = logging.getLogger(__name__)
@@ -134,3 +135,4 @@ def play(settings: Settings, playlist: Path) -> None:
     )
 
     _run_hook("post-play", settings.post_play_hook, env)
+    state.record_last_played(settings.state_file, playlist)  # for /mpv_last

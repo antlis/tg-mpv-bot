@@ -20,7 +20,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 
-from . import generate, keyboards, player, playlists
+from . import generate, keyboards, player, playlists, state
 from .config import get_settings
 from .keyboards import (
     categories_keyboard,
@@ -449,6 +449,17 @@ async def cmd_play(message: Message, command: CommandObject) -> None:
     await message.reply(f"▶ Playing: {pl.display}")
 
 
+@router.message(Command("mpv_last", "mpv_continue"))
+async def cmd_last(message: Message) -> None:
+    """Relaunch the last-played playlist (mpv restores the position itself)."""
+    last = state.last_played(get_settings().state_file)
+    if last is None:
+        await message.reply("❌ No watch history yet — play something first.")
+        return
+    await asyncio.to_thread(player.play, get_settings(), last)
+    await message.reply(f"▶ Resuming: {playlists.prettify(last.stem)}")
+
+
 @router.message(Command("mpv_search", "mpv_find"))
 async def cmd_search(message: Message, command: CommandObject) -> None:
     """Search playlists and show every hit as a play button.
@@ -545,6 +556,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_list</b> — browse playlists with buttons\n"
         "<b>/mpv_play</b> &lt;query&gt; — play by number or name\n"
         "<b>/mpv_search</b> [category] &lt;text&gt; — find playlists, tap to play\n"
+        "<b>/mpv_last</b> — resume the last-played playlist\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"

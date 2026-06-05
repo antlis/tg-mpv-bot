@@ -35,6 +35,9 @@ class Settings:
     post_play_hook: str = ""
     lock_file: str = "/tmp/tg-mpv-bot.lock"
     scan_interval_min: int = 0   # >0 → auto-scan for new media every N minutes
+    state_file: Path = field(  # remembers the last-played playlist (/mpv_last)
+        default_factory=lambda: Path.home() / ".local/state/tg-mpv-bot/state.json"
+    )
 
     @property
     def is_restricted(self) -> bool:
@@ -76,4 +79,7 @@ def get_settings() -> Settings:
         post_play_hook=os.environ.get("POST_PLAY_HOOK", ""),
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),
         scan_interval_min=int(os.environ.get("SCAN_INTERVAL_MIN", "0") or "0"),
+        state_file=Path(os.environ["STATE_FILE"]).expanduser()
+        if os.environ.get("STATE_FILE")
+        else Path.home() / ".local/state/tg-mpv-bot/state.json",
     )
