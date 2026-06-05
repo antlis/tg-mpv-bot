@@ -119,8 +119,22 @@ class UrlPlaybackError(Exception):
 _INFO_JSON = "tg-mpv-bot-info.json"  # one play at a time → fixed, self-cleaning
 
 
-def _is_bot_check(error: str) -> bool:
-    return "Sign in to confirm" in error or "not a bot" in error
+# Errors that no retry can fix — fail fast, don't waste a slow second probe.
+_TERMINAL_ERRORS = (
+    "Video unavailable",
+    "Private video",
+    "This live event will begin",
+    "has been removed",
+    "is not a valid URL",
+    "Unsupported URL",
+)
+
+
+def _should_escalate(error: str) -> bool:
+    """Retry with stock client + cookies? Anything that smells like client
+    degradation (bot checks, missing formats) qualifies — YouTube cycles
+    failure modes on flagged IPs, so matching one exact message is a trap."""
+    return not any(t in error for t in _TERMINAL_ERRORS)
 
 
 def _run_probe(
@@ -158,28 +172,27 @@ def probe_url(settings: Settings, url: str, timeout: float = 120) -> tuple[dict,
     immediately. Raises :class:`UrlPlaybackError` with a user-facing message
     on failure.
 
-    Cookies escalation (same shape as tg-media-bot's geo-retry): the first
-    attempt runs cookie-less with the fast YTDL_OPTIONS — logged-in YouTube
-    cookies stall *normal* extraction, so they must not be the default. Only
-    when the site answers with a sign-in/bot-check demand do we retry with
-    browser cookies — and with stock client args, since the lean pinned
-    client doesn't support cookies.
+    Escalation (same shape as tg-media-bot's geo-retry): the first attempt
+    runs cookie-less with the fast YTDL_OPTIONS — logged-in YouTube cookies
+    stall *normal* extraction, so they must not be the default. When that
+    fails with anything non-terminal (bot-check demand, missing formats —
+    YouTube cycles failure modes on flagged IPs), retry once with stock
+    client args plus browser cookies if configured.
     """
     if _ytdlp_bin() is None:
         raise UrlPlaybackError("yt-dlp is not installed on the host")
-    info, reason = _run_probe(settings, url, _ytdl_cli_args(settings, url), timeout)
-    if (
-        info is None
-        and settings.ytdl_cookies_browser
-        and _is_bot_check(reason)
-    ):
-        logger.info("Bot check for %s — retrying with %s cookies",
-                    url, settings.ytdl_cookies_browser)
-        info, reason = _run_probe(
-            settings, url,
-            ["--cookies-from-browser", settings.ytdl_cookies_browser],
-            timeout,
+    fast_args = _ytdl_cli_args(settings, url)
+    info, reason = _run_probe(settings, url, fast_args, timeout)
+    if info is None and _should_escalate(reason):
+        stock_args = (
+            ["--cookies-from-browser", settings.ytdl_cookies_browser]
+            if settings.ytdl_cookies_browser
+            else []
         )
+        if stock_args != fast_args:
+            logger.info("Probe failed (%s) — escalating with stock args for %s",
+                        reason[:80], url)
+            info, reason = _run_probe(settings, url, stock_args, timeout)
     if info is None:
         raise UrlPlaybackError(reason)
     info_path = Path(tempfile.gettempdir()) / _INFO_JSON

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from src.config import Settings
 from src.player import (
     _hook_env,
@@ -108,43 +110,48 @@ def test_ytdl_cli_args_cookies_gated_only():
     assert _ytdl_cli_args(s, "https://youtu.be/x") == []
 
 
-def test_probe_escalates_to_cookies_on_bot_check(monkeypatch):
+def _probe_attempts(monkeypatch, settings, fail_first_with, second=({"title": "ok"}, "")):
+    import src.player as player
+
+    attempts = []
+
+    def fake_probe(settings_, url, extra_args, timeout):
+        attempts.append(extra_args)
+        if len(attempts) == 1:
+            return None, fail_first_with
+        return second
+
+    monkeypatch.setattr(player, "_run_probe", fake_probe)
+    return attempts
+
+
+@pytest.mark.parametrize("error", [
+    "ERROR: Sign in to confirm you're not a bot.",
+    "ERROR: Requested format is not available. Use --list-formats …",
+    "site did not respond within 120s (rate-limited?)",
+])
+def test_probe_escalates_on_degraded_client(monkeypatch, error):
+    # YouTube cycles failure modes on flagged IPs — every non-terminal
+    # failure of the lean fast path must trigger the stock+cookies retry.
     import src.player as player
 
     s = _settings(ytdl_cookies_browser="firefox", ytdl_options="extractor-args=x")
-    attempts = []
-
-    def fake_probe(settings, url, extra_args, timeout):
-        attempts.append(extra_args)
-        if "--cookies-from-browser" in extra_args:
-            return {"title": "ok"}, ""
-        return None, "ERROR: Sign in to confirm you're not a bot."
-
-    monkeypatch.setattr(player, "_run_probe", fake_probe)
+    attempts = _probe_attempts(monkeypatch, s, error)
     info, _ = player.probe_url(s, "https://youtu.be/x")
     assert info == {"title": "ok"}
-    assert len(attempts) == 2
     assert "--extractor-args" in attempts[0]          # fast path first…
     assert "--cookies-from-browser" not in attempts[0]
     assert attempts[1] == ["--cookies-from-browser", "firefox"]  # …stock args + cookies
 
 
-def test_probe_no_cookie_retry_for_other_errors(monkeypatch):
-    import pytest
-
+def test_probe_fails_fast_on_terminal_errors(monkeypatch):
     import src.player as player
 
     s = _settings(ytdl_cookies_browser="firefox")
-    attempts = []
-
-    def fake_probe(settings, url, extra_args, timeout):
-        attempts.append(extra_args)
-        return None, "ERROR: Video unavailable"
-
-    monkeypatch.setattr(player, "_run_probe", fake_probe)
+    attempts = _probe_attempts(monkeypatch, s, "ERROR: Video unavailable")
     with pytest.raises(player.UrlPlaybackError, match="unavailable"):
         player.probe_url(s, "https://youtu.be/x")
-    assert len(attempts) == 1  # cookies are an escalation, not a blanket retry
+    assert len(attempts) == 1  # no slow retry for an error no retry can fix
 
 
 def test_stop_current_dead_socket_no_pkill(tmp_path):
