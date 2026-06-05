@@ -769,13 +769,23 @@ def _remember_chat(message: Message) -> None:
 
 
 async def _replay(message: Message, target: str) -> None:
-    """Launch a history target — URL or playlist path — via the right path."""
+    """Launch a history target — URL, playlist or media file — the right way.
+
+    The distinction matters: playlists go to mpv as ``--playlist=…``, but a
+    media file (e.g. a downloaded Telegram video) handed to that flag makes
+    mpv parse the video bytes as a playlist and play nothing.
+    """
     if target.startswith(("http://", "https://")):
         await _play_url(message, target)
+        return
+    _remember_chat(message)
+    path = Path(target)
+    title = playlists.prettify(path.stem)
+    if path.suffix.lower() == ".m3u":
+        await asyncio.to_thread(player.play, get_settings(), path)
     else:
-        _remember_chat(message)
-        await asyncio.to_thread(player.play, get_settings(), Path(target))
-        await message.reply(f"▶ Playing: {playlists.prettify(Path(target).stem)}")
+        await asyncio.to_thread(player.play_file, get_settings(), path, path.stem)
+    await message.reply(f"▶ Playing: {title}")
 
 
 @router.message(Command("mpv_notify"))
