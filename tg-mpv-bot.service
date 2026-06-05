@@ -20,11 +20,10 @@ Environment="PRE_PLAY_HOOK=i3-msg workspace 10"
 # URL playback: Firefox cookies for gated Instagram/Facebook ONLY — never
 # global (logged-in YouTube cookies make yt-dlp hang on bot checks).
 Environment=YTDL_COOKIES_BROWSER=firefox
-# googlevideo URLs are IP-locked to the network they were minted from. This
-# host runs a hysteria2 TUN that captures IPv4 only, so IPv4 egress is the
-# proxy exit while IPv6 is the ISP line. Pin yt-dlp to IPv6 so the minted
-# URLs match the path mpv fetches over (system default prefers IPv6 too).
-Environment=YTDL_OPTIONS=force-ipv6
+# NOTE: do NOT force an address family here (e.g. force-ipv6). The pipe
+# architecture makes IP-locked URLs a non-issue (yt-dlp fetches everything
+# itself), and forcing v6 breaks v4-only CDNs outright (SoundCloud) while
+# this host's v6 path to YouTube is flaky. Let yt-dlp pick per connection.
 # The user manager's inherited PATH can be minimal; ensure the std bin dirs are present.
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
