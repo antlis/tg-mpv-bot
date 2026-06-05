@@ -86,21 +86,132 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_update_ytdlp` | Update the bot's yt-dlp to the latest nightly — the usual fix when YouTube playback breaks |
 | `/help` | Show this help |
 
-## Quick Start
+## Setup
+
+### 1. Prerequisites
+
+- Linux box with a graphical session (X11 or Wayland) whose display is the TV
+- `mpv`
+- Python 3.11+
+- `yt-dlp` — only needed for URL streaming / YouTube search / Telegram files.
+  Install it **into the bot's venv** (the bot prefers that copy, and
+  `/mpv_update_ytdlp` updates it): YouTube breaks extraction every few months
+  and distro packages lag, so use the nightly.
+
+### 2. Create the bot
+
+1. Message [@BotFather](https://t.me/BotFather) → `/newbot` → copy the token.
+2. Get your numeric Telegram ID from [@userinfobot](https://t.me/userinfobot).
+
+### 3. Install & first run
 
 ```bash
-# 1. Create bot on @BotFather, get token
-# 2. Copy env and configure
-cp .env.example .env
-# Edit .env → set BOT_TOKEN from @BotFather
-
-# 3. Run with Docker
-docker compose up -d --build
-
-# Or run bare (no Docker)
+git clone https://github.com/antlis/tg-mpv-bot && cd tg-mpv-bot
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+pip install -U "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.tar.gz"
+
+cp .env.example .env        # set BOT_TOKEN and ALLOWED_USERS at minimum
+set -a; source .env; set +a
 python bot.py
 ```
+
+Message your bot `/help` — if it answers, the Telegram side works. Then
+`/mpv_list` to browse, or send any YouTube link.
+
+> **Access control:** leave `ALLOWED_USERS` empty and *anyone* who finds the
+> bot can control your TV. Set it.
+
+### 4. Your media library
+
+The browse UI expects this layout (category → playlists, with one optional
+nesting level for subcategories):
+
+```
+~/Videos/
+├── movie/
+│   └── playlists/
+│       ├── Fight Club.m3u
+│       └── Heat (1995).m3u
+├── shows/
+│   └── playlists/
+│       └── Deadwood S01.m3u
+└── tutorials/
+    └── playlists/
+        └── frontend-masters/        ← subcategory
+            └── Advanced CSS.m3u
+```
+
+- Categories = the directory names under `VIDEOS_DIR` (anything you like —
+  the four above are just the defaults; set `PLAYLIST_DIRS` for a custom set).
+- `.m3u` files are plain lists of media paths (absolute, or relative to the
+  playlist's own directory).
+- **Don't want to write playlists by hand?** Drop media files/folders under a
+  category and run `/mpv_scan` — it generates one playlist per folder (or per
+  loose file), idempotently. `/mpv_doctor` reports broken entries after you
+  move things; `/mpv_fix` repairs them.
+- No library at all is fine too — URL streaming, YouTube search and Telegram
+  file playback work without one.
+
+### 5. Run it permanently
+
+**Systemd user service** (recommended on a host you own):
+
+```bash
+ln -s "$PWD/tg-mpv-bot.service" ~/.config/systemd/user/
+mkdir -p ~/.config/environment.d
+cat > ~/.config/environment.d/99-tg-mpv-bot.conf << EOF
+BOT_TOKEN=your_token_here
+ALLOWED_USERS=123456789
+EOF
+systemctl --user daemon-reload
+systemctl --user enable --now tg-mpv-bot
+journalctl --user-unit tg-mpv-bot -f     # logs
+```
+
+The unit assumes the repo at `~/Projects/tg-mpv-bot` with a `venv/` inside —
+edit `WorkingDirectory`/`ExecStart` if yours lives elsewhere. Tweak the
+`Environment=` lines (hooks, yt-dlp options) in the unit itself.
+
+**Docker:**
+
+```bash
+docker compose up -d --build
+```
+
+Uses `network_mode: host` and bind-mounts the X11 socket, the mpv IPC socket
+and your playlist dirs (paths in `docker-compose.yml`). Note hooks run
+*inside* the container — add the tools they call to the image.
+
+> ⚠️ Run exactly **one** instance per bot token (the lock file guards one
+> host, but Telegram allows only one poller globally — a second instance
+> elsewhere causes `TelegramConflictError`).
+
+## Configuration
+
+Everything is configured via environment variables (`.env` for bare runs,
+`environment.d` for systemd, `environment:` for Docker). Only `BOT_TOKEN` is
+required.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `BOT_TOKEN` | — *(required)* | Bot token from @BotFather |
+| `ALLOWED_USERS` | *(empty = open!)* | Comma-separated Telegram user IDs allowed to use the bot |
+| `VIDEOS_DIR` | `~/Videos` | Library root — categories are its subdirectories |
+| `PLAYLIST_DIRS` | `$VIDEOS_DIR/{cartoons,movie,shows,tutorials}/playlists` | Explicit playlist dirs (`:`-separated) if your layout differs |
+| `MPV_SOCKET` | `/tmp/mpv-socket` | mpv JSON IPC socket the bot creates/controls |
+| `DISPLAY` | `:0` | X11 display the mpv window opens on |
+| `MPV_RUNNER` | `/tmp/mpv-runner.sh` | Optional wrapper script to launch instead of `mpv` (plain `mpv` when absent) |
+| `PRE_PLAY_HOOK` | *(none)* | Shell command run before mpv starts — WM glue like `i3-msg workspace 10`; sees `$PLAYLIST`, `$PLAYLIST_NAME`, `$MPV_SOCKET`, `$DISPLAY` |
+| `POST_PLAY_HOOK` | *(none)* | Same, run right after the mpv spawn |
+| `KILL_STRAY_MPV` | `1` | Also `pkill` mpv instances the bot didn't start; `0` if you use mpv manually too |
+| `YTDL_FORMAT` | `bv*[height<=1080]+ba/b` | yt-dlp format for URL streaming (raise the cap for 4K) |
+| `YTDL_OPTIONS` | *(none)* | Extra yt-dlp options, comma-separated `key=value` / bare flags — e.g. `force-ipv4` or the lean-YouTube `extractor-args=…` (see `.env.example`) |
+| `YTDL_COOKIES_BROWSER` | *(none)* | Browser whose cookies unlock Instagram/Facebook and YouTube bot-checks (e.g. `firefox`); applied only to gated hosts / as an escalation, never globally |
+| `API_SERVER_URL` | *(none)* | Local [Bot API server](https://github.com/tdlib/telegram-bot-api) — needed to receive Telegram files over 20 MB |
+| `SCAN_INTERVAL_MIN` | `0` | If >0, auto-run the playlist generator every N minutes |
+| `STATE_FILE` | `~/.local/state/tg-mpv-bot/state.json` | Watch history / notification target |
+| `LOCK_FILE` | `/tmp/tg-mpv-bot.lock` | Single-instance lock |
 
 ## Tests & lint
 
@@ -123,44 +234,6 @@ ruff check .
 | `src/keyboards.py` | Inline-keyboard builders for browsing |
 | `docker-compose.yml` | Docker deployment (host networking + X11 bind) |
 | `Dockerfile` | Container build (Python 3.12 + mpv) |
-
-## Deployment Options
-
-### Docker (recommended)
-
-```bash
-cd ~/Projects/tg-mpv-bot
-docker compose up -d --build
-```
-
-The container uses `network_mode: host` and binds X11 and video
-directories for full mpv control.
-
-### Systemd user service
-
-```bash
-ln -s ~/Projects/tg-mpv-bot/tg-mpv-bot.service ~/.config/systemd/user/
-mkdir -p ~/.config/environment.d
-cat > ~/.config/environment.d/99-tg-mpv-bot.conf << EOF
-BOT_TOKEN=your_token_here
-ALLOWED_USERS=123456789
-EOF
-systemctl --user daemon-reload
-systemctl --user start tg-mpv-bot
-systemctl --user enable tg-mpv-bot
-```
-
-## Access Control
-
-Set `ALLOWED_USERS` in `.env` as comma-separated Telegram user IDs:
-
-```env
-ALLOWED_USERS=123456789,987654321
-```
-
-Get your ID from [@userinfobot](https://t.me/userinfobot). Leave empty to allow
-everyone — **not recommended**, since anyone who finds the bot could control
-your player.
 
 ## Architecture
 
