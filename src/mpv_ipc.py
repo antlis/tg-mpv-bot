@@ -138,6 +138,16 @@ class MpvClient:
         self.command("seek", seconds)
         self.show_progress()
 
+    def seek_absolute(self, seconds: float) -> None:
+        """Seek to an absolute position in the current file."""
+        self.command("seek", max(0.0, seconds), "absolute")
+        self.show_progress()
+
+    def seek_percent(self, percent: float) -> None:
+        """Seek to a percentage of the current file (clamped to 0–100)."""
+        self.command("seek", max(0.0, min(100.0, percent)), "absolute-percent")
+        self.show_progress()
+
     def quit(self) -> None:
         self.command("quit")
 

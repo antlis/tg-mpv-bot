@@ -23,6 +23,7 @@ operation. The bot talks to mpv's JSON IPC socket directly from Python.
 | `/mpv_quit` | Stop mpv and quit |
 | `/mpv_fwd` | Seek forward 30s |
 | `/mpv_back` | Seek backward 10s |
+| `/mpv_goto <pos>` | Seek to `1:23:45`, `23:45`, `90` (seconds) or `75%` |
 | `/mpv_next` | Next item in playlist |
 | `/mpv_prev` | Previous item in playlist |
 | `/mpv_ep [n]` | Episode picker with buttons (no arg) or jump to item N |

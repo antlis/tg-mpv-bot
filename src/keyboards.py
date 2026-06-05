@@ -104,6 +104,7 @@ def now_playing_keyboard(paused: bool | None = None) -> InlineKeyboardMarkup:
 
     return InlineKeyboardMarkup(inline_keyboard=[
         [b("⏮", "prev"), b("⏪", "back"), b(toggle, "toggle"), b("⏩", "fwd"), b("⏭", "next")],
+        [b("0%", "p0"), b("25%", "p25"), b("50%", "p50"), b("75%", "p75")],
         [b("🔉", "voldown"), b("🔇", "mute"), b("🔊", "volup"), b("💬", "sub"), b("🎧", "audio")],
         [b("🔀", "shuffle"), b("🔁", "loop"), b("⏹", "stop"), b("🔄 Refresh", "refresh")],
     ])

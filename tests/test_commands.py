@@ -1,6 +1,8 @@
 """Tests for the pure helpers in src.commands (no Telegram / IPC needed)."""
 
-from src.commands import _episode_list, _episodes_text
+import pytest
+
+from src.commands import _episode_list, _episodes_text, _parse_goto
 
 
 class FakePlaylistClient:
@@ -25,6 +27,26 @@ def test_episode_list_names_and_current():
 
 def test_episode_list_empty():
     assert _episode_list(FakePlaylistClient([])) == ([], None)
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("1:23:45", ("time", 5025.0)),
+    ("23:45", ("time", 1425.0)),
+    ("90", ("time", 90.0)),
+    ("0", ("time", 0.0)),
+    ("75%", ("percent", 75.0)),
+    ("0%", ("percent", 0.0)),
+    ("100%", ("percent", 100.0)),
+])
+def test_parse_goto_valid(raw, expected):
+    assert _parse_goto(raw) == expected
+
+
+@pytest.mark.parametrize("raw", [
+    "", "  ", "abc", "1:2:3:4", "-5", "1:-2", "101%", "-1%", "x%",
+])
+def test_parse_goto_invalid(raw):
+    assert _parse_goto(raw) is None
 
 
 def test_episodes_text():

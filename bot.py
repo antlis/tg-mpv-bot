@@ -45,6 +45,7 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_quit", description="Stop mpv and quit"),
         BotCommand(command="mpv_fwd", description="Seek +30s"),
         BotCommand(command="mpv_back", description="Seek -10s"),
+        BotCommand(command="mpv_goto", description="Seek to time (1:23:45) or percent (75%)"),
         BotCommand(command="mpv_next", description="Next in playlist"),
         BotCommand(command="mpv_prev", description="Previous in playlist"),
         BotCommand(command="mpv_ep", description="Episode picker (or jump to item N)"),

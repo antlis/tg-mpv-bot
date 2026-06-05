@@ -281,6 +281,53 @@ async def cb_episode(query: CallbackQuery) -> None:
         await _refresh_episode_picker(query, n // PER_PAGE)
 
 
+def _parse_goto(arg: str) -> tuple[str, float] | None:
+    """``1:23:45`` / ``23:45`` / ``90`` → ('time', seconds); ``75%`` → ('percent', 75)."""
+    arg = arg.strip()
+    if not arg:
+        return None
+    if arg.endswith("%"):
+        try:
+            pct = float(arg[:-1])
+        except ValueError:
+            return None
+        return ("percent", pct) if 0 <= pct <= 100 else None
+    parts = arg.split(":")
+    if len(parts) > 3:
+        return None
+    try:
+        nums = [float(p) for p in parts]
+    except ValueError:
+        return None
+    if any(n < 0 for n in nums):
+        return None
+    seconds = 0.0
+    for n in nums:
+        seconds = seconds * 60 + n
+    return ("time", seconds)
+
+
+@router.message(Command("mpv_goto", "mpv_seek"))
+async def cmd_goto(message: Message, command: CommandObject) -> None:
+    parsed = _parse_goto(command.args or "")
+    if parsed is None:
+        await message.reply(
+            "Usage: /mpv_goto <position>\n"
+            "  /mpv_goto 1:23:45   — h:mm:ss\n"
+            "  /mpv_goto 23:45     — mm:ss\n"
+            "  /mpv_goto 90        — seconds\n"
+            "  /mpv_goto 75%       — percent of the file"
+        )
+        return
+    kind, value = parsed
+    if kind == "percent":
+        _, err = await _ipc(lambda c: c.seek_percent(value))
+        await message.reply(err or f"⏩ → {value:g}%")
+    else:
+        _, err = await _ipc(lambda c: c.seek_absolute(value))
+        await message.reply(err or f"⏩ → {_fmt_time(value)}")
+
+
 def _speed_text(speed: float) -> str:
     return f"⏩ Speed: {speed:g}× — pick:"
 
@@ -441,6 +488,10 @@ _CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
     "mute": lambda c: c.cycle_mute(),
     "sub": lambda c: c.cycle_sub(),
     "audio": lambda c: c.cycle_audio(),
+    "p0": lambda c: c.seek_percent(0),
+    "p25": lambda c: c.seek_percent(25),
+    "p50": lambda c: c.seek_percent(50),
+    "p75": lambda c: c.seek_percent(75),
     "shuffle": lambda c: c.shuffle(),
     "loop": lambda c: c.toggle_loop(),
     "stop": lambda c: c.quit(),
@@ -708,7 +759,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
-        "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s\n"
+        "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s · <b>/mpv_goto</b> &lt;pos&gt;\n"
         "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> [n] episode picker/jump\n"
         "<b>/mpv_speed</b> [x] — playback speed (buttons or value)\n"
         "<b>/mpv_shuffle</b> · <b>/mpv_loop</b>\n"
