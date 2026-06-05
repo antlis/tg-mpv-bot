@@ -1,10 +1,18 @@
 # tg-mpv-bot 🎬
 
-Standalone Telegram bot for mpv media control — play, pause, browse, seek,
-volume control via Telegram commands. Zero AI token cost (pure IPC dispatch).
+[![CI](https://github.com/antlis/tg-mpv-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/antlis/tg-mpv-bot/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Extracted from the Lain bot (Hermes) into its own dedicated bot for independent
-operation. The bot talks to mpv's JSON IPC socket directly from Python.
+Turn Telegram into a remote control for **mpv** on your desktop/HTPC: browse
+your media library with inline buttons, stream any YouTube/SoundCloud/… link
+by just sending it, seek/pause/volume from your phone. No AI, no cloud — the
+bot talks to mpv's JSON IPC socket directly from Python.
+
+- 📋 **Browse** playlists by category with inline keyboards, or search
+- 🔗 **Stream URLs** — send a link, mpv plays it via yt-dlp (1000+ sites)
+- 🎛 **Now-playing panel** — transport, seek-to-%, volume, tracks, one message
+- 📜 **Episode picker**, ▶ **continue watching**, 📸 **frame screenshots**
+- 🪝 **Hooks** instead of WM assumptions — `i3-msg`/`swaymsg`/`notify-send`, your call
 
 ## Commands
 
@@ -163,3 +171,7 @@ subcategories (tutorials are grouped by provider, e.g. `frontend-masters`).
 
 `mpvctl.sh` remains as a standalone shell controller for Hermes/CLI use but is
 no longer invoked by the bot.
+
+## License
+
+[MIT](LICENSE)
