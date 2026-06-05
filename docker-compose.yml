@@ -5,7 +5,7 @@
 # Option A: Docker (recommended)  →  docker compose up -d --build
 # Option B: systemd user service  →  ln -s $PWD/tg-mpv-bot.service ~/.config/systemd/user/
 #
-# The bot needs host X11 display and i3 socket to control mpv windows.
+# The bot needs the host X11 display to control mpv windows.
 # Docker uses host networking + bind mounts for this.
 
 services:
@@ -15,16 +15,16 @@ services:
     environment:
       DISPLAY: ":0"
       HOME: /home/lad
-      I3SOCK: /run/user/1000/i3/ipc-socket.2012
       MPV_SOCKET: /tmp/mpv-socket
       MPV_RUNNER: /tmp/mpv-runner.sh
+      # Optional WM glue (runs inside the container — add the tool to the
+      # image first, e.g. i3 for i3-msg):
+      # PRE_PLAY_HOOK: i3-msg workspace 10
     volumes:
       # X11 display socket — required for mpv windows
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       # mpv IPC socket — shared with host mpv instances
       - /tmp/mpv-socket:/tmp/mpv-socket:rw
-      # i3 IPC socket — workspace switching to media workspace 10
-      - /run/user/1000/i3:/run/user/1000/i3:rw
       # Video directories with playlists
       - ~/Videos/cartoons/playlists:/home/lad/Videos/cartoons/playlists:ro
       - ~/Videos/movie/playlists:/home/lad/Videos/movie/playlists:ro

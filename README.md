@@ -70,7 +70,7 @@ ruff check .
 | `src/commands.py` | Telegram command + callback handlers |
 | `src/mpv_ipc.py` | Direct JSON-IPC client for mpv (pause/seek/volume/info) |
 | `src/playlists.py` | Playlist discovery, query matching, on-disk validation |
-| `src/player.py` | Launch mpv (pkill + i3 workspace + detached spawn) |
+| `src/player.py` | Launch mpv (pkill + pre/post-play hooks + detached spawn) |
 | `src/keyboards.py` | Inline-keyboard builders for browsing |
 | `mpvctl.sh` | Standalone shell controller (Hermes/CLI use; not used by the bot) |
 | `docker-compose.yml` | Docker deployment (host networking + X11 bind) |
@@ -86,7 +86,7 @@ cd ~/Projects/tg-mpv-bot
 docker compose up -d --build
 ```
 
-The container uses `network_mode: host` and binds X11, i3, and video
+The container uses `network_mode: host` and binds X11 and video
 directories for full mpv control.
 
 ### Systemd user service
@@ -131,11 +131,24 @@ Leave empty to allow everyone.
                           ┌─ src/mpv_ipc  ──▶ mpv JSON IPC (/tmp/mpv-socket)   pause/seek/vol/info
 Telegram ─▶ bot.py ─▶ src/commands ─┤
             (polling)   (+ auth mw)  ├─ src/playlists ──▶ scan ~/Videos/*/playlists/*.m3u
-                                     └─ src/player   ──▶ pkill mpv · i3 workspace 10 · spawn mpv ─▶ X11
+                                     └─ src/player   ──▶ pkill mpv · pre-hook · spawn mpv · post-hook ─▶ X11
 ```
 
 Playback/volume/info commands write straight to mpv's IPC socket from Python.
 Only launching a playlist (`/mpv_play`, tapping a button) spawns a process.
+
+Window-manager glue is **not** built in — set the optional hooks instead
+(shell commands; they see `$PLAYLIST`, `$PLAYLIST_NAME`, `$MPV_SOCKET`,
+`$DISPLAY`):
+
+```bash
+PRE_PLAY_HOOK="i3-msg workspace 10"          # i3: jump to the media workspace
+PRE_PLAY_HOOK="swaymsg workspace 10"         # sway
+PRE_PLAY_HOOK="hyprctl dispatch workspace 10"  # Hyprland
+POST_PLAY_HOOK='notify-send "Now playing" "$PLAYLIST_NAME"'
+```
+
+Hook failures are logged and never block playback (15s timeout).
 `src/keyboards` renders the browse UI for `/mpv_list`: **category → (subcategory)
 → playlist**. Categories come from the top-level media dirs (cartoons / movie /
 shows / tutorials); a playlists dir may nest one level of folders, which become

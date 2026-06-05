@@ -1,8 +1,10 @@
 """Launching mpv — the one part that genuinely needs the shell/subprocess.
 
 Everything else (pause/seek/volume/info) goes straight to the IPC socket via
-:mod:`src.mpv_ipc`. Here we kill any running mpv, optionally switch the i3
-workspace, and start a detached mpv on the chosen playlist.
+:mod:`src.mpv_ipc`. Here we kill any running mpv, run the user's pre-play
+hook (window-manager glue like ``i3-msg workspace 10`` lives there, not in
+the bot), start a detached mpv on the chosen playlist, then run the
+post-play hook.
 
 Binaries are resolved to absolute paths and a sane PATH is handed to the child
 process: under a systemd user service the inherited PATH can be minimal (it
@@ -66,24 +68,48 @@ def build_launch_command(settings: Settings, playlist: Path) -> list[str]:
     ]
 
 
-def _switch_workspace(settings: Settings) -> None:
-    if not settings.i3_socket or not Path(settings.i3_socket).exists():
+HOOK_TIMEOUT = 15  # seconds — a hung hook must not block playback for long
+
+
+def _hook_env(settings: Settings, playlist: Path) -> dict[str, str]:
+    """Environment for hooks and mpv: X11 display, sane PATH, playlist info."""
+    return {
+        **os.environ,
+        "DISPLAY": settings.display,
+        "PATH": _augmented_path(),
+        "PLAYLIST": str(playlist),
+        "PLAYLIST_NAME": playlist.stem,
+        "MPV_SOCKET": settings.mpv_socket,
+    }
+
+
+def _run_hook(label: str, command: str, env: dict[str, str]) -> None:
+    """Run a user hook (shell command). Failures are logged, never fatal."""
+    if not command:
         return
-    i3 = _which("i3-msg")
-    if i3 is None:
-        return
-    env = {**os.environ, "I3SOCK": settings.i3_socket, "PATH": _augmented_path()}
-    subprocess.run(
-        [i3, "workspace", settings.i3_workspace],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            env=env,
+            timeout=HOOK_TIMEOUT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            logger.warning(
+                "%s hook exited %d: %s", label, result.returncode,
+                (result.stderr or result.stdout).strip()[:200],
+            )
+    except subprocess.TimeoutExpired:
+        logger.warning("%s hook timed out after %ds: %s", label, HOOK_TIMEOUT, command)
+    except OSError as exc:
+        logger.warning("%s hook failed: %s", label, exc)
 
 
 def play(settings: Settings, playlist: Path) -> None:
-    """Stop any current mpv, switch workspace, and launch the playlist detached."""
+    """Stop any current mpv, run hooks around a detached launch of ``playlist``."""
     # Exact-match kill so we don't take down unrelated processes (mpv-runner etc).
     pkill = _which("pkill")
     if pkill:
@@ -93,10 +119,10 @@ def play(settings: Settings, playlist: Path) -> None:
         except OSError as exc:  # don't let a kill failure abort playback
             logger.warning("pkill failed: %s", exc)
 
-    _switch_workspace(settings)
+    env = _hook_env(settings, playlist)
+    _run_hook("pre-play", settings.pre_play_hook, env)
 
     cmd = build_launch_command(settings, playlist)
-    env = {**os.environ, "DISPLAY": settings.display, "PATH": _augmented_path()}
     logger.info("Launching: %s", " ".join(cmd))
     subprocess.Popen(
         cmd,
@@ -106,3 +132,5 @@ def play(settings: Settings, playlist: Path) -> None:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
+
+    _run_hook("post-play", settings.post_play_hook, env)

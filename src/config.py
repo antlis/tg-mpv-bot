@@ -28,8 +28,11 @@ class Settings:
     playlist_dirs: list[Path] = field(default_factory=_default_playlist_dirs)
     mpv_runner: str = "/tmp/mpv-runner.sh"  # falls back to "mpv" if absent
     display: str = ":0"
-    i3_socket: str = ""          # empty → don't switch workspaces
-    i3_workspace: str = "10"
+    # Shell commands run around the mpv launch (empty → skipped). They get
+    # PLAYLIST / PLAYLIST_NAME / MPV_SOCKET / DISPLAY in the environment —
+    # e.g. PRE_PLAY_HOOK="i3-msg workspace 10" or a notify-send script.
+    pre_play_hook: str = ""
+    post_play_hook: str = ""
     lock_file: str = "/tmp/tg-mpv-bot.lock"
     scan_interval_min: int = 0   # >0 → auto-scan for new media every N minutes
 
@@ -69,8 +72,8 @@ def get_settings() -> Settings:
         or _default_playlist_dirs(),
         mpv_runner=os.environ.get("MPV_RUNNER", "/tmp/mpv-runner.sh"),
         display=os.environ.get("DISPLAY", ":0"),
-        i3_socket=os.environ.get("I3SOCK", os.environ.get("I3_SOCKET", "")),
-        i3_workspace=os.environ.get("I3_WORKSPACE", "10"),
+        pre_play_hook=os.environ.get("PRE_PLAY_HOOK", ""),
+        post_play_hook=os.environ.get("POST_PLAY_HOOK", ""),
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),
         scan_interval_min=int(os.environ.get("SCAN_INTERVAL_MIN", "0") or "0"),
     )

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from src.config import Settings
-from src.player import build_launch_command
+from src.player import _hook_env, _run_hook, build_launch_command
 
 
 def _settings(**kw) -> Settings:
@@ -39,3 +39,33 @@ def test_empty_runner_uses_mpv():
     s = _settings(mpv_runner="")
     cmd = build_launch_command(s, Path("/x.m3u"))
     assert cmd[0] == "mpv" or cmd[0].endswith("/mpv")
+
+
+# ── pre/post-play hooks ──────────────────────────────────────────────
+
+
+def test_hook_env_exposes_playlist_info():
+    s = _settings(display=":7")
+    env = _hook_env(s, Path("/media/shows/playlists/deadwood.m3u"))
+    assert env["PLAYLIST"] == "/media/shows/playlists/deadwood.m3u"
+    assert env["PLAYLIST_NAME"] == "deadwood"
+    assert env["MPV_SOCKET"] == "/tmp/sock"
+    assert env["DISPLAY"] == ":7"
+
+
+def test_run_hook_executes_with_env(tmp_path):
+    out = tmp_path / "out"
+    env = _hook_env(_settings(), Path("/x/futurama.m3u"))
+    _run_hook("pre-play", f'echo "$PLAYLIST_NAME" > {out}', env)
+    assert out.read_text().strip() == "futurama"
+
+
+def test_run_hook_empty_is_noop():
+    _run_hook("pre-play", "", {})  # must not raise
+
+
+def test_run_hook_failure_never_raises(caplog):
+    env = _hook_env(_settings(), Path("/x.m3u"))
+    _run_hook("pre-play", "exit 3", env)            # non-zero exit
+    _run_hook("pre-play", "/nonexistent-cmd-xyz", env)  # command not found
+    assert any("hook" in r.message for r in caplog.records)

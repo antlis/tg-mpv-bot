@@ -22,7 +22,7 @@ pip install -r requirements-dev.txt
 pytest                                     # config (pytest.ini): testpaths=tests, asyncio_mode=auto
 ruff check .                               # config in ruff.toml
 
-# Docker (host networking + X11/i3 bind mounts)
+# Docker (host networking + X11 bind mounts)
 docker compose up -d --build
 
 # systemd user service
@@ -31,8 +31,9 @@ systemctl --user start tg-mpv-bot          # reads ~/.config/environment.d/99-tg
 
 Required env: `BOT_TOKEN` (missing → `SystemExit` with a friendly message, not a traceback). Optional:
 `ALLOWED_USERS` (comma-separated Telegram user IDs — **empty means open to everyone**, logged as a
-warning), `API_SERVER_URL`, and host paths `MPV_SOCKET` / `PLAYLIST_DIRS` / `VIDEOS_DIR` / `MPV_RUNNER`
-/ `I3SOCK` / `I3_WORKSPACE` / `DISPLAY`. See `.env.example`.
+warning), `API_SERVER_URL`, host paths `MPV_SOCKET` / `PLAYLIST_DIRS` / `VIDEOS_DIR` / `MPV_RUNNER` /
+`DISPLAY`, and launch hooks `PRE_PLAY_HOOK` / `POST_PLAY_HOOK` (shell commands run around the mpv
+spawn — WM glue like `i3-msg workspace 10` lives there, not in the bot). See `.env.example`.
 
 ## Architecture
 
@@ -40,7 +41,7 @@ warning), `API_SERVER_URL`, and host paths `MPV_SOCKET` / `PLAYLIST_DIRS` / `VID
                             ┌─ src/mpv_ipc  ─▶ mpv JSON IPC (/tmp/mpv-socket)  pause/seek/vol/info
 Telegram ─▶ bot.py ─▶ src/commands ─┤
             (polling)  (+ auth mw)  ├─ src/playlists ─▶ scan ~/Videos/*/playlists/*.m3u
-                                    └─ src/player  ─▶ pkill -x mpv · i3 workspace · spawn mpv ─▶ X11
+                                    └─ src/player  ─▶ pkill -x mpv · pre-hook · spawn mpv · post-hook ─▶ X11
 ```
 
 - `bot.py` — entry point. Acquires a single-instance `flock` (`src/lock.py`) before anything else (a
@@ -64,9 +65,12 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   `Playlist.display` / button text; the raw `name` is what matching, callbacks and files use).
 - `src/player.py` — the only part that spawns a process. `build_launch_command()` is a pure helper
   (used `MPV_RUNNER` if it exists, else falls back to plain `mpv`). `play()` does `pkill -x mpv`,
-  optional i3 workspace switch (skipped if `I3SOCK` unset/missing or `i3-msg` absent), then a detached
+  runs the optional `PRE_PLAY_HOOK` shell command, then a detached
   `Popen(..., start_new_session=True)` — the Python-native equivalent of the old `setsid` detachment
-  for non-TTY contexts (asyncio/systemd).
+  for non-TTY contexts (asyncio/systemd) — then `POST_PLAY_HOOK`. Hooks get `PLAYLIST` /
+  `PLAYLIST_NAME` / `MPV_SOCKET` / `DISPLAY` in their env; failures are logged, never fatal (15s
+  timeout). **Never hardcode `I3SOCK`** — the i3 socket path embeds i3's PID and goes stale on every
+  reboot (the old built-in switch broke exactly this way); `i3-msg` in a hook finds the socket via X11.
 - `src/keyboards.py` — inline-keyboard builders for `/mpv_list`: **category → (subcategory) →
   paginated playlist buttons** (`PER_PAGE=8`). Flat categories (no subcategories) jump straight to the
   playlist list; categories with subcategories (tutorials → provider) show a subcategory menu first.
@@ -104,7 +108,7 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 - The now-playing panel's `ctl:<action>` callbacks are a fifth callback grammar alongside
   `cats`/`c:`/`s:`/`pl:`/`noop`; `_CTL_ACTIONS` maps each to an `MpvClient` call.
 - All host assumptions now flow from `src/config.py` env vars. The deploy files (`docker-compose.yml`,
-  `tg-mpv-bot.service`) still set concrete values (UID 1000 i3 socket, `DISPLAY=:0`, `HOME=/home/lad`)
+  `tg-mpv-bot.service`) still set concrete values (`PRE_PLAY_HOOK=i3-msg workspace 10`, `DISPLAY=:0`, `HOME=/home/lad`)
   and must agree with them.
 - `mpvctl.sh` is now **standalone/legacy** — kept for Hermes/CLI use (`./mpvctl.sh list|play|info`) but
   the bot no longer invokes it. It still hardcodes its own paths; it is *not* driven by `config.py`.

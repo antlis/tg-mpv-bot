@@ -47,14 +47,16 @@ def test_get_settings_reads_env(monkeypatch):
     monkeypatch.setenv("ALLOWED_USERS", "10,20")
     monkeypatch.setenv("MPV_SOCKET", "/tmp/custom-socket")
     monkeypatch.setenv("PLAYLIST_DIRS", "/x/playlists")
-    monkeypatch.setenv("I3_WORKSPACE", "7")
+    monkeypatch.setenv("PRE_PLAY_HOOK", "i3-msg workspace 7")
+    monkeypatch.setenv("POST_PLAY_HOOK", "notify-send hi")
     get_settings.cache_clear()
     s = get_settings()
     assert s.bot_token == "tok"
     assert s.allowed_users == [10, 20]
     assert s.mpv_socket == "/tmp/custom-socket"
     assert s.playlist_dirs == [Path("/x/playlists")]
-    assert s.i3_workspace == "7"
+    assert s.pre_play_hook == "i3-msg workspace 7"
+    assert s.post_play_hook == "notify-send hi"
     get_settings.cache_clear()
 
 
