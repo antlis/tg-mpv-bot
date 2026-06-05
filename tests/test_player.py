@@ -177,6 +177,40 @@ def test_probe_fails_fast_on_terminal_errors(monkeypatch):
     assert len(attempts) == 1  # no slow retry for an error no retry can fix
 
 
+def test_update_ytdlp_reports_versions(monkeypatch):
+    import src.player as player
+
+    versions = iter(["2026.05.25", "2026.06.05"])  # before, after
+
+    def fake_run(cmd, **kw):
+        class R:
+            returncode = 0
+            stderr = ""
+            stdout = next(versions) + "\n" if "--version" in cmd else ""
+        return R()
+
+    monkeypatch.setattr(player.subprocess, "run", fake_run)
+    monkeypatch.setattr(player, "_ytdlp_bin", lambda: "/v/yt-dlp")
+    monkeypatch.setattr(player.Path, "exists", lambda self: True)
+    assert player.update_ytdlp() == "✅ yt-dlp updated: 2026.05.25 → 2026.06.05"
+
+
+def test_update_ytdlp_pip_failure(monkeypatch):
+    import src.player as player
+
+    def fake_run(cmd, **kw):
+        class R:
+            returncode = 0 if "--version" in cmd else 1
+            stderr = "resolution impossible"
+            stdout = "2026.05.25\n"
+        return R()
+
+    monkeypatch.setattr(player.subprocess, "run", fake_run)
+    monkeypatch.setattr(player, "_ytdlp_bin", lambda: "/v/yt-dlp")
+    monkeypatch.setattr(player.Path, "exists", lambda self: True)
+    assert player.update_ytdlp().startswith("❌ pip failed: resolution impossible")
+
+
 def test_stop_current_dead_socket_no_pkill(tmp_path):
     # No mpv at the socket and stray-killing off → must be a quiet no-op.
     s = _settings(mpv_socket=str(tmp_path / "no.sock"), kill_stray_mpv=False)

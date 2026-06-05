@@ -52,6 +52,7 @@ bot talks to mpv's JSON IPC socket directly from Python.
 | `/mpv_doctor` | Report playlists with missing files on disk |
 | `/mpv_fix` | Repair broken playlists (re-point moved files, prune dead) |
 | `/mpv_scan` | Create playlists for newly-added media (idempotent) |
+| `/mpv_update_ytdlp` | Update the bot's yt-dlp to the latest nightly — the usual fix when YouTube playback breaks |
 | `/help` | Show this help |
 
 ## Quick Start

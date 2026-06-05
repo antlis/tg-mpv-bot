@@ -790,6 +790,17 @@ async def msg_url(message: Message) -> None:
 # ── Doctor / help ───────────────────────────────────────────────────
 
 
+@router.message(Command("mpv_update_ytdlp"))
+async def cmd_update_ytdlp(message: Message) -> None:
+    """Update the venv's yt-dlp nightly (the fix when YouTube breaks)."""
+    note = await message.reply("⏳ Updating yt-dlp to the latest nightly…")
+    result = await asyncio.to_thread(player.update_ytdlp)
+    try:
+        await note.edit_text(result)
+    except TelegramBadRequest:
+        pass
+
+
 @router.message(Command("mpv_doctor", "mpv_validate"))
 async def cmd_doctor(message: Message) -> None:
     pls = await asyncio.to_thread(_all_playlists, refresh=True)
@@ -863,5 +874,6 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_doctor</b> — check for broken playlists\n"
         "<b>/mpv_fix</b> — repair broken playlists\n"
         "<b>/mpv_scan</b> — create playlists for newly-added media\n"
+        "<b>/mpv_update_ytdlp</b> — update yt-dlp (when YouTube breaks)\n"
     )
     await message.reply(text, parse_mode=ParseMode.HTML)

@@ -133,6 +133,51 @@ class UrlPlaybackError(Exception):
     """Raised when a URL cannot be prepared for playback (user-facing msg)."""
 
 
+# YouTube breaks extraction every few months; stable releases lag the fix.
+NIGHTLY_URL = (
+    "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.tar.gz"
+)
+
+
+def update_ytdlp(timeout: float = 300) -> str:
+    """Update the venv's yt-dlp to the latest nightly; returns a status line.
+
+    Behind ``/mpv_update_ytdlp`` so the fix for the next YouTube breakage is
+    one Telegram tap instead of a shell session. Installs into the bot's own
+    venv (which :func:`_ytdlp_bin` prefers) — never touches the system one.
+    """
+    pip = Path(sys.executable).parent / "pip"
+    if not pip.exists():
+        return "❌ No venv pip found — the bot isn't running from a venv"
+
+    def version() -> str:
+        binary = _ytdlp_bin()
+        if binary is None:
+            return "none"
+        try:
+            out = subprocess.run(
+                [binary, "--version"], capture_output=True, text=True, timeout=30
+            )
+            return out.stdout.strip() or "?"
+        except (OSError, subprocess.TimeoutExpired):
+            return "?"
+
+    old = version()
+    try:
+        result = subprocess.run(
+            [str(pip), "install", "--quiet", "--upgrade", NIGHTLY_URL],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return f"❌ pip timed out after {timeout:.0f}s"
+    if result.returncode != 0:
+        return f"❌ pip failed: {result.stderr.strip()[-300:]}"
+    new = version()
+    if new == old:
+        return f"✅ yt-dlp already up to date ({new})"
+    return f"✅ yt-dlp updated: {old} → {new}"
+
+
 _INFO_JSON = "tg-mpv-bot-info.json"  # one play at a time → fixed, self-cleaning
 
 
