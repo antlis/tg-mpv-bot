@@ -16,6 +16,31 @@ bot talks to mpv's JSON IPC socket directly from Python.
 
 ![tg-mpv-bot demo](docs/demo.svg)
 
+## The use case
+
+A home server (or any always-on Linux box) is plugged into the TV over HDMI.
+The bot runs on that box; **your phone — or any device with Telegram — is the
+remote.**
+
+```
+   phone / laptop                home server ──HDMI──▶ TV
+  ┌──────────────┐   Telegram   ┌─────────────────────────┐
+  │  @your_bot   │ ───────────▶ │  tg-mpv-bot ──▶ mpv ────┼──▶ 📺
+  │  /mpv_list   │              │  (X11/Wayland session)  │
+  └──────────────┘              └─────────────────────────┘
+```
+
+From the couch: open Telegram, `/mpv_list`, tap a show — mpv opens fullscreen
+on the TV. Send a YouTube link from your phone's share sheet — it streams on
+the TV. Pause from the now-playing panel when the doorbell rings, drag the
+volume, switch the audio track or subtitles, jump to episode 7 — all without
+a keyboard, mouse, or smart-TV apps. `/mpv_last` resumes yesterday's episode
+where you left off.
+
+Because it's Telegram, the "remote" works from anywhere — same couch or other
+side of the world — with no ports forwarded, no VPN, no local network setup:
+the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
+
 ## Commands
 
 | Command | Description |
