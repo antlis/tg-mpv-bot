@@ -179,6 +179,20 @@ def test_set_playlist_pos(fake_mpv):
     assert fake_mpv.props["playlist-pos"] == 4
 
 
+def test_get_playlist(fake_mpv):
+    client = MpvClient(fake_mpv.path)
+    fake_mpv.props["playlist"] = [{"filename": "/a.mkv"}, {"filename": "/b.mkv", "current": True}]
+    assert client.get_playlist()[1]["current"] is True
+    fake_mpv.props["playlist"] = "garbage"  # non-list → normalised to []
+    assert client.get_playlist() == []
+
+
+def test_screenshot_to_file(fake_mpv):
+    client = MpvClient(fake_mpv.path)
+    client.screenshot_to_file("/tmp/x.jpg")            # flags: subtitles
+    client.screenshot_to_file("/tmp/x.jpg", include_subs=False)  # flags: video
+
+
 def test_actions_emit_osd(fake_mpv, monkeypatch):
     # each user-facing action should push an OSD message to mpv (show-text /
     # show-progress) so there's visual feedback on the video itself.

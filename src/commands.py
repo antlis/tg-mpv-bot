@@ -11,15 +11,18 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import tempfile
+import time
+import uuid
 from collections.abc import Callable
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from typing import Any, TypeVar
 
 from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, FSInputFile, Message
 
 from . import generate, keyboards, player, playlists, state
 from .config import get_settings
@@ -275,6 +278,45 @@ async def cb_episode(query: CallbackQuery) -> None:
     await query.answer(err.replace("❌ ", "") if err else f"▶ #{n + 1}")
     if not err:
         await _refresh_episode_picker(query, n // PER_PAGE)
+
+
+# ── Screenshot ──────────────────────────────────────────────────────
+
+
+def _take_screenshot(client: MpvClient) -> tuple[str, str]:
+    """Save the current frame to a temp file; returns ``(path, caption)``.
+
+    mpv's screenshot command can complete asynchronously (the IPC reply may
+    arrive before the file hits disk), so poll briefly for the file.
+    """
+    path = Path(tempfile.gettempdir()) / f"tg-mpv-shot-{uuid.uuid4().hex}.jpg"
+    client.screenshot_to_file(str(path))
+    for _ in range(20):  # up to ~2s
+        if path.is_file() and path.stat().st_size > 0:
+            break
+        time.sleep(0.1)
+    title = client._safe_get("media-title") or "screenshot"
+    pos = _fmt_time(client._safe_get("time-pos"))
+    dur = _fmt_time(client._safe_get("duration"))
+    return str(path), f"📸 {title} — {pos} / {dur}"
+
+
+@router.message(Command("mpv_shot", "mpv_screenshot"))
+async def cmd_shot(message: Message) -> None:
+    res, err = await _ipc(_take_screenshot)
+    if err:
+        await message.reply(err)
+        return
+    path, caption = res
+    shot = Path(path)
+    if not shot.is_file() or shot.stat().st_size == 0:
+        shot.unlink(missing_ok=True)
+        await message.reply("❌ mpv produced no screenshot (is video playing?)")
+        return
+    try:
+        await message.reply_photo(FSInputFile(path), caption=caption)
+    finally:
+        shot.unlink(missing_ok=True)
 
 
 # ── Status ──────────────────────────────────────────────────────────
@@ -627,6 +669,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_search</b> [category] &lt;text&gt; — find playlists, tap to play\n"
         "<b>/mpv_last</b> — resume the last-played playlist\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
+        "<b>/mpv_shot</b> — screenshot the current frame to chat\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s\n"

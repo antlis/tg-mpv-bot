@@ -38,6 +38,7 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_search", description="Search playlists (optionally by category)"),
         BotCommand(command="mpv_last", description="Resume the last-played playlist"),
         BotCommand(command="mpv_info", description="Show current status"),
+        BotCommand(command="mpv_shot", description="Screenshot the current frame"),
         BotCommand(command="mpv_toggle", description="Play/pause toggle"),
         BotCommand(command="mpv_pause", description="Pause playback"),
         BotCommand(command="mpv_unpause", description="Resume playback"),

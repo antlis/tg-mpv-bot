@@ -149,6 +149,15 @@ class MpvClient:
         self.command("playlist-prev")
         self.show_text(self._track_label())
 
+    def screenshot_to_file(self, path: str, include_subs: bool = True) -> None:
+        """Save the current frame to ``path``.
+
+        ``subtitles`` renders the frame as seen (with subs); ``video`` is the
+        raw frame. Note the command may complete asynchronously in newer mpv —
+        callers should wait for the file to appear.
+        """
+        self.command("screenshot-to-file", path, "subtitles" if include_subs else "video")
+
     def get_playlist(self) -> list[dict]:
         """The current playlist: ``{filename, current?, title?}`` dicts."""
         items = self.get_property("playlist")
