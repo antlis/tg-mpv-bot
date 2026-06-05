@@ -40,6 +40,7 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_history", description="Recently played — tap to replay"),
         BotCommand(command="mpv_notify", description="Toggle end-of-playback notifications"),
         BotCommand(command="mpv_url", description="Stream a link (YouTube/SoundCloud/…)"),
+        BotCommand(command="mpv_yt", description="Search YouTube, tap to play"),
         BotCommand(command="mpv_info", description="Show current status"),
         BotCommand(command="mpv_shot", description="Screenshot the current frame"),
         BotCommand(command="mpv_toggle", description="Play/pause toggle"),

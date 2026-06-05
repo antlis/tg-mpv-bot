@@ -38,6 +38,7 @@ from .keyboards import (
     search_results_keyboard,
     speed_keyboard,
     subcategories_keyboard,
+    yt_results_keyboard,
 )
 from .mpv_ipc import MpvClient, MpvError, MpvNotRunning
 
@@ -749,6 +750,32 @@ async def cmd_search(message: Message, command: CommandObject) -> None:
     await message.reply(title, reply_markup=search_results_keyboard(pls, indices))
 
 
+@router.message(Command("mpv_yt", "mpv_youtube"))
+async def cmd_yt(message: Message, command: CommandObject) -> None:
+    """Search YouTube and offer the top hits as tap-to-play buttons."""
+    query = (command.args or "").strip()
+    if not query:
+        await message.reply("Usage: /mpv_yt <search terms>  — top results, tap to play")
+        return
+    note = await message.reply(f"🔎 Searching YouTube for '{query}'…")
+    try:
+        results = await asyncio.to_thread(player.search_youtube, get_settings(), query)
+    except player.UrlPlaybackError as exc:
+        await note.edit_text(f"❌ Search failed: {exc}")
+        return
+    await note.edit_text(
+        f"🔎 Results for '{query}' — tap to play:",
+        reply_markup=yt_results_keyboard(results),
+    )
+
+
+@router.callback_query(F.data.startswith("yt:"))
+async def cb_yt(query: CallbackQuery) -> None:
+    video_id = query.data[len("yt:"):]
+    await query.answer("▶ Starting…")
+    await _play_url(query.message, f"https://www.youtube.com/watch?v={video_id}")
+
+
 # Anchored and whitespace-free: only a message that *is* a URL triggers
 # playback, and the scheme anchor means it can never be parsed as an mpv flag.
 _URL_RE = re.compile(r"^https?://\S+$")
@@ -892,6 +919,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_history</b> — recently played, tap to replay\n"
         "<b>/mpv_notify</b> — toggle episode-finished notifications\n"
         "<b>/mpv_url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
+        "<b>/mpv_yt</b> &lt;search&gt; — search YouTube, tap a result to play\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"

@@ -214,6 +214,18 @@ def test_history_keyboard():
     assert buttons[1].text == "📁 The Big Lebowski"
 
 
+def test_yt_results_keyboard():
+    from src.keyboards import yt_results_keyboard
+    kb = yt_results_keyboard([
+        {"id": "n61ULEU7CO0", "title": "Best of lofi", "duration": 22258.0},
+        {"id": "rPjez8z61rI", "title": "radio", "duration": None},  # live stream
+    ])
+    buttons = [b for row in kb.inline_keyboard for b in row]
+    assert [b.callback_data for b in buttons] == ["yt:n61ULEU7CO0", "yt:rPjez8z61rI"]
+    assert buttons[0].text == "▶ Best of lofi · 6:10:58"
+    assert buttons[1].text == "▶ radio"  # no duration → no suffix
+
+
 def test_subcategory_pagination_prefix():
     pls = make_nested({"tutorials": {"big": PER_PAGE * 2}})  # 2 pages
     kb = playlists_keyboard(pls, ci=0, si=0, page=0)

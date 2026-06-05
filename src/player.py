@@ -270,6 +270,48 @@ def probe_url(
     return info, info_path
 
 
+def search_youtube(settings: Settings, query: str, n: int = 5) -> list[dict]:
+    """Top-``n`` YouTube results as ``{id, title, duration, channel}`` dicts.
+
+    ``--flat-playlist`` keeps it to one cheap search request (no per-video
+    extraction). Raises :class:`UrlPlaybackError` with a user-facing reason.
+    """
+    ytdlp = _ytdlp_bin()
+    if ytdlp is None:
+        raise UrlPlaybackError("yt-dlp is not installed on the host")
+    cmd = [
+        ytdlp, "--no-warnings", "-j", "--flat-playlist",
+        *_network_cli_args(settings),
+        f"ytsearch{n}:{query}",
+    ]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=60, check=False,
+            env={**os.environ, "PATH": _augmented_path()},
+        )
+    except subprocess.TimeoutExpired:
+        raise UrlPlaybackError("YouTube search timed out") from None
+    except OSError as exc:
+        raise UrlPlaybackError(str(exc)) from exc
+    results = []
+    for line in result.stdout.splitlines():
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if e.get("id"):
+            results.append({
+                "id": e["id"],
+                "title": e.get("title") or e["id"],
+                "duration": e.get("duration"),
+                "channel": e.get("channel") or e.get("uploader") or "",
+            })
+    if not results:
+        reason = result.stderr.strip().splitlines()[-1:] or ["no results"]
+        raise UrlPlaybackError(reason[0][:200])
+    return results
+
+
 def build_fetch_command(
     settings: Settings, info_path: Path, format_id: str | None = None
 ) -> list[str]:

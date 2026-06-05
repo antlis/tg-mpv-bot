@@ -23,6 +23,7 @@ clashes (≤64 bytes):
     eps:<pg>             → page <pg> of the episode picker
     spd:<value>          → set playback speed (e.g. spd:1.5)
     h:<i>                → replay watch-history entry #i (newest-first order)
+    yt:<video_id>        → stream that YouTube result (ids are 11 chars — fits)
     cats / noop          → back to categories / inert (page counter)
 
 ``/mpv_search`` results reuse the same ``pl:<global_index>`` buttons, so a
@@ -152,6 +153,29 @@ def history_keyboard(entries: list[HistoryEntry]) -> InlineKeyboardMarkup:
             )
         ]
         for i, e in enumerate(entries)
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _fmt_duration(seconds: float | None) -> str:
+    if not seconds:
+        return ""
+    s = int(seconds)
+    h, rem = divmod(s, 3600)
+    m, s = divmod(rem, 60)
+    return f" · {h}:{m:02d}:{s:02d}" if h else f" · {m}:{s:02d}"
+
+
+def yt_results_keyboard(results: list[dict]) -> InlineKeyboardMarkup:
+    """One play button per YouTube search hit (callback ``yt:<video_id>``)."""
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"▶ {r['title'][:50]}{_fmt_duration(r.get('duration'))}",
+                callback_data=f"yt:{r['id']}",
+            )
+        ]
+        for r in results
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

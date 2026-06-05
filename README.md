@@ -53,6 +53,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_history` | Last 20 played (playlists & streams) — tap to replay |
 | `/mpv_notify` | Toggle notifications: "⏭ Now playing: 5/12 — …" on episode change, "✅ Finished" at the end |
 | `/mpv_url <link>` | Stream a URL via yt-dlp — or just **send a link** as a message |
+| `/mpv_yt <search>` | Search YouTube from chat — top results as tap-to-play buttons |
 | `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_shot` | Send a screenshot of the current frame to the chat |
 | `/mpv_toggle` | Play/pause toggle (one command) |
