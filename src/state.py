@@ -31,13 +31,24 @@ class HistoryEntry:
         return self.target.startswith(("http://", "https://"))
 
 
-def _load(state_file: Path) -> list[dict]:
+def _read_doc(state_file: Path) -> dict:
     try:
         data = json.loads(state_file.read_text())
     except (OSError, ValueError):
-        return []
-    if not isinstance(data, dict):
-        return []
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_doc(state_file: Path, doc: dict) -> None:
+    try:
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(json.dumps(doc))
+    except OSError as exc:  # a broken state file must never break playback
+        logger.warning("Could not write state file %s: %s", state_file, exc)
+
+
+def _load(state_file: Path) -> list[dict]:
+    data = _read_doc(state_file)
     raw = data.get("history", [])
     if not raw and data.get("last_played"):  # migrate the pre-history format
         raw = [{"target": data["last_played"], "at": data.get("at", 0)}]
@@ -56,11 +67,34 @@ def record_last_played(
     }
     entries = [e for e in _load(state_file) if e["target"] != target]
     entries.insert(0, entry)
-    try:
-        state_file.parent.mkdir(parents=True, exist_ok=True)
-        state_file.write_text(json.dumps({"history": entries[:HISTORY_LIMIT]}))
-    except OSError as exc:  # a broken state file must never break playback
-        logger.warning("Could not write state file %s: %s", state_file, exc)
+    doc = _read_doc(state_file)
+    doc.pop("last_played", None)  # superseded by history
+    doc.pop("at", None)
+    doc["history"] = entries[:HISTORY_LIMIT]
+    _write_doc(state_file, doc)
+
+
+def set_notify_chat(state_file: Path, chat_id: int) -> None:
+    """Remember the chat that last started playback (notification target)."""
+    doc = _read_doc(state_file)
+    if doc.get("notify_chat") != chat_id:
+        doc["notify_chat"] = chat_id
+        _write_doc(state_file, doc)
+
+
+def notify_chat(state_file: Path) -> int | None:
+    chat = _read_doc(state_file).get("notify_chat")
+    return chat if isinstance(chat, int) else None
+
+
+def set_notify_enabled(state_file: Path, enabled: bool) -> None:
+    doc = _read_doc(state_file)
+    doc["notify_enabled"] = enabled
+    _write_doc(state_file, doc)
+
+
+def notify_enabled(state_file: Path) -> bool:
+    return bool(_read_doc(state_file).get("notify_enabled", True))
 
 
 def history(state_file: Path) -> list[HistoryEntry]:

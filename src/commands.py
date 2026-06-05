@@ -624,6 +624,7 @@ async def cb_play(query: CallbackQuery) -> None:
         await query.answer("Playlist no longer available", show_alert=True)
         return
     pl = pls[idx]
+    _remember_chat(query.message)
     await asyncio.to_thread(player.play, get_settings(), pl.path)
     await query.answer(f"▶ {pl.display}")
     await query.message.reply(f"▶ Playing: {pl.display}")
@@ -645,6 +646,7 @@ async def cmd_play(message: Message, command: CommandObject) -> None:
     if pl is None:
         await message.reply(f"❌ No playlist matching '{query}'. Try /mpv_list")
         return
+    _remember_chat(message)
     await asyncio.to_thread(player.play, get_settings(), pl.path)
     await message.reply(f"▶ Playing: {pl.display}")
 
@@ -659,13 +661,31 @@ async def cmd_last(message: Message) -> None:
     await _replay(message, last)
 
 
+def _remember_chat(message: Message) -> None:
+    """Point playback notifications at the chat that started playback."""
+    state.set_notify_chat(get_settings().state_file, message.chat.id)
+
+
 async def _replay(message: Message, target: str) -> None:
     """Launch a history target — URL or playlist path — via the right path."""
     if target.startswith(("http://", "https://")):
         await _play_url(message, target)
     else:
+        _remember_chat(message)
         await asyncio.to_thread(player.play, get_settings(), Path(target))
         await message.reply(f"▶ Playing: {playlists.prettify(Path(target).stem)}")
+
+
+@router.message(Command("mpv_notify"))
+async def cmd_notify(message: Message) -> None:
+    """Toggle the episode-finished / playlist-done notifications."""
+    sf = get_settings().state_file
+    enabled = not state.notify_enabled(sf)
+    state.set_notify_enabled(sf, enabled)
+    await message.reply(
+        "🔔 Playback notifications ON — I'll message when an episode ends"
+        if enabled else "🔕 Playback notifications OFF"
+    )
 
 
 @router.message(Command("mpv_history", "mpv_recent"))
@@ -735,6 +755,7 @@ _URL_RE = re.compile(r"^https?://\S+$")
 
 
 async def _play_url(message: Message, url: str) -> None:
+    _remember_chat(message)
     note = await message.reply("⏳ Resolving…")
     try:
         title = await asyncio.to_thread(player.play_url, get_settings(), url)
@@ -826,6 +847,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_search</b> [category] &lt;text&gt; — find playlists, tap to play\n"
         "<b>/mpv_last</b> — resume the last-played playlist/stream\n"
         "<b>/mpv_history</b> — recently played, tap to replay\n"
+        "<b>/mpv_notify</b> — toggle episode-finished notifications\n"
         "<b>/mpv_url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"

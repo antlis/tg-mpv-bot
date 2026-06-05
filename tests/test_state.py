@@ -73,6 +73,24 @@ def test_last_played_corrupt_state_file(tmp_path):
     assert state.last_played(sf) is None
 
 
+def test_notify_chat_roundtrip(tmp_path):
+    sf = tmp_path / "state.json"
+    assert state.notify_chat(sf) is None
+    state.set_notify_chat(sf, 42)
+    assert state.notify_chat(sf) == 42
+    # history writes must not clobber it
+    state.record_last_played(sf, "https://example.com/v", name="V")
+    assert state.notify_chat(sf) == 42
+    assert state.history(sf)
+
+
+def test_notify_enabled_default_on(tmp_path):
+    sf = tmp_path / "state.json"
+    assert state.notify_enabled(sf) is True
+    state.set_notify_enabled(sf, False)
+    assert state.notify_enabled(sf) is False
+
+
 def test_record_failure_never_raises(tmp_path):
     ro = tmp_path / "file-not-dir"
     ro.write_text("x")  # parent "dir" is actually a file → mkdir/write fails

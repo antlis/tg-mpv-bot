@@ -38,6 +38,7 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_search", description="Search playlists (optionally by category)"),
         BotCommand(command="mpv_last", description="Resume the last-played playlist/stream"),
         BotCommand(command="mpv_history", description="Recently played — tap to replay"),
+        BotCommand(command="mpv_notify", description="Toggle end-of-playback notifications"),
         BotCommand(command="mpv_url", description="Stream a link (YouTube/SoundCloud/…)"),
         BotCommand(command="mpv_info", description="Show current status"),
         BotCommand(command="mpv_shot", description="Screenshot the current frame"),
@@ -152,6 +153,10 @@ async def main() -> None:
     if settings.scan_interval_min > 0:
         asyncio.create_task(_scan_loop(settings))
         logger.info("Auto-scan every %d min", settings.scan_interval_min)
+
+    # End-of-playback notifications (episode advanced / playlist finished).
+    from src import notify
+    asyncio.create_task(notify.run(bot, settings))
 
     logger.info("tg-mpv-bot starting (polling)...")
     await dp.start_polling(bot)
