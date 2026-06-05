@@ -24,6 +24,10 @@ Environment=YTDL_COOKIES_BROWSER=firefox
 # architecture makes IP-locked URLs a non-issue (yt-dlp fetches everything
 # itself), and forcing v6 breaks v4-only CDNs outright (SoundCloud) while
 # this host's v6 path to YouTube is flaky. Let yt-dlp pick per connection.
+# Lean YouTube extraction: one client, skip the (slow, retry-prone) webpage.
+# Measured: default client mix timed out at 60s where this took 22s.
+# If YouTube playback ever breaks, try removing this first.
+Environment=YTDL_OPTIONS=extractor-args=youtube:player_client=android_vr;player_skip=webpage
 # The user manager's inherited PATH can be minimal; ensure the std bin dirs are present.
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 

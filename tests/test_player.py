@@ -91,6 +91,15 @@ def test_ytdl_cli_args_translation():
     ]
 
 
+def test_ytdl_cli_args_value_with_equals_and_semicolons():
+    # the lean-YouTube extractor-args value embeds '=' and ';' — only the
+    # FIRST '=' splits key from value
+    s = _settings(ytdl_options="extractor-args=youtube:player_client=android_vr;player_skip=webpage")
+    assert _ytdl_cli_args(s, "https://youtu.be/x") == [
+        "--extractor-args", "youtube:player_client=android_vr;player_skip=webpage",
+    ]
+
+
 def test_ytdl_cli_args_cookies_gated_only():
     s = _settings(ytdl_cookies_browser="firefox")
     assert _ytdl_cli_args(s, "https://www.instagram.com/reel/x") == [

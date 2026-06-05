@@ -268,8 +268,9 @@ def _stop_current(settings: Settings) -> None:
     pkill = _which("pkill")
     if pkill:
         try:
-            subprocess.run([pkill, "-x", "mpv"], check=False)
-            time.sleep(0.3)
+            result = subprocess.run([pkill, "-x", "mpv"], check=False)
+            if result.returncode == 0:  # only wait if something was killed
+                time.sleep(0.3)
         except OSError as exc:  # don't let a kill failure abort playback
             logger.warning("pkill failed: %s", exc)
 
