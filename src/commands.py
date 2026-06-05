@@ -32,6 +32,7 @@ from .keyboards import (
     categories_keyboard,
     episodes_keyboard,
     has_subcategories,
+    history_keyboard,
     now_playing_keyboard,
     playlists_keyboard,
     search_results_keyboard,
@@ -655,12 +656,39 @@ async def cmd_last(message: Message) -> None:
     if last is None:
         await message.reply("❌ No watch history yet — play something first.")
         return
-    if last.startswith(("http://", "https://")):
-        await asyncio.to_thread(player.play_url, get_settings(), last)
-        await message.reply(f"▶ Resuming stream: {last}")
+    await _replay(message, last)
+
+
+async def _replay(message: Message, target: str) -> None:
+    """Launch a history target — URL or playlist path — via the right path."""
+    if target.startswith(("http://", "https://")):
+        await _play_url(message, target)
     else:
-        await asyncio.to_thread(player.play, get_settings(), Path(last))
-        await message.reply(f"▶ Resuming: {playlists.prettify(Path(last).stem)}")
+        await asyncio.to_thread(player.play, get_settings(), Path(target))
+        await message.reply(f"▶ Playing: {playlists.prettify(Path(target).stem)}")
+
+
+@router.message(Command("mpv_history", "mpv_recent"))
+async def cmd_history(message: Message) -> None:
+    entries = state.history(get_settings().state_file)
+    if not entries:
+        await message.reply("❌ No watch history yet — play something first.")
+        return
+    await message.reply(
+        f"🕘 Last {len(entries)} played — tap to replay:",
+        reply_markup=history_keyboard(entries),
+    )
+
+
+@router.callback_query(F.data.startswith("h:"))
+async def cb_history(query: CallbackQuery) -> None:
+    i = int(query.data[len("h:"):])
+    entries = state.history(get_settings().state_file)
+    if not (0 <= i < len(entries)):
+        await query.answer("History changed — run /mpv_history again", show_alert=True)
+        return
+    await query.answer(f"▶ {entries[i].name[:60]}")
+    await _replay(query.message, entries[i].target)
 
 
 @router.message(Command("mpv_search", "mpv_find"))
@@ -797,6 +825,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_play</b> &lt;query&gt; — play by number or name\n"
         "<b>/mpv_search</b> [category] &lt;text&gt; — find playlists, tap to play\n"
         "<b>/mpv_last</b> — resume the last-played playlist/stream\n"
+        "<b>/mpv_history</b> — recently played, tap to replay\n"
         "<b>/mpv_url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"

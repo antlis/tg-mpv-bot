@@ -428,5 +428,5 @@ def play_url(settings: Settings, url: str) -> str:
             f.close()  # children hold their own duplicates
 
     _run_hook("post-play", settings.post_play_hook, env)
-    state.record_last_played(settings.state_file, url)  # for /mpv_last
+    state.record_last_played(settings.state_file, url, name=title)  # /mpv_last|history
     return title

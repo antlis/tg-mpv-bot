@@ -22,6 +22,7 @@ clashes (≤64 bytes):
     ep:<n>               → jump to 0-based item <n> of mpv's *current* playlist
     eps:<pg>             → page <pg> of the episode picker
     spd:<value>          → set playback speed (e.g. spd:1.5)
+    h:<i>                → replay watch-history entry #i (newest-first order)
     cats / noop          → back to categories / inert (page counter)
 
 ``/mpv_search`` results reuse the same ``pl:<global_index>`` buttons, so a
@@ -37,6 +38,7 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from .playlists import Playlist, prettify
+from .state import HistoryEntry
 
 PER_PAGE = 8
 MAX_SEARCH_RESULTS = 12
@@ -130,6 +132,27 @@ def search_results_keyboard(
         for i in indices[:MAX_SEARCH_RESULTS]
     ]
     rows.append([InlineKeyboardButton(text="⬅ Categories", callback_data="cats")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def history_keyboard(entries: list[HistoryEntry]) -> InlineKeyboardMarkup:
+    """Replay buttons for the watch history (callback ``h:<i>``).
+
+    Indices follow the newest-first history order at render time; a replay
+    reshuffles that order, so handlers re-read the list on tap (same
+    freshness contract as the category indices).
+    """
+    rows = [
+        [
+            InlineKeyboardButton(
+                # URL names are real media titles already; playlist stems get
+                # the usual display cleanup.
+                text=f"{'🔗' if e.is_url else '📁'} {(e.name if e.is_url else prettify(e.name))[:48]}",
+                callback_data=f"h:{i}",
+            )
+        ]
+        for i, e in enumerate(entries)
+    ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

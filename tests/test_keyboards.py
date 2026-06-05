@@ -199,6 +199,21 @@ def test_speed_keyboard_marks_current():
     assert by_data["spd:0.75"] == "0.75×"
 
 
+def test_history_keyboard():
+    from src.keyboards import history_keyboard
+    from src.state import HistoryEntry
+    entries = [
+        HistoryEntry(target="https://youtu.be/x", name="Some Video 1080p Title", at=2),
+        HistoryEntry(target="/v/the-big-lebowski.m3u", name="the-big-lebowski", at=1),
+    ]
+    kb = history_keyboard(entries)
+    buttons = [b for row in kb.inline_keyboard for b in row]
+    assert [b.callback_data for b in buttons] == ["h:0", "h:1"]
+    # URL titles shown verbatim; playlist stems get display cleanup
+    assert buttons[0].text == "🔗 Some Video 1080p Title"
+    assert buttons[1].text == "📁 The Big Lebowski"
+
+
 def test_subcategory_pagination_prefix():
     pls = make_nested({"tutorials": {"big": PER_PAGE * 2}})  # 2 pages
     kb = playlists_keyboard(pls, ci=0, si=0, page=0)
