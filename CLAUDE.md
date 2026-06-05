@@ -31,7 +31,10 @@ systemctl --user start tg-mpv-bot          # reads ~/.config/environment.d/99-tg
 
 Required env: `BOT_TOKEN` (missing → `SystemExit` with a friendly message, not a traceback). Optional:
 `ALLOWED_USERS` (comma-separated Telegram user IDs — **empty means open to everyone**, logged as a
-warning), `API_SERVER_URL`, host paths `MPV_SOCKET` / `PLAYLIST_DIRS` / `VIDEOS_DIR` / `MPV_RUNNER` /
+warning), `API_SERVER_URL` + `API_LOCAL_FILES_DIR` (local Bot API server for 2GB Telegram-file
+downloads; on this host it's tg-media-bot's server at :8082 with `TELEGRAM_LOCAL=true`, files read
+from the `~/telegram-bot-api-data` bind mount — switching a token to/from a local server needs a
+one-time cloud `logOut`), host paths `MPV_SOCKET` / `PLAYLIST_DIRS` / `VIDEOS_DIR` / `MPV_RUNNER` /
 `DISPLAY`, and launch hooks `PRE_PLAY_HOOK` / `POST_PLAY_HOOK` (shell commands run around the mpv
 spawn — WM glue like `i3-msg workspace 10` lives there, not in the bot), `YTDL_OPTIONS`
 (comma-separated `key=value` passed to mpv as `--ytdl-raw-options` for every URL), and

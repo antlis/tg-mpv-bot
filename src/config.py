@@ -22,6 +22,11 @@ class Settings:
     bot_token: str
     allowed_users: list[int] = field(default_factory=list)
     api_server_url: str = ""
+    # Host path of the local Bot API server's /var/lib/telegram-bot-api dir.
+    # Required when that server runs in TELEGRAM_LOCAL mode: getFile then
+    # returns container-side filesystem paths instead of serving bytes over
+    # HTTP, and this mapping lets the bot read the files directly.
+    api_local_files_dir: str = ""
 
     # ── Host / runtime config ────────────────────────────────────────
     mpv_socket: str = "/tmp/mpv-socket"
@@ -87,6 +92,7 @@ def get_settings() -> Settings:
         bot_token=token,
         allowed_users=_parse_int_list(os.environ.get("ALLOWED_USERS", "")),
         api_server_url=os.environ.get("API_SERVER_URL", ""),
+        api_local_files_dir=os.environ.get("API_LOCAL_FILES_DIR", ""),
         mpv_socket=os.environ.get("MPV_SOCKET", "/tmp/mpv-socket"),
         playlist_dirs=_parse_path_list(os.environ.get("PLAYLIST_DIRS"))
         or _default_playlist_dirs(),

@@ -10,12 +10,13 @@ import asyncio
 import logging
 import sys
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiogram.client.telegram import TelegramAPIServer
+from aiogram.client.telegram import SimpleFilesPathWrapper, TelegramAPIServer
 from aiogram.types import (
     BotCommand,
     BotCommandScopeDefault,
@@ -95,8 +96,19 @@ async def main() -> None:
     # Replies are plain text by default; handlers that need HTML set it per-message.
     default = DefaultBotProperties(parse_mode=None)
     if settings.api_server_url:
+        server_kwargs = {}
+        if settings.api_local_files_dir:
+            # TELEGRAM_LOCAL-mode server: getFile returns container paths;
+            # map them to the bind-mounted host dir and read directly.
+            server_kwargs = dict(
+                is_local=True,
+                wrap_local_file=SimpleFilesPathWrapper(
+                    Path("/var/lib/telegram-bot-api"),
+                    Path(settings.api_local_files_dir).expanduser(),
+                ),
+            )
         session = AiohttpSession(
-            api=TelegramAPIServer.from_base(settings.api_server_url),
+            api=TelegramAPIServer.from_base(settings.api_server_url, **server_kwargs),
         )
         bot = Bot(token=settings.bot_token, session=session, default=default)
         logger.info("Using local API server at %s", settings.api_server_url)
