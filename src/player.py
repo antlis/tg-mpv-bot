@@ -107,11 +107,15 @@ def build_url_command(settings: Settings, url: str) -> list[str]:
         "--force-window",
         "--save-position-on-quit",
     ]
-    raw = [o for o in (settings.ytdl_options,) if o]
+    raw = [o.strip() for o in settings.ytdl_options.split(",") if o.strip()]
     if settings.ytdl_cookies_browser and _is_gated_host(url):
         raw.append(f"cookies-from-browser={settings.ytdl_cookies_browser}")
     if raw:
-        cmd.append(f"--ytdl-raw-options={','.join(raw)}")
+        # mpv requires every raw option to be key=value — a bare flag like
+        # "force-ipv6" must become "force-ipv6=" or mpv exits with a fatal
+        # option-parse error before playing anything.
+        normalized = [o if "=" in o else f"{o}=" for o in raw]
+        cmd.append(f"--ytdl-raw-options={','.join(normalized)}")
     return cmd
 
 
@@ -129,7 +133,7 @@ def _ytdl_cli_args(settings: Settings, url: str) -> list[str]:
 
 
 def resolve_stream(
-    settings: Settings, url: str, timeout: float = 90
+    settings: Settings, url: str, timeout: float = 180
 ) -> tuple[str, list[str], dict[str, str]] | None:
     """Resolve ``url`` with yt-dlp to ``(title, stream URL(s), http headers)``.
 

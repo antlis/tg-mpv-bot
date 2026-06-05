@@ -64,6 +64,14 @@ def test_url_command_with_ytdl_options():
     assert "--ytdl-raw-options=format-sort=res:1080" in cmd
 
 
+def test_url_command_normalizes_bare_flags():
+    # mpv's ytdl-raw-options requires key=value; a bare "force-ipv6" makes
+    # mpv exit with a fatal parse error — it must be emitted as "force-ipv6=".
+    s = _settings(mpv_runner="", ytdl_options="force-ipv6")
+    cmd = build_url_command(s, "https://youtu.be/x")
+    assert "--ytdl-raw-options=force-ipv6=" in cmd
+
+
 def test_cookies_only_for_gated_hosts():
     s = _settings(mpv_runner="", ytdl_cookies_browser="firefox")
     gated = build_url_command(s, "https://www.instagram.com/reel/x")
