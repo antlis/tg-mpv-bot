@@ -1,6 +1,7 @@
 # tg-mpv-bot 🎬
 
 [![CI](https://github.com/antlis/tg-mpv-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/antlis/tg-mpv-bot/actions/workflows/ci.yml)
+[![AUR](https://img.shields.io/aur/version/tg-mpv-bot-git)](https://aur.archlinux.org/packages/tg-mpv-bot-git)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Turn Telegram into a remote control for **mpv** on your desktop/HTPC: browse
@@ -94,8 +95,9 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 
 - Linux box with a graphical session (X11 or Wayland) whose display is the TV
 - `mpv`
-- [`uv`](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-  — manages Python and all dependencies, including `yt-dlp`
+- For the **source** install: [`uv`](https://docs.astral.sh/uv/)
+  (`curl -LsSf https://astral.sh/uv/install.sh | sh`) — manages Python and
+  all dependencies, including `yt-dlp`
 
 ### 2. Create the bot
 
@@ -103,6 +105,10 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 2. Get your numeric Telegram ID from [@userinfobot](https://t.me/userinfobot).
 
 ### 3. Install & first run
+
+Pick one:
+
+**A. From source (any distro)**
 
 ```bash
 git clone https://github.com/antlis/tg-mpv-bot && cd tg-mpv-bot
@@ -117,6 +123,29 @@ uv run bot.py
 > breaks extraction faster than stable releases, so once the bot is running,
 > send it `/mpv_update_ytdlp` (or set `YTDL_UPDATE_DAYS=7`) to bump the venv
 > copy to the nightly — repeat after any future `uv sync`.
+
+**B. Arch Linux ([AUR](https://aur.archlinux.org/packages/tg-mpv-bot-git))**
+
+```bash
+yay -S tg-mpv-bot-git       # deps incl. yt-dlp come from pacman/AUR
+
+# configuration lives in one env file read by the packaged service:
+install -m600 /usr/share/doc/tg-mpv-bot/env.example ~/.config/tg-mpv-bot.env
+$EDITOR ~/.config/tg-mpv-bot.env        # BOT_TOKEN + ALLOWED_USERS at minimum
+
+tg-mpv-bot                  # foreground test run (the launcher sources that
+                            # env file); or go straight to the service below
+```
+
+On AUR installs `yt-dlp` is pacman's — keep it fresh with normal system
+updates; `/mpv_update_ytdlp` only manages venv installs and will tell you so.
+In the env file, **quote values containing spaces**
+(`PRE_PLAY_HOOK="i3-msg workspace 10"`) — both the shell launcher and
+systemd accept that form.
+
+**C. Docker** — see [Run it permanently](#5-run-it-permanently).
+
+
 
 Message your bot `/help` — if it answers, the Telegram side works. Then
 `/mpv_list` to browse, or send any YouTube link.
@@ -157,7 +186,15 @@ nesting level for subcategories):
 
 ### 5. Run it permanently
 
-**Systemd user service** (recommended on a host you own):
+**AUR install** — the unit ships with the package and reads
+`~/.config/tg-mpv-bot.env` (created in step 3):
+
+```bash
+systemctl --user enable --now tg-mpv-bot
+journalctl --user-unit tg-mpv-bot -f     # logs
+```
+
+**Source install — systemd user service:**
 
 ```bash
 ln -s "$PWD/tg-mpv-bot.service" ~/.config/systemd/user/
@@ -193,9 +230,17 @@ and your playlist dirs (paths in `docker-compose.yml`). Note hooks run
 
 ## Configuration
 
-Everything is configured via environment variables (`.env` for bare runs,
-`environment.d` for systemd, `environment:` for Docker). Only `BOT_TOKEN` is
-required.
+Everything is configured via environment variables. Where they live depends
+on the install method — the variables themselves are identical:
+
+| Install | Configuration file |
+|---------|--------------------|
+| Source, foreground | `.env` in the repo (`set -a; source .env; set +a`) |
+| Source, systemd | `~/.config/environment.d/99-tg-mpv-bot.conf` + `Environment=` lines in the unit |
+| AUR | `~/.config/tg-mpv-bot.env` (read by both the launcher and the unit) |
+| Docker | `environment:` / `env_file:` in `docker-compose.yml` |
+
+Only `BOT_TOKEN` is required.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
