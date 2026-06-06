@@ -71,7 +71,9 @@
   .hero {
     position: relative;
     text-align: center;
-    padding: clamp(72px, 12vh, 128px) 0 0;
+    /* large, distinct bottom space — the section break must out-breathe
+       every gap inside the hero */
+    padding: clamp(72px, 12vh, 128px) 0 clamp(40px, 6vh, 80px);
   }
   .hero::before {
     content: "";
@@ -133,7 +135,7 @@
   .diagram {
     display: flex; align-items: stretch; justify-content: center; gap: 18px;
     flex-wrap: wrap;
-    margin-top: 72px;
+    margin-top: 56px; /* closer to the hero it belongs to… */
   }
   .node {
     display: flex; flex-direction: column; justify-content: center;
@@ -162,7 +164,8 @@
   .eyebrow { flex-wrap: wrap; justify-content: center; }
 
   /* ── sections ─────────────────────────────────────── */
-  section { padding-top: clamp(72px, 10vh, 120px); scroll-margin-top: 70px; }
+  /* …while section breaks are ~4× any spacing inside a section */
+  section { padding-top: clamp(130px, 18vh, 200px); scroll-margin-top: 70px; }
   .kicker {
     font-size: .8rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase;
     color: var(--accent);
@@ -180,7 +183,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
     gap: 16px;
-    margin-top: 44px;
+    margin-top: 40px;
   }
   .card {
     background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
@@ -202,7 +205,7 @@
   .card p { color: var(--dim); font-size: .94rem; margin-top: 7px; text-wrap: pretty; }
   .card code { font-family: var(--mono); font-size: .86em; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; }
 
-  .shot { margin-top: 56px; }
+  .shot { margin-top: 72px; }
   .shot img {
     width: 100%; display: block;
     border-radius: var(--radius);
@@ -211,7 +214,7 @@
   }
 
   /* ── install ──────────────────────────────────────── */
-  .tabs { display: flex; gap: 10px; flex-wrap: wrap; margin: 40px 0 16px; }
+  .tabs { display: flex; gap: 10px; flex-wrap: wrap; margin: 36px 0 16px; }
   .tabs button {
     font: inherit; font-size: .92rem; font-weight: 650;
     color: var(--dim);
@@ -253,7 +256,7 @@
 
   /* ── commands ─────────────────────────────────────── */
   .cmds {
-    margin-top: 44px;
+    margin-top: 36px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
@@ -277,7 +280,7 @@
 
   /* ── footer ───────────────────────────────────────── */
   footer {
-    margin-top: clamp(80px, 12vh, 140px);
+    margin-top: clamp(130px, 18vh, 200px);
     border-top: 1px solid var(--border);
     padding: 40px 0 56px;
   }
