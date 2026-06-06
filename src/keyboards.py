@@ -27,6 +27,7 @@ clashes (≤64 bytes):
     ple:<i>              → play entry #i of the last probed listing page
                            (entry URLs exceed 64 bytes, hence the index)
     rd:<i> / rds:<pg>    → tune to preset radio station #i / picker page <pg>
+    rdq:<i>              → tune to result #i of the last radio search
     ch:<n> / chs:<pg>    → jump to chapter <n> of the current file / picker page
     cats / noop          → back to categories / inert (page counter)
 
@@ -233,6 +234,21 @@ def radio_keyboard(
                 callback_data=f"rds:{page + 1}" if page < total - 1 else "noop",
             ),
         ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def radio_search_keyboard(results: list[dict]) -> InlineKeyboardMarkup:
+    """Tune-in buttons for radio-browser search hits (``rdq:<i>``)."""
+    rows = []
+    for i, s in enumerate(results):
+        meta = " · ".join(
+            p for p in (
+                f"{s['bitrate']}k {s['codec']}".strip() if s.get("bitrate") else s.get("codec", ""),
+                s.get("country", ""),
+            ) if p
+        )
+        label = f"📻 {s['name'][:38]}" + (f" · {meta}" if meta else "")
+        rows.append([InlineKeyboardButton(text=label[:64], callback_data=f"rdq:{i}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

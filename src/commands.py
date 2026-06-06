@@ -41,6 +41,7 @@ from .keyboards import (
     now_playing_keyboard,
     playlists_keyboard,
     radio_keyboard,
+    radio_search_keyboard,
     search_results_keyboard,
     speed_keyboard,
     subcategories_keyboard,
@@ -392,14 +393,44 @@ async def cb_chapter(query: CallbackQuery) -> None:
         await _refresh_chapters(query, n // PER_PAGE)
 
 
+# Results of the most recent radio search (rdq:<i> callbacks).
+_radio_search_cache: list[dict] = []
+
+
 @router.message(Command("mpv_radio", "mpv_fm"))
-async def cmd_radio(message: Message) -> None:
-    """Internet-radio presets as tune-in buttons."""
-    stations = get_settings().radio_stations
-    await message.reply(
-        "📻 Pick a station:",
-        reply_markup=radio_keyboard(stations),
+async def cmd_radio(message: Message, command: CommandObject) -> None:
+    """Preset stations as buttons — or search ~50k stations with an argument."""
+    query = (command.args or "").strip()
+    if not query:
+        await message.reply(
+            "📻 Pick a station (or search: /mpv_radio jazz tokyo):",
+            reply_markup=radio_keyboard(get_settings().radio_stations),
+        )
+        return
+    note = await message.reply(f"🔎 Searching stations for '{query}'…")
+    try:
+        results = await asyncio.to_thread(player.search_radio, get_settings(), query)
+    except player.UrlPlaybackError as exc:
+        await note.edit_text(f"❌ Radio search failed: {exc}")
+        return
+    _radio_search_cache[:] = results
+    await note.edit_text(
+        f"📻 Stations matching '{query}' — tap to tune in:",
+        reply_markup=radio_search_keyboard(results),
     )
+
+
+@router.callback_query(F.data.startswith("rdq:"))
+async def cb_radio_search(query: CallbackQuery) -> None:
+    i = int(query.data[len("rdq:"):])
+    if not (0 <= i < len(_radio_search_cache)):
+        await query.answer("Search expired — run /mpv_radio <query> again", show_alert=True)
+        return
+    s = _radio_search_cache[i]
+    _remember_chat(query.message)
+    await asyncio.to_thread(player.play_radio, get_settings(), s["url"], s["name"])
+    await query.answer(f"📻 {s['name'][:60]}")
+    await query.message.reply(f"📻 Tuned to {s['name']}")
 
 
 @router.callback_query(F.data.startswith("rds:"))
@@ -1366,7 +1397,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_notify</b> — toggle episode-finished notifications\n"
         "<b>/mpv_url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
         "<b>/mpv_yt</b> &lt;search&gt; — search YouTube, tap a result to play\n"
-        "<b>/mpv_radio</b> — internet radio, pick a station\n"
+        "<b>/mpv_radio</b> [search] — internet radio: presets, or search 50k stations\n"
         "…or just <b>send a video/audio file</b> — it plays on the TV\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"
