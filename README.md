@@ -179,6 +179,8 @@ inside — edit `WorkingDirectory`/`ExecStart` if yours lives elsewhere. Tweak t
 
 ```bash
 docker compose up -d --build
+# or skip the build — releases are published to ghcr:
+# docker pull ghcr.io/antlis/tg-mpv-bot:latest
 ```
 
 Uses `network_mode: host` and bind-mounts the X11 socket, the mpv IPC socket
