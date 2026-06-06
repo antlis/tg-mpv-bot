@@ -92,7 +92,7 @@ def test_needs_pipe_only_for_youtube():
     assert needs_pipe({"requested_formats": [{"url": "https://rr3---sn.googlevideo.com/v"}]})
     # generic hosts play better from the direct URL (range requests → moov-at-end
     # progressive MP4s actually start; the pipe deadlocked on an 858 MB one)
-    assert not needs_pipe({"extractor": "Eporner", "url": "https://cdn.eporner.com/v.mp4"})
+    assert not needs_pipe({"extractor": "SomeSite", "url": "https://cdn.videohost.example/v.mp4"})
     assert not needs_pipe({"extractor": "soundcloud", "url": "https://cf-media.sndcdn.com/x"})
 
 
@@ -193,6 +193,19 @@ def test_ytdl_cli_args_value_with_equals_and_semicolons():
     ]
 
 
+def test_ytdl_cli_args_network_keys_youtube_only():
+    # Some CDNs embed the requester's IP in minted URLs and reject mpv's
+    # fetch when the probe ran over a different egress — so the force-ipv4
+    # proxy pin must not leak beyond YouTube.
+    s = _settings(ytdl_options="force-ipv4,format-sort=res:1080")
+    assert _ytdl_cli_args(s, "https://youtu.be/x") == [
+        "--force-ipv4", "--format-sort", "res:1080",
+    ]
+    assert _ytdl_cli_args(s, "https://www.videohost.example/video-x/y/") == [
+        "--format-sort", "res:1080",
+    ]
+
+
 def test_ytdl_cli_args_cookies_gated_only():
     s = _settings(ytdl_cookies_browser="firefox")
     assert _ytdl_cli_args(s, "https://www.instagram.com/reel/x") == [
@@ -258,6 +271,34 @@ def test_probe_escalation_keeps_network_args(monkeypatch):
     player.probe_url(s, "https://youtu.be/x")
     assert attempts[1] == ["--force-ipv4", "--cookies-from-browser", "firefox"]
     assert "--extractor-args" not in attempts[1]  # client pinning is dropped
+
+
+def test_probe_playlist_url_sentinel(monkeypatch):
+    # -j emits one JSON line per entry for listing URLs → sentinel, no escalation
+    import src.player as player
+
+    def fake_run(cmd, **kw):
+        class R:
+            returncode = 0
+            stderr = ""
+            stdout = '{"id": "a"}\n{"id": "b"}\n'
+        return R()
+
+    monkeypatch.setattr(player.subprocess, "run", fake_run)
+    monkeypatch.setattr(player, "_ytdlp_bin", lambda: "/v/yt-dlp")
+    s = _settings(ytdl_cookies_browser="firefox")
+    with pytest.raises(player.UrlPlaybackError, match=player.PLAYLIST_URL):
+        player.probe_url(s, "https://youtube.com/playlist?list=X")
+
+
+def test_listing_command_shape():
+    from src.player import build_listing_command
+    s = _settings(ytdl_options="force-ipv4")
+    cmd = build_listing_command(s, "https://youtube.com/playlist?list=X", limit=8)
+    assert "--flat-playlist" in cmd and "-J" in cmd
+    assert cmd[cmd.index("--playlist-items") + 1] == "1:8"
+    assert "--force-ipv4" in cmd
+    assert cmd[-1] == "https://youtube.com/playlist?list=X"
 
 
 def test_probe_fails_fast_on_terminal_errors(monkeypatch):
