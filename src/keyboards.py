@@ -24,6 +24,7 @@ clashes (≤64 bytes):
     spd:<value>          → set playback speed (e.g. spd:1.5)
     h:<i>                → replay watch-history entry #i (newest-first order)
     yt:<video_id>        → stream that YouTube result (ids are 11 chars — fits)
+    ch:<n> / chs:<pg>    → jump to chapter <n> of the current file / picker page
     cats / noop          → back to categories / inert (page counter)
 
 ``/mpv_search`` results reuse the same ``pl:<global_index>`` buttons, so a
@@ -164,6 +165,46 @@ def _fmt_duration(seconds: float | None) -> str:
     h, rem = divmod(s, 3600)
     m, s = divmod(rem, 60)
     return f" · {h}:{m:02d}:{s:02d}" if h else f" · {m}:{s:02d}"
+
+
+def chapters_keyboard(
+    chapters: list[dict], current: int | None, page: int
+) -> InlineKeyboardMarkup:
+    """Picker over the current file's chapters (callback ``ch:<n>``).
+
+    Same shape as the episode picker: current chapter marked and inert,
+    ``chs:<page>`` pagination. Chapter dicts come straight from mpv's
+    ``chapter-list`` (``title`` optional, ``time`` in seconds).
+    """
+    def label(i: int, c: dict) -> str:
+        t = int(c.get("time") or 0)
+        h, rem = divmod(t, 3600)
+        m, s = divmod(rem, 60)
+        stamp = f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+        return f"{stamp}  {c.get('title') or f'Chapter {i + 1}'}"[:56]
+
+    page = clamp_page(page, len(chapters))
+    rows = []
+    for i in page_slice(list(range(len(chapters))), page):
+        if i == current:
+            rows.append([InlineKeyboardButton(text=f"▶ {label(i, chapters[i])}", callback_data="noop")])
+        else:
+            rows.append([InlineKeyboardButton(text=label(i, chapters[i]), callback_data=f"ch:{i}")])
+
+    total = page_count(len(chapters))
+    if total > 1:
+        rows.append([
+            InlineKeyboardButton(
+                text="◀" if page > 0 else "·",
+                callback_data=f"chs:{page - 1}" if page > 0 else "noop",
+            ),
+            InlineKeyboardButton(text=f"{page + 1}/{total}", callback_data="noop"),
+            InlineKeyboardButton(
+                text="▶" if page < total - 1 else "·",
+                callback_data=f"chs:{page + 1}" if page < total - 1 else "noop",
+            ),
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def yt_results_keyboard(results: list[dict]) -> InlineKeyboardMarkup:

@@ -229,6 +229,18 @@ class MpvClient:
         self.show_text(f"Speed: {speed:g}x")
         return speed
 
+    def get_chapters(self) -> tuple[list[dict], int | None]:
+        """``(chapter-list, current chapter index)``; ``([], None)`` if none."""
+        chapters = self._safe_get("chapter-list")
+        if not isinstance(chapters, list) or not chapters:
+            return [], None
+        current = self._safe_get("chapter")
+        return chapters, current if isinstance(current, int) else None
+
+    def set_chapter(self, index0: int) -> None:
+        self.set_property("chapter", index0)
+        self.show_text(self._safe_get("chapter-metadata/title") or f"Chapter {index0 + 1}")
+
     def toggle_night(self) -> bool:
         """Toggle loudness normalization (night mode); True = now on.
 

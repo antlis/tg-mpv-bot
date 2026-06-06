@@ -54,6 +54,7 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_next", description="Next in playlist"),
         BotCommand(command="mpv_prev", description="Previous in playlist"),
         BotCommand(command="mpv_ep", description="Episode picker (or jump to item N)"),
+        BotCommand(command="mpv_chapters", description="Chapter picker for the current file"),
         BotCommand(command="mpv_speed", description="Playback speed (buttons or value)"),
         BotCommand(command="mpv_shuffle", description="Shuffle the playlist"),
         BotCommand(command="mpv_loop", description="Toggle playlist loop"),

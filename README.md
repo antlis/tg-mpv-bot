@@ -68,6 +68,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_next` | Next item in playlist |
 | `/mpv_prev` | Previous item in playlist |
 | `/mpv_ep [n]` | Episode picker with buttons (no arg) or jump to item N |
+| `/mpv_chapters` | Chapter picker — movie/YouTube chapters as jump buttons |
 | `/mpv_speed [x]` | Playback speed — buttons (no arg) or a value like `1.5` |
 | `/mpv_shuffle` | Shuffle the current playlist |
 | `/mpv_loop` | Toggle looping the playlist |

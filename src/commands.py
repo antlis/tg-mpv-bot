@@ -31,6 +31,7 @@ from .config import get_settings
 from .keyboards import (
     PER_PAGE,
     categories_keyboard,
+    chapters_keyboard,
     episodes_keyboard,
     has_subcategories,
     history_keyboard,
@@ -330,6 +331,61 @@ async def cmd_goto(message: Message, command: CommandObject) -> None:
     else:
         _, err = await _ipc(lambda c: c.seek_absolute(value))
         await message.reply(err or f"⏩ → {_fmt_time(value)}")
+
+
+# ── Chapters ────────────────────────────────────────────────────────
+
+
+def _chapters_text(n: int, current: int | None) -> str:
+    where = f" (now: #{current + 1})" if current is not None else ""
+    return f"📖 {n} chapters{where} — tap to jump:"
+
+
+@router.message(Command("mpv_chapters", "mpv_ch"))
+async def cmd_chapters(message: Message) -> None:
+    """Browse the current file's chapters as jump buttons."""
+    res, err = await _ipc(lambda c: c.get_chapters())
+    if err:
+        await message.reply(err)
+        return
+    chapters, current = res
+    if not chapters:
+        await message.reply("📖 This file has no chapters")
+        return
+    page = (current or 0) // PER_PAGE
+    await message.reply(
+        _chapters_text(len(chapters), current),
+        reply_markup=chapters_keyboard(chapters, current, page),
+    )
+
+
+async def _refresh_chapters(query: CallbackQuery, page: int) -> None:
+    res, err = await _ipc(lambda c: c.get_chapters())
+    if err or not res[0]:
+        return  # keep the old picker; the tap was already answered
+    chapters, current = res
+    try:
+        await query.message.edit_text(
+            _chapters_text(len(chapters), current),
+            reply_markup=chapters_keyboard(chapters, current, page),
+        )
+    except TelegramBadRequest:
+        pass
+
+
+@router.callback_query(F.data.startswith("chs:"))
+async def cb_chapters_page(query: CallbackQuery) -> None:
+    await _refresh_chapters(query, int(query.data[len("chs:"):]))
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith("ch:"))
+async def cb_chapter(query: CallbackQuery) -> None:
+    n = int(query.data[len("ch:"):])
+    _, err = await _ipc(lambda c: c.set_chapter(n))
+    await query.answer(err.replace("❌ ", "") if err else f"📖 #{n + 1}")
+    if not err:
+        await _refresh_chapters(query, n // PER_PAGE)
 
 
 @router.message(Command("mpv_random", "mpv_surprise"))
@@ -1124,6 +1180,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s · <b>/mpv_goto</b> &lt;pos&gt;\n"
         "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> [n] episode picker/jump\n"
+        "<b>/mpv_chapters</b> — chapter picker for the current file\n"
         "<b>/mpv_speed</b> [x] — playback speed (buttons or value)\n"
         "<b>/mpv_sleep</b> &lt;time&gt; — stop playback after e.g. 45m / 1.5h\n"
         "<b>/mpv_random</b> [category] — play a random playlist\n"

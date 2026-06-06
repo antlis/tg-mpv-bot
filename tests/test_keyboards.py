@@ -214,6 +214,22 @@ def test_history_keyboard():
     assert buttons[1].text == "📁 The Big Lebowski"
 
 
+def test_chapters_keyboard():
+    from src.keyboards import chapters_keyboard
+    chapters = [
+        {"title": "Intro", "time": 0},
+        {"title": "The Heist", "time": 754},
+        {"time": 3725},  # no title → numbered fallback
+    ]
+    kb = chapters_keyboard(chapters, current=1, page=0)
+    buttons = [b for row in kb.inline_keyboard for b in row]
+    by_data = {b.callback_data: b.text for b in buttons}
+    assert by_data["ch:0"] == "0:00  Intro"
+    assert by_data["ch:2"] == "1:02:05  Chapter 3"
+    # current chapter is marked and inert
+    assert any(b.text == "▶ 12:34  The Heist" and b.callback_data == "noop" for b in buttons)
+
+
 def test_yt_results_keyboard():
     from src.keyboards import yt_results_keyboard
     kb = yt_results_keyboard([
