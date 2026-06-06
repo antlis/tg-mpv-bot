@@ -82,6 +82,9 @@ def test_categories_keyboard_uses_indices():
     datas = [b.callback_data for row in kb.inline_keyboard for b in row]
     # one button per category, callback c:<ci>
     assert set(datas) == {"c:0", "c:1"}
+    texts = [b.text for row in kb.inline_keyboard for b in row]
+    assert any("cartoons (3)" in t for t in texts)
+    assert any("tutorials (2)" in t for t in texts)
 
 
 def test_categories_keyboard_continue_row():
@@ -92,9 +95,6 @@ def test_categories_keyboard_continue_row():
     assert first.callback_data == "h:0"  # replays newest history entry
     # without a label there is no extra row
     assert categories_keyboard(pls).inline_keyboard[0][0].callback_data == "c:0"
-    texts = [b.text for row in kb.inline_keyboard for b in row]
-    assert any("cartoons (3)" in t for t in texts)
-    assert any("tutorials (2)" in t for t in texts)
 
 
 def test_flat_category_keyboard_play_and_back():
