@@ -58,7 +58,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_notify` | Toggle notifications: "⏭ Now playing: 5/12 — …" on episode change, "✅ Finished" at the end |
 | `/mpv_url <link>` | Stream a URL via yt-dlp — or just **send a link** as a message |
 | `/mpv_yt <search>` | Search YouTube from chat — top results as tap-to-play buttons |
-| `/mpv_radio` | Internet radio — curated free stations (SomaFM, Radio Record, FIP, KEXP, …) as tune-in buttons; bring your own via `RADIO_STATIONS` |
+| `/mpv_radio [search]` | Internet radio — presets (full SomaFM catalog, Radio Record, FIP, KEXP, …; yours via `RADIO_STATIONS`) or search ~50k stations on [radio-browser.info](https://www.radio-browser.info) |
 | *(send a video/audio file)* | Downloads and plays it — >20 MB needs `API_SERVER_URL` (local Bot API server) |
 | `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_shot` | Send a screenshot of the current frame to the chat |

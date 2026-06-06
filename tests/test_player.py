@@ -85,6 +85,20 @@ def test_file_command_shape():
     assert "--input-ipc-server=/tmp/sock" in cmd
 
 
+def test_parse_radio_results():
+    from src.player import _parse_radio_results
+    raw = [
+        {"name": "A", "url_resolved": "https://a/x", "codec": "MP3", "bitrate": 192, "countrycode": "DE"},
+        {"name": "no-url", "url_resolved": "", "url": ""},  # dropped
+        {"name": "B", "url": "http://b/y", "codec": "AAC+", "bitrate": 48, "countrycode": "RU"},
+        {"name": "C", "url": "http://c/z"},
+    ]
+    out = _parse_radio_results(raw, n=2)
+    assert [s["name"] for s in out] == ["A", "B"]  # capped at n, no-url dropped
+    assert out[0]["url"] == "https://a/x"
+    assert out[1]["country"] == "RU"
+
+
 def test_radio_command_shape():
     from src.player import build_radio_command
     s = _settings(mpv_runner="", media_proxy="http://127.0.0.1:2080")

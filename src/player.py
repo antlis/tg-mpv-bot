@@ -456,6 +456,61 @@ def fetch_subtitles(settings: Settings, info: dict, info_path: Path) -> list[Pat
     return sorted(tmp.glob(f"{_SUB_PREFIX}*"))[:3]  # a few tracks is plenty
 
 
+# Community radio database (radio-browser.info) — free, no auth, mirrored.
+_RADIO_BROWSER_MIRRORS = (
+    "https://de1.api.radio-browser.info",
+    "https://fi1.api.radio-browser.info",
+    "https://nl1.api.radio-browser.info",
+)
+
+
+def _parse_radio_results(raw: list[dict], n: int) -> list[dict]:
+    """Normalize radio-browser station entries; drop ones without a URL."""
+    out = []
+    for s in raw:
+        url = s.get("url_resolved") or s.get("url")
+        if not url:
+            continue
+        out.append({
+            "name": s.get("name") or url,
+            "url": url,
+            "codec": s.get("codec") or "",
+            "bitrate": s.get("bitrate") or 0,
+            "country": s.get("countrycode") or "",
+        })
+        if len(out) >= n:
+            break
+    return out
+
+
+def search_radio(settings: Settings, query: str, n: int = 8) -> list[dict]:
+    """Search ~50k stations on radio-browser.info, best-voted first.
+
+    Raises :class:`UrlPlaybackError` with a user-facing reason when all
+    mirrors fail.
+    """
+    from urllib.error import URLError
+    from urllib.parse import quote
+    from urllib.request import Request, urlopen
+
+    last_error: Exception | None = None
+    for mirror in _RADIO_BROWSER_MIRRORS:
+        api = (
+            f"{mirror}/json/stations/byname/{quote(query)}"
+            f"?limit={n * 2}&order=votes&reverse=true&hidebroken=true"
+        )
+        try:
+            req = Request(api, headers={"User-Agent": "tg-mpv-bot/1.2"})
+            with urlopen(req, timeout=10) as resp:
+                results = _parse_radio_results(json.loads(resp.read()), n)
+            if results:
+                return results
+            last_error = UrlPlaybackError(f"no stations matching '{query}'")
+        except (URLError, OSError, ValueError) as exc:
+            last_error = exc
+    raise UrlPlaybackError(str(last_error or "radio search failed"))
+
+
 def build_radio_command(settings: Settings, url: str, name: str) -> list[str]:
     """argv for an internet-radio stream — straight to mpv, no probe.
 

@@ -257,6 +257,18 @@ def test_radio_keyboard_paginates_with_global_indices():
     assert "rds:0" in datas and "rds:2" in datas  # nav both ways
 
 
+def test_radio_search_keyboard():
+    from src.keyboards import radio_search_keyboard
+    kb = radio_search_keyboard([
+        {"name": "Technolovers GABBER", "url": "https://x", "codec": "MP3", "bitrate": 192, "country": "DE"},
+        {"name": "Minimal", "url": "https://y", "codec": "", "bitrate": 0, "country": ""},
+    ])
+    buttons = [b for row in kb.inline_keyboard for b in row]
+    assert [b.callback_data for b in buttons] == ["rdq:0", "rdq:1"]
+    assert buttons[0].text == "📻 Technolovers GABBER · 192k MP3 · DE"
+    assert buttons[1].text == "📻 Minimal"  # no meta → no trailing separator
+
+
 def test_default_station_catalog_sane():
     from src.config import DEFAULT_RADIO_STATIONS
     urls = [u for _, u in DEFAULT_RADIO_STATIONS]
