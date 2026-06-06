@@ -986,6 +986,36 @@ def _local_api_path(file_path: str) -> Path | None:
     return None
 
 
+# Media dirs the local Bot API server creates per token; its bookkeeping
+# (binlogs etc.) lives outside these and is never touched.
+_MEDIA_SUBDIRS = {"videos", "documents", "music", "animations", "video_notes", "voice"}
+
+
+def _prune_api_files(current: Path) -> None:
+    """Delete previously fetched Telegram media, keeping ``current``.
+
+    With a TELEGRAM_LOCAL server, files land on disk and nothing ever
+    removes them — every forwarded movie would stay forever. The server
+    re-downloads on demand, so old media is a pure disk leak. Failures are
+    logged, never fatal (e.g. ACLs missing on someone else's setup).
+    """
+    if current.parent.name not in _MEDIA_SUBDIRS:
+        return  # not a server media path — nothing to manage
+    removed = 0
+    for sub in current.parent.parent.iterdir():
+        if not sub.is_dir() or sub.name not in _MEDIA_SUBDIRS:
+            continue
+        for f in sub.iterdir():
+            if f.is_file() and f != current:
+                try:
+                    f.unlink()
+                    removed += 1
+                except OSError as exc:
+                    logger.warning("Could not prune %s: %s", f, exc)
+    if removed:
+        logger.info("Pruned %d old Telegram media file(s)", removed)
+
+
 async def _fetch_media(message: Message, media: Any, dest: Path) -> Path:
     """Make the file playable locally; returns the path mpv should open.
 
@@ -1043,6 +1073,7 @@ async def msg_media_file(message: Message) -> None:
     title = Path(name).stem
     await asyncio.to_thread(player.play_file, get_settings(), path, title)
     await note.edit_text(f"▶ Playing: {title}")
+    await asyncio.to_thread(_prune_api_files, path)  # old media = disk leak
 
 
 # Anchored and whitespace-free: only a message that *is* a URL triggers

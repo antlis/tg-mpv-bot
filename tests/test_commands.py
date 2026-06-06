@@ -80,6 +80,36 @@ def test_parse_sleep(raw, minutes):
     assert _parse_sleep(raw) == minutes
 
 
+def test_prune_api_files(tmp_path):
+    from src.commands import _prune_api_files
+    token = tmp_path / "123:AA"
+    for sub in ("videos", "music"):
+        (token / sub).mkdir(parents=True)
+    (token / "td.binlog").write_text("bookkeeping")  # must survive
+    old_video = token / "videos" / "old.mp4"
+    old_song = token / "music" / "old.mp3"
+    current = token / "videos" / "now-playing.mp4"
+    for f in (old_video, old_song, current):
+        f.write_text("x")
+
+    _prune_api_files(current)
+    assert current.exists()                  # the playing file survives
+    assert not old_video.exists()            # same-dir sibling pruned
+    assert not old_song.exists()             # other media dirs pruned too
+    assert (token / "td.binlog").exists()    # server bookkeeping untouched
+
+
+def test_prune_api_files_ignores_non_media_paths(tmp_path):
+    from src.commands import _prune_api_files
+    f = tmp_path / "tg-mpv-files" / "movie.mp4"
+    f.parent.mkdir()
+    f.write_text("x")
+    sibling = tmp_path / "tg-mpv-files" / "other.mp4"
+    sibling.write_text("x")
+    _prune_api_files(f)  # /tmp copy path — not the server layout
+    assert sibling.exists()
+
+
 def test_local_api_path_mapping(monkeypatch):
     monkeypatch.setenv("BOT_TOKEN", "x")
     monkeypatch.setenv("API_LOCAL_FILES_DIR", "/srv/botapi")
