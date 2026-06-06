@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tg-mpv-bot — Telegram remote control for mpv</title>
+<meta name="description" content="Turn any Linux box plugged into a TV into a Telegram-controlled media center. Browse your library, stream any link, forward video files — no cloud, no ports, no smart-TV apps.">
+<meta property="og:title" content="tg-mpv-bot — your TV's remote is now Telegram">
+<meta property="og:description" content="Browse your media library, stream YouTube/SoundCloud links, play forwarded Telegram files — all from your phone. Self-hosted, no AI, no cloud.">
+<meta property="og:url" content="https://antlis.github.io/tg-mpv-bot/">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+<style>
+  :root {
+    --bg: #0e1621; --panel: #182533; --panel2: #1f2e3d; --line: #2c3e50;
+    --text: #f1f5f9; --dim: #9fb3c8; --accent: #2aabee; --code: #0b1118;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, 'Segoe UI', Roboto, Ubuntu, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header { text-align: center; padding: 72px 0 40px; }
+  header h1 { font-size: 3rem; letter-spacing: -1px; }
+  header .tag { color: var(--dim); font-size: 1.3rem; margin: 12px 0 28px; }
+  .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 10px 22px; border-radius: 10px;
+    background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+    font-weight: 600;
+  }
+  .btn:hover { border-color: var(--accent); text-decoration: none; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #04121f; }
+
+  .diagram {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    flex-wrap: wrap; margin: 44px 0 0; color: var(--dim); font-size: 1.05rem;
+  }
+  .node {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 20px; text-align: center; color: var(--text);
+  }
+  .node small { display: block; color: var(--dim); }
+  .arrow { color: var(--accent); font-size: 1.4rem; }
+
+  section { padding: 48px 0 8px; }
+  h2 { font-size: 1.7rem; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .card b { display: block; margin-bottom: 6px; font-size: 1.05rem; }
+  .card span { color: var(--dim); font-size: .95rem; }
+
+  .shot { margin-top: 24px; }
+  .shot img { width: 100%; border-radius: 14px; border: 1px solid var(--line); }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 0; flex-wrap: wrap; }
+  .tabs button {
+    background: var(--panel); color: var(--dim); border: 1px solid var(--line);
+    border-bottom: none; border-radius: 10px 10px 0 0; padding: 10px 20px;
+    font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .tabs button.on { background: var(--code); color: var(--text); }
+  pre {
+    background: var(--code); border: 1px solid var(--line); border-radius: 0 10px 10px 10px;
+    padding: 18px 20px; overflow-x: auto; font-size: .92rem; line-height: 1.55;
+  }
+  code { font-family: ui-monospace, 'JetBrains Mono', Consolas, monospace; }
+  pre .c { color: #5c7186; }
+  .tabpane { display: none; }
+  .tabpane.on { display: block; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; }
+  td { padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  td:first-child { font-family: ui-monospace, Consolas, monospace; color: var(--accent); white-space: nowrap; }
+  td:last-child { color: var(--dim); }
+  tr:last-child td { border-bottom: none; }
+  .more { margin-top: 12px; color: var(--dim); }
+
+  footer {
+    margin-top: 64px; padding: 28px 0 40px; border-top: 1px solid var(--line);
+    text-align: center; color: var(--dim);
+  }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <h1>🎬 tg-mpv-bot</h1>
+  <p class="tag">Your TV's remote is now Telegram.</p>
+  <div class="btns">
+    <a class="btn primary" href="#install">Install</a>
+    <a class="btn" href="https://github.com/antlis/tg-mpv-bot">GitHub</a>
+    <a class="btn" href="https://aur.archlinux.org/packages/tg-mpv-bot-git">AUR</a>
+  </div>
+  <div class="diagram">
+    <div class="node">📱<small>phone / laptop<br>with Telegram</small></div>
+    <div class="arrow">→</div>
+    <div class="node">🖥️<small>home server<br>tg-mpv-bot + mpv</small></div>
+    <div class="arrow">→ HDMI →</div>
+    <div class="node">📺<small>your TV</small></div>
+  </div>
+</header>
+
+<section class="wrap">
+  <p style="font-size:1.1rem; max-width:760px;">
+    A self-hosted Telegram bot that turns any always-on Linux box plugged into a
+    TV into a media center you control from the couch — or the other side of the
+    world. <b>No cloud, no AI, no port forwarding, no smart-TV apps</b>: the bot
+    talks to mpv's IPC socket directly and only ever makes outbound connections.
+  </p>
+</section>
+
+<section class="wrap">
+  <h2>What it does</h2>
+  <div class="grid">
+    <div class="card">📋 <b>Browse your library</b><span>Categories → playlists as inline buttons, full-text search, episode picker, chapters.</span></div>
+    <div class="card">🔗 <b>Stream any link</b><span>Send a YouTube / SoundCloud / any yt-dlp URL — it plays on the TV, subtitles included.</span></div>
+    <div class="card">🔎 <b>Search YouTube from chat</b><span>/mpv_yt lofi beats — top results with thumbnails, tap to play.</span></div>
+    <div class="card">📨 <b>Forward video files</b><span>Any Telegram video plays on the TV — up to 2 GB with a local Bot API server.</span></div>
+    <div class="card">🎛 <b>Full transport control</b><span>One now-playing panel: pause, seek, %-jump, volume, speed, audio &amp; subtitle tracks.</span></div>
+    <div class="card">▶ <b>Continue watching</b><span>History with one-tap replay; playlists and streams resume where you left off.</span></div>
+    <div class="card">🔔 <b>Knows when you're done</b><span>"⏭ Now playing: 6/12" on episode change, "✅ Finished" at the end. Sleep timer included.</span></div>
+    <div class="card">🩺 <b>Runs itself</b><span>Auto-updating yt-dlp, playlist doctor/repair, disk GC, one-screen health check.</span></div>
+  </div>
+  <div class="shot"><img src="demo.svg" alt="Telegram chat with tg-mpv-bot: category buttons, URL streaming and the now-playing panel"></div>
+</section>
+
+<section class="wrap" id="install">
+  <h2>Install</h2>
+  <div class="tabs">
+    <button class="on" data-t="src">Any distro</button>
+    <button data-t="aur">Arch (AUR)</button>
+    <button data-t="docker">Docker</button>
+  </div>
+  <div class="tabpane on" id="src">
+<pre><code><span class="c"># needs mpv + uv; token from @BotFather</span>
+git clone https://github.com/antlis/tg-mpv-bot &amp;&amp; cd tg-mpv-bot
+uv sync
+cp .env.example .env        <span class="c"># set BOT_TOKEN and ALLOWED_USERS</span>
+set -a; source .env; set +a
+uv run bot.py</code></pre>
+  </div>
+  <div class="tabpane" id="aur">
+<pre><code>yay -S tg-mpv-bot-git
+install -m600 /usr/share/doc/tg-mpv-bot/env.example ~/.config/tg-mpv-bot.env
+$EDITOR ~/.config/tg-mpv-bot.env   <span class="c"># BOT_TOKEN + ALLOWED_USERS</span>
+systemctl --user enable --now tg-mpv-bot</code></pre>
+  </div>
+  <div class="tabpane" id="docker">
+<pre><code>docker pull ghcr.io/antlis/tg-mpv-bot:latest
+<span class="c"># host networking + X11 bind mounts — see docker-compose.yml in the repo</span></code></pre>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>A taste of the commands</h2>
+  <table>
+    <tr><td>/mpv_list</td><td>browse the library with buttons — opens with "▶ Continue: last watched"</td></tr>
+    <tr><td><i>(send a link)</i></td><td>any YouTube/SoundCloud/yt-dlp URL just plays</td></tr>
+    <tr><td>/mpv_yt queen live aid</td><td>search YouTube, tap a result</td></tr>
+    <tr><td>/mpv_info</td><td>now-playing panel: transport, seek, volume, tracks</td></tr>
+    <tr><td>/mpv_sleep 45m</td><td>fall asleep; the bot stops playback</td></tr>
+    <tr><td>/mpv_night</td><td>loudness normalization — explosions down, dialogue up</td></tr>
+  </table>
+  <p class="more">…and ~35 more in the <a href="https://github.com/antlis/tg-mpv-bot#commands">full command table</a>.</p>
+</section>
+
+<footer>
+  <div class="wrap">
+    MIT licensed · built by <a href="https://github.com/antlis">antlis</a> ·
+    <a href="https://github.com/antlis/tg-mpv-bot">source</a> ·
+    <a href="https://github.com/antlis/tg-mpv-bot/releases">releases</a>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.tabpane').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById(b.dataset.t).classList.add('on');
+  }));
+</script>
+</body>
+</html>
