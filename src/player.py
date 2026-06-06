@@ -154,16 +154,32 @@ def ytdlp_version() -> str | None:
         return None
 
 
+def _installer_command() -> list[str] | None:
+    """How to install into the bot's venv: ``uv pip`` (uv venvs ship no pip)
+    or the venv's own pip as a fallback."""
+    uv = _which("uv") or (
+        str(p) if (p := Path.home() / ".local/bin/uv").exists() else None
+    )
+    if uv:
+        return [uv, "pip", "install", "--python", sys.executable]
+    pip = Path(sys.executable).parent / "pip"
+    if pip.exists():
+        return [str(pip), "install"]
+    return None
+
+
 def update_ytdlp(timeout: float = 300) -> str:
     """Update the venv's yt-dlp to the latest nightly; returns a status line.
 
     Behind ``/mpv_update_ytdlp`` so the fix for the next YouTube breakage is
     one Telegram tap instead of a shell session. Installs into the bot's own
     venv (which :func:`_ytdlp_bin` prefers) — never touches the system one.
+    Note: a later ``uv sync``/``uv run`` reverts to the locked stable
+    release; just run this again after.
     """
-    pip = Path(sys.executable).parent / "pip"
-    if not pip.exists():
-        return "❌ No venv pip found — the bot isn't running from a venv"
+    installer = _installer_command()
+    if installer is None:
+        return "❌ Neither uv nor a venv pip found — can't install"
 
     def version() -> str:
         return ytdlp_version() or "none"
@@ -171,7 +187,7 @@ def update_ytdlp(timeout: float = 300) -> str:
     old = version()
     try:
         result = subprocess.run(
-            [str(pip), "install", "--quiet", "--upgrade", NIGHTLY_URL],
+            [*installer, "--quiet", "--upgrade", NIGHTLY_URL],
             capture_output=True, text=True, timeout=timeout,
         )
     except subprocess.TimeoutExpired:

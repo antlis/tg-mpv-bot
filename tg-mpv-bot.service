@@ -6,9 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 # %h = the user's home directory (systemd specifier) — adjust the repo path if
-# you cloned elsewhere.
+# you cloned elsewhere. The .venv comes from `uv sync`.
 WorkingDirectory=%h/Projects/tg-mpv-bot
-ExecStart=%h/Projects/tg-mpv-bot/venv/bin/python3 bot.py
+ExecStart=%h/Projects/tg-mpv-bot/.venv/bin/python3 bot.py
 Restart=on-failure
 RestartSec=5
 # BOT_TOKEN / ALLOWED_USERS live here, outside the repo:
@@ -30,8 +30,9 @@ Environment=YTDL_OPTIONS=force-ipv4,extractor-args=youtube:player_client=android
 # Refresh the yt-dlp nightly weekly, before YouTube breakage bites.
 Environment=YTDL_UPDATE_DAYS=7
 Environment=YTDL_SUB_LANGS=en.*,ru.*
-# The user manager's inherited PATH can be minimal; ensure the std bin dirs are present.
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# The user manager's inherited PATH can be minimal; ensure the std bin dirs
+# are present, plus ~/.local/bin so /mpv_update_ytdlp finds uv.
+Environment=PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=default.target

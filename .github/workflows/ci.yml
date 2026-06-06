@@ -13,12 +13,12 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
-      - run: pip install -r requirements-dev.txt
+          enable-cache: true
+      - run: uv sync --locked
       # Real mpv for the integration tests in tests/test_real_mpv.py
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mpv
-      - run: ruff check .
-      - run: pytest
+      - run: uv run ruff check .
+      - run: uv run pytest

@@ -12,15 +12,17 @@ bot to run independently.
 ## Run / develop
 
 ```bash
-# Bare (uses ./venv per the systemd unit, or any venv)
-pip install -r requirements.txt
-python bot.py                              # standard Telegram API
-API_SERVER_URL=http://localhost:8081 python bot.py   # local Bot API server (2GB uploads)
+# uv manages everything (pyproject.toml + uv.lock → ./.venv, which the
+# systemd unit runs directly). NOTE: uv sync/uv run revert yt-dlp to the
+# locked stable — re-bump via /mpv_update_ytdlp (the bot prefers the venv
+# copy; nightly needed because YouTube outpaces stable releases).
+uv sync
+uv run bot.py                              # standard Telegram API
+API_SERVER_URL=http://localhost:8082 uv run bot.py   # local Bot API server (2GB files)
 
 # Tests + lint
-pip install -r requirements-dev.txt
-pytest                                     # config (pytest.ini): testpaths=tests, asyncio_mode=auto
-ruff check .                               # config in ruff.toml
+uv run pytest                              # config (pytest.ini): testpaths=tests, asyncio_mode=auto
+uv run ruff check .                        # config in ruff.toml
 
 # Docker (host networking + X11 bind mounts)
 docker compose up -d --build

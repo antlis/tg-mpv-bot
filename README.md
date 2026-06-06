@@ -94,11 +94,8 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 
 - Linux box with a graphical session (X11 or Wayland) whose display is the TV
 - `mpv`
-- Python 3.11+
-- `yt-dlp` — only needed for URL streaming / YouTube search / Telegram files.
-  Install it **into the bot's venv** (the bot prefers that copy, and
-  `/mpv_update_ytdlp` updates it): YouTube breaks extraction every few months
-  and distro packages lag, so use the nightly.
+- [`uv`](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+  — manages Python and all dependencies, including `yt-dlp`
 
 ### 2. Create the bot
 
@@ -109,14 +106,17 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 
 ```bash
 git clone https://github.com/antlis/tg-mpv-bot && cd tg-mpv-bot
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-pip install -U "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.tar.gz"
+uv sync                     # creates .venv with everything pinned by uv.lock
 
 cp .env.example .env        # set BOT_TOKEN and ALLOWED_USERS at minimum
 set -a; source .env; set +a
-python bot.py
+uv run bot.py
 ```
+
+> **yt-dlp freshness:** `uv sync` installs the locked stable yt-dlp. YouTube
+> breaks extraction faster than stable releases, so once the bot is running,
+> send it `/mpv_update_ytdlp` (or set `YTDL_UPDATE_DAYS=7`) to bump the venv
+> copy to the nightly — repeat after any future `uv sync`.
 
 Message your bot `/help` — if it answers, the Telegram side works. Then
 `/mpv_list` to browse, or send any YouTube link.
@@ -171,8 +171,8 @@ systemctl --user enable --now tg-mpv-bot
 journalctl --user-unit tg-mpv-bot -f     # logs
 ```
 
-The unit assumes the repo at `~/Projects/tg-mpv-bot` with a `venv/` inside —
-edit `WorkingDirectory`/`ExecStart` if yours lives elsewhere. Tweak the
+The unit assumes the repo at `~/Projects/tg-mpv-bot` with uv's `.venv/`
+inside — edit `WorkingDirectory`/`ExecStart` if yours lives elsewhere. Tweak the
 `Environment=` lines (hooks, yt-dlp options) in the unit itself.
 
 **Docker:**
@@ -221,9 +221,8 @@ required.
 ## Tests & lint
 
 ```bash
-pip install -r requirements-dev.txt
-pytest
-ruff check .
+uv run pytest
+uv run ruff check .
 ```
 
 ## Files
