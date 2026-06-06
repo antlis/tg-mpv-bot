@@ -85,6 +85,45 @@ def test_file_command_shape():
     assert "--input-ipc-server=/tmp/sock" in cmd
 
 
+def test_needs_pipe_only_for_youtube():
+    from src.player import needs_pipe
+    # googlevideo URLs are IP-locked → pipe required
+    assert needs_pipe({"extractor": "youtube", "url": "https://rr1.googlevideo.com/x"})
+    assert needs_pipe({"requested_formats": [{"url": "https://rr3---sn.googlevideo.com/v"}]})
+    # generic hosts play better from the direct URL (range requests → moov-at-end
+    # progressive MP4s actually start; the pipe deadlocked on an 858 MB one)
+    assert not needs_pipe({"extractor": "SomeSite", "url": "https://cdn.videohost.example/v.mp4"})
+    assert not needs_pipe({"extractor": "soundcloud", "url": "https://cf-media.sndcdn.com/x"})
+
+
+def test_direct_command_single_and_headers():
+    from src.player import build_direct_command
+    s = _settings(mpv_runner="")
+    info = {
+        "url": "https://cdn.example/v.mp4",
+        "http_headers": {"User-Agent": "UA/1", "Referer": "https://site.example/"},
+    }
+    cmd = build_direct_command(s, info, "My Title", start=120.7)
+    assert cmd[1] == "https://cdn.example/v.mp4"
+    assert "--force-media-title=My Title" in cmd
+    assert "--user-agent=UA/1" in cmd
+    assert "--referrer=https://site.example/" in cmd
+    assert "--start=120" in cmd
+    assert "--save-position-on-quit" not in cmd  # resolved URLs expire
+
+
+def test_direct_command_split_av():
+    from src.player import build_direct_command
+    s = _settings(mpv_runner="")
+    info = {"requested_formats": [
+        {"url": "https://v.example/v", "http_headers": {}},
+        {"url": "https://a.example/a"},
+    ]}
+    cmd = build_direct_command(s, info, "T")
+    assert cmd[1] == "https://v.example/v"
+    assert "--audio-file=https://a.example/a" in cmd
+
+
 def test_pipe_player_single_stream_stdin():
     s = _settings(mpv_runner="")
     cmd = build_pipe_player_command(s, "My Title")
