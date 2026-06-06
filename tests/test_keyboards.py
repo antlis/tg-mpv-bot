@@ -262,7 +262,7 @@ def test_default_station_catalog_sane():
     urls = [u for _, u in DEFAULT_RADIO_STATIONS]
     assert len(urls) == len(set(urls)), "duplicate stream URLs"
     assert sum(1 for u in urls if "somafm.com" in u) >= 40  # the full catalog
-    assert all(u.startswith("https://") for u in urls)
+    assert all(u.startswith(("https://", "http://")) for u in urls)
 
 
 def test_listing_keyboard():

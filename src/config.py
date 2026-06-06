@@ -17,6 +17,8 @@ DEFAULT_RADIO_STATIONS: list[tuple[str, str]] = [
     ("Record Techno", "https://radiorecord.hostingradio.ru/techno96.aacp"),
     ("Record Trancemission", "https://radiorecord.hostingradio.ru/tm96.aacp"),
     ("Record Deep", "https://radiorecord.hostingradio.ru/deep96.aacp"),
+    # Shoutcast, plain http (no TLS mount), 256k MP3
+    ("Hardcore Radio NL — hardcore/gabber", "http://stream.hardcoreradio.nl:8000/;"),
     ("Radio Paradise — eclectic rock", "https://stream.radioparadise.com/mp3-192"),
     ("FIP — eclectic, Radio France", "https://icecast.radiofrance.fr/fip-midfi.mp3"),
     ("Nightride FM — synthwave", "https://stream.nightride.fm/nightride.mp3"),
