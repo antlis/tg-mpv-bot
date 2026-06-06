@@ -4,10 +4,12 @@
 [![AUR](https://img.shields.io/aur/version/tg-mpv-bot-git)](https://aur.archlinux.org/packages/tg-mpv-bot-git)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Turn Telegram into a remote control for **mpv** on your desktop/HTPC: browse
-your media library with inline buttons, stream any YouTube/SoundCloud/… link
-by just sending it, seek/pause/volume from your phone. No AI, no cloud — the
-bot talks to mpv's JSON IPC socket directly from Python.
+Turn Telegram into a remote control for **[mpv](https://mpv.io)** (the
+free, scriptable media player that plays basically everything) on your
+desktop/HTPC: browse your media library with inline buttons, stream any
+YouTube/SoundCloud/… link by just sending it, seek/pause/volume from your
+phone. No AI, no cloud — the bot talks to mpv's [JSON IPC
+socket](https://mpv.io/manual/stable/#json-ipc) directly from Python.
 
 - 📋 **Browse** playlists by category with inline keyboards, or search
 - 🔗 **Stream URLs** — send a link, mpv plays it via yt-dlp (1000+ sites)
@@ -94,7 +96,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 ### 1. Prerequisites
 
 - Linux box with a graphical session (X11 or Wayland) whose display is the TV
-- `mpv`
+- [`mpv`](https://mpv.io) — in your distro's repos (`pacman -S mpv`, `apt install mpv`, …)
 - For the **source** install: [`uv`](https://docs.astral.sh/uv/)
   (`curl -LsSf https://astral.sh/uv/install.sh | sh`) — manages Python and
   all dependencies, including `yt-dlp`
