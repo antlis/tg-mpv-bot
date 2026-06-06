@@ -423,6 +423,59 @@ def fetch_subtitles(settings: Settings, info: dict, info_path: Path) -> list[Pat
     return sorted(tmp.glob(f"{_SUB_PREFIX}*"))[:3]  # a few tracks is plenty
 
 
+def needs_pipe(info: dict) -> bool:
+    """Must yt-dlp do the fetching itself (pipe), or can mpv take the URL?
+
+    googlevideo URLs are IP-locked and client-bound — an external player's
+    fetch gets refused/tarpitted, so YouTube goes through the pipe. Everything
+    else plays better from the direct URL: mpv can issue range requests,
+    which full seeking needs — and which *progressive MP4s with a trailing
+    moov atom require to start at all* (858 MB through a pipe and mpv still
+    can't begin; that exact failure prompted this split).
+    """
+    if "youtube" in str(info.get("extractor") or "").lower():
+        return True
+    formats = info.get("requested_formats") or [info]
+    return any("googlevideo" in str(f.get("url") or "") for f in formats)
+
+
+def build_direct_command(
+    settings: Settings,
+    info: dict,
+    title: str,
+    sub_files: list[Path] | None = None,
+    start: float | None = None,
+) -> list[str]:
+    """argv for mpv playing pre-resolved stream URL(s) directly.
+
+    yt-dlp's ``http_headers`` ride along (CDNs often check User-Agent /
+    Referer). No ``--save-position-on-quit`` — resolved URLs expire, so the
+    resume point would be keyed to a dead URL; the listener's checkpoints
+    plus ``--start`` handle resume instead.
+    """
+    formats = info.get("requested_formats") or [info]
+    urls = [f["url"] for f in formats if f.get("url")]
+    headers = formats[0].get("http_headers") or {}
+    cmd = [
+        _mpv_base(settings),
+        urls[0],
+        f"--input-ipc-server={settings.mpv_socket}",
+        "--force-window",
+        f"--force-media-title={title}",
+    ]
+    if len(urls) > 1:
+        cmd.append(f"--audio-file={urls[1]}")
+    if headers.get("User-Agent"):
+        cmd.append(f"--user-agent={headers['User-Agent']}")
+    if headers.get("Referer"):
+        cmd.append(f"--referrer={headers['Referer']}")
+    for sub in sub_files or []:
+        cmd.append(f"--sub-file={sub}")
+    if start and start > 0:
+        cmd.append(f"--start={int(start)}")
+    return cmd
+
+
 def build_pipe_player_command(
     settings: Settings,
     title: str,
@@ -597,7 +650,13 @@ def play_url(
     ytdl_log = _log_file("tg-mpv-bot-ytdl.log")
     mpv_log = _log_file("tg-mpv-bot-mpv.log")
     common = dict(env=env, stdin=subprocess.DEVNULL, start_new_session=True)
-    if len(formats) >= 2:
+    if not needs_pipe(info):
+        # Direct URL: mpv fetches with range requests — full seeking, and
+        # the only way moov-at-end progressive MP4s start at all.
+        mpv_cmd = build_direct_command(settings, info, title, sub_files, start)
+        logger.info("Launching direct: %s", " ".join(mpv_cmd))
+        subprocess.Popen(mpv_cmd, stdout=mpv_log, stderr=mpv_log, **common)
+    elif len(formats) >= 2:
         video_r, video_w = os.pipe()
         audio_r, audio_w = os.pipe()
         for fmt, write_end in ((formats[0], video_w), (formats[1], audio_w)):
