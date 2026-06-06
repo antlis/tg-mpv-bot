@@ -839,10 +839,16 @@ async def _replay(message: Message, target: str) -> None:
 
     The distinction matters: playlists go to mpv as ``--playlist=…``, but a
     media file (e.g. a downloaded Telegram video) handed to that flag makes
-    mpv parse the video bytes as a playlist and play nothing.
+    mpv parse the video bytes as a playlist and play nothing. URLs resume
+    from the listener's last position checkpoint.
     """
     if target.startswith(("http://", "https://")):
-        await _play_url(message, target)
+        entry = next(
+            (e for e in state.history(get_settings().state_file) if e.target == target),
+            None,
+        )
+        start = float(entry.pos) if entry and entry.pos > 30 else None
+        await _play_url(message, target, start=start)
         return
     _remember_chat(message)
     path = Path(target)
@@ -1053,7 +1059,7 @@ _STAGE_TEXT = {
 _SPINNER = "◔◑◕●"
 
 
-async def _play_url(message: Message, url: str) -> None:
+async def _play_url(message: Message, url: str, start: float | None = None) -> None:
     _remember_chat(message)
     note = await message.reply(_STAGE_TEXT["resolving"])
     stage = {"name": "resolving"}  # written by the worker thread, read here
@@ -1063,6 +1069,7 @@ async def _play_url(message: Message, url: str) -> None:
         asyncio.to_thread(
             player.play_url, get_settings(), url,
             lambda name: stage.__setitem__("name", name),
+            start,
         )
     )
     # Live status while the probe runs: stage + spinner + elapsed seconds
@@ -1083,6 +1090,8 @@ async def _play_url(message: Message, url: str) -> None:
             pass  # unchanged text / message gone — keep waiting either way
     try:
         text = f"▶ Streaming: {task.result()}"
+        if start:
+            text += f" (resuming at {_fmt_time(start)})"
     except player.UrlPlaybackError as exc:
         text = f"❌ Can't play that link: {exc}"
     try:

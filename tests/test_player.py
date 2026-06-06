@@ -114,6 +114,13 @@ def test_fetch_subtitles_skips_when_none_advertised(tmp_path):
     assert fetch_subtitles(s_off, {"subtitles": {"en": []}}, tmp_path / "i.json") == []
 
 
+def test_pipe_player_start_offset():
+    s = _settings(mpv_runner="")
+    assert "--start=754" in build_pipe_player_command(s, "T", start=754.9)
+    assert not any(a.startswith("--start") for a in build_pipe_player_command(s, "T"))
+    assert not any(a.startswith("--start") for a in build_pipe_player_command(s, "T", start=0))
+
+
 def test_pipe_player_sub_files():
     s = _settings(mpv_runner="")
     cmd = build_pipe_player_command(

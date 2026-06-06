@@ -50,7 +50,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_play <query>` | Search & play by name or number |
 | `/mpv <query>` | Alias for `/mpv_play` |
 | `/mpv_search [category] <text>` | List all matching playlists as play buttons (e.g. `/mpv_search tutorials docker`) |
-| `/mpv_last` | Resume the last-played playlist or stream (position restored by mpv) |
+| `/mpv_last` | Resume the last-played playlist or stream — playlist positions via mpv, stream positions via the bot's own 15s checkpoints |
 | `/mpv_history` | Last 20 played (playlists & streams) — tap to replay |
 | `/mpv_notify` | Toggle notifications: "⏭ Now playing: 5/12 — …" on episode change, "✅ Finished" at the end |
 | `/mpv_url <link>` | Stream a URL via yt-dlp — or just **send a link** as a message |

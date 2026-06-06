@@ -28,6 +28,7 @@ from .mpv_ipc import MpvClient
 logger = logging.getLogger(__name__)
 
 RECONNECT_DELAY = 3.0  # mpv is down most of the time; connect attempts are cheap
+CHECKPOINT_EVERY = 15.0  # seconds between position checkpoints (stream resume)
 
 
 class PlaybackMonitor:
@@ -95,6 +96,18 @@ async def _now_playing(settings: Settings, attempts: int = 6) -> str | None:
     return None
 
 
+async def _checkpoint_position(settings: Settings) -> None:
+    """Save the current position onto the newest history entry (stream resume)."""
+    try:
+        pos = await asyncio.to_thread(
+            lambda: MpvClient(settings.mpv_socket)._safe_get("time-pos")
+        )
+    except Exception:  # noqa: BLE001 — mpv may be mid-restart
+        return
+    if isinstance(pos, (int, float)) and pos > 0:
+        state.update_position(settings.state_file, pos)
+
+
 async def run(bot: Bot, settings: Settings) -> None:
     """Listen to mpv events forever (started as a task from bot.py)."""
     while True:
@@ -110,9 +123,17 @@ async def run(bot: Bot, settings: Settings) -> None:
         last_title: str | None = await _now_playing(settings, attempts=2)
         try:
             while True:
-                line = await reader.readline()
+                try:
+                    line = await asyncio.wait_for(
+                        reader.readline(), timeout=CHECKPOINT_EVERY
+                    )
+                except TimeoutError:
+                    # quiet stretch = steady playback — checkpoint the position
+                    await _checkpoint_position(settings)
+                    continue
                 if not line:  # mpv exited
                     if monitor.on_disconnect() == "finished":
+                        state.update_position(settings.state_file, 0)  # start over next time
                         await _send(bot, settings, f"✅ Finished: {last_title or 'playback'}")
                     break
                 try:

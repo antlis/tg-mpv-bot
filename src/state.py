@@ -25,6 +25,7 @@ class HistoryEntry:
     target: str  # playlist path or URL
     name: str    # display name: playlist stem, or media title for URLs
     at: int      # unix timestamp of the last launch
+    pos: int = 0  # last checkpointed position (seconds) — used to resume URLs
 
     @property
     def is_url(self) -> bool:
@@ -65,12 +66,31 @@ def record_last_played(
         "name": name or (target if "://" in target else Path(target).stem),
         "at": int(time.time()),
     }
+    old = next((e for e in _load(state_file) if e["target"] == target), None)
+    if old and old.get("pos"):
+        entry["pos"] = old["pos"]  # replaying keeps the saved resume point
     entries = [e for e in _load(state_file) if e["target"] != target]
     entries.insert(0, entry)
     doc = _read_doc(state_file)
     doc.pop("last_played", None)  # superseded by history
     doc.pop("at", None)
     doc["history"] = entries[:HISTORY_LIMIT]
+    _write_doc(state_file, doc)
+
+
+def update_position(state_file: Path, seconds: float) -> None:
+    """Checkpoint the playback position onto the newest history entry.
+
+    Written periodically by the notification listener; mpv's own
+    ``--save-position-on-quit`` can't resume piped streams (a pipe has no
+    stable resume key), so the bot remembers the position itself and
+    relaunches URLs with ``--start``.
+    """
+    doc = _read_doc(state_file)
+    entries = doc.get("history") or []
+    if not entries or not isinstance(entries[0], dict):
+        return
+    entries[0]["pos"] = max(0, int(seconds))
     _write_doc(state_file, doc)
 
 
@@ -110,6 +130,7 @@ def history(state_file: Path) -> list[HistoryEntry]:
                 target=target,
                 name=str(e.get("name") or Path(target).stem),
                 at=int(e.get("at") or 0),
+                pos=int(e.get("pos") or 0),
             )
         )
     return out

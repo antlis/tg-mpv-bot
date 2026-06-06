@@ -73,6 +73,24 @@ def test_last_played_corrupt_state_file(tmp_path):
     assert state.last_played(sf) is None
 
 
+def test_position_checkpoint_roundtrip(tmp_path):
+    sf = tmp_path / "state.json"
+    state.record_last_played(sf, "https://youtu.be/x", name="V")
+    state.update_position(sf, 754.9)
+    [entry] = state.history(sf)
+    assert entry.pos == 754
+    # replaying the same target keeps the saved resume point
+    state.record_last_played(sf, "https://youtu.be/x", name="V")
+    assert state.history(sf)[0].pos == 754
+    # finishing clears it
+    state.update_position(sf, 0)
+    assert state.history(sf)[0].pos == 0
+
+
+def test_update_position_no_history_is_noop(tmp_path):
+    state.update_position(tmp_path / "state.json", 100)  # must not raise
+
+
 def test_notify_chat_roundtrip(tmp_path):
     sf = tmp_path / "state.json"
     assert state.notify_chat(sf) is None

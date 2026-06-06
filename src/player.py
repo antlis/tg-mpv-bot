@@ -413,6 +413,7 @@ def build_pipe_player_command(
     video_fd: int | None = None,
     audio_fd: int | None = None,
     sub_files: list[Path] | None = None,
+    start: float | None = None,
 ) -> list[str]:
     """argv for mpv reading 1–2 piped streams.
 
@@ -436,6 +437,10 @@ def build_pipe_player_command(
         cmd.append(f"--audio-file=fd://{audio_fd}")
     for sub in sub_files or []:
         cmd.append(f"--sub-file={sub}")
+    if start and start > 0:
+        # Resume point from the listener's checkpoints. Seeking a pipe means
+        # reading up to the offset, so far-in resumes take a moment to catch up.
+        cmd.append(f"--start={int(start)}")
     return cmd
 
 
@@ -549,6 +554,7 @@ def play_url(
     settings: Settings,
     url: str,
     progress: Callable[[str], None] | None = None,
+    start: float | None = None,
 ) -> str:
     """Stream a URL: one yt-dlp extraction, then yt-dlp pipes into mpv.
 
@@ -583,7 +589,9 @@ def play_url(
             logger.info("Launching fetcher: %s", " ".join(cmd))
             subprocess.Popen(cmd, stdout=write_end, stderr=ytdl_log, **common)
             os.close(write_end)  # fetchers must own the only write ends
-        mpv_cmd = build_pipe_player_command(settings, title, video_r, audio_r, sub_files)
+        mpv_cmd = build_pipe_player_command(
+            settings, title, video_r, audio_r, sub_files, start=start
+        )
         logger.info("Launching player: %s", " ".join(mpv_cmd))
         subprocess.Popen(
             mpv_cmd, pass_fds=(video_r, audio_r),
@@ -595,7 +603,7 @@ def play_url(
         cmd = build_fetch_command(settings, info_path)
         logger.info("Launching pipe: %s | mpv -", " ".join(cmd))
         fetcher = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=ytdl_log, **common)
-        mpv_cmd = build_pipe_player_command(settings, title, sub_files=sub_files)
+        mpv_cmd = build_pipe_player_command(settings, title, sub_files=sub_files, start=start)
         subprocess.Popen(
             mpv_cmd, env=env, stdin=fetcher.stdout,
             stdout=mpv_log, stderr=mpv_log, start_new_session=True,
