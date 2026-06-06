@@ -206,6 +206,25 @@ def test_ytdl_cli_args_network_keys_youtube_only():
     ]
 
 
+def test_media_proxy_non_youtube_only():
+    s = _settings(media_proxy="http://127.0.0.1:2080", ytdl_options="force-ipv4")
+    # generic site: proxy in, network pin out
+    args = _ytdl_cli_args(s, "https://www.videohost.example/v/x")
+    assert args == ["--proxy", "http://127.0.0.1:2080"]
+    # YouTube keeps its own working path — no proxy
+    assert _ytdl_cli_args(s, "https://youtu.be/x") == ["--force-ipv4"]
+
+
+def test_direct_command_uses_media_proxy():
+    from src.player import build_direct_command
+    s = _settings(mpv_runner="", media_proxy="http://127.0.0.1:2080")
+    cmd = build_direct_command(s, {"url": "https://cdn.example/v.mp4"}, "T")
+    assert "--http-proxy=http://127.0.0.1:2080" in cmd
+    # without the setting the flag is absent
+    s2 = _settings(mpv_runner="")
+    assert not any("http-proxy" in a for a in build_direct_command(s2, {"url": "https://c/v"}, "T"))
+
+
 def test_ytdl_cli_args_cookies_gated_only():
     s = _settings(ytdl_cookies_browser="firefox")
     assert _ytdl_cli_args(s, "https://www.instagram.com/reel/x") == [
