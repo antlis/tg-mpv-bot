@@ -271,28 +271,48 @@
   .tabpane.on { display: block; }
 
   /* ── commands ─────────────────────────────────────── */
-  .cmds {
+  .cmd-groups {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
     margin-top: var(--space-block);
+    align-items: start;
+  }
+  @media (max-width: 880px) { .cmd-groups { grid-template-columns: 1fr; } }
+  .group h3 {
+    display: flex; align-items: center; gap: 10px;
+    font-size: .82rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 12px;
+  }
+  .group h3::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .cmds {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
   }
   .row {
-    display: flex; gap: 24px; align-items: baseline;
-    padding: 16px 24px;
+    display: flex; gap: 16px; align-items: baseline;
+    padding: 11px 18px;
     border-bottom: 1px solid var(--border);
     transition: background .15s ease;
   }
   .row:nth-child(odd) { background: var(--surface); }
   .row:last-child { border-bottom: none; }
   .row:hover { background: rgba(42, 171, 238, .06); }
-  .row code { color: var(--accent); font-size: .92rem; flex: 0 0 240px; }
-  .row span { color: var(--dim); font-size: .94rem; }
-  @media (max-width: 560px) {
-    .row { flex-direction: column; gap: 2px; }
-    .row code { flex: none; }
+  .row .c { flex: 0 0 200px; color: var(--dim); font-size: .86rem; }
+  .row .c code { color: var(--accent); }
+  .row > span { color: var(--dim); font-size: .88rem; }
+  .row > span code {
+    font-size: .82em; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 5px; padding: 0 5px;
   }
-  .more { margin-top: 20px; color: var(--dim); font-size: .94rem; }
+  @media (max-width: 560px) {
+    .row { flex-direction: column; gap: 1px; }
+    .row .c { flex: none; }
+  }
+  .more { margin-top: 24px; color: var(--dim); font-size: .94rem; }
 
   /* ── footer ───────────────────────────────────────── */
   footer { border-top: 1px solid var(--border); padding-block: 44px 60px; }
@@ -420,18 +440,87 @@ systemctl --user enable --now tg-mpv-bot</code></pre>
   <div class="wrap">
     <div class="head center">
       <p class="kicker">Commands</p>
-      <h2>A taste of the interface</h2>
+      <h2>The complete interface</h2>
+      <p class="sub">Every command the bot understands — plus two that aren't commands at all: just send a link or a video file.</p>
     </div>
 
-    <div class="cmds">
-      <div class="row"><code>/mpv_list</code><span>browse the library — opens with "▶ Continue: last watched"</span></div>
-      <div class="row"><code>(send a link)</code><span>any YouTube / SoundCloud / yt-dlp URL just plays</span></div>
-      <div class="row"><code>/mpv_yt queen live aid</code><span>search YouTube, tap a result</span></div>
-      <div class="row"><code>/mpv_info</code><span>now-playing panel: transport, seek, volume, tracks</span></div>
-      <div class="row"><code>/mpv_sleep 45m</code><span>fall asleep — the bot stops playback for you</span></div>
-      <div class="row"><code>/mpv_night</code><span>loudness normalization: explosions down, dialogue up</span></div>
+    <div class="cmd-groups">
+      <div class="group">
+        <h3>Browse &amp; play</h3>
+        <div class="cmds">
+          <div class="row"><div class="c"><code>/mpv_list</code></div><span>browse by category — opens with "▶ Continue: last watched"</span></div>
+          <div class="row"><div class="c"><code>/mpv_play &lt;query&gt;</code></div><span>play by name or number (<code>/mpv</code> works too)</span></div>
+          <div class="row"><div class="c"><code>/mpv_search [cat] &lt;text&gt;</code></div><span>every match as a play button</span></div>
+          <div class="row"><div class="c"><code>/mpv_random [category]</code></div><span>"just put something on"</span></div>
+          <div class="row"><div class="c"><code>/mpv_last</code></div><span>resume the last playlist or stream where you left off</span></div>
+          <div class="row"><div class="c"><code>/mpv_history</code></div><span>last 20 played — tap to replay</span></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Streaming &amp; files</h3>
+        <div class="cmds">
+          <div class="row"><div class="c"><code>(send a link)</code></div><span>any YouTube / SoundCloud / yt-dlp URL just plays</span></div>
+          <div class="row"><div class="c"><code>(send a video file)</code></div><span>plays on the TV — up to 2 GB with a local Bot API server</span></div>
+          <div class="row"><div class="c"><code>/mpv_url &lt;link&gt;</code></div><span>the explicit version of sending a link</span></div>
+          <div class="row"><div class="c"><code>/mpv_yt &lt;search&gt;</code></div><span>search YouTube — top results as buttons with thumbnails</span></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Transport</h3>
+        <div class="cmds">
+          <div class="row"><div class="c"><code>/mpv_info</code></div><span>now-playing panel with all controls as buttons</span></div>
+          <div class="row"><div class="c"><code>/mpv_toggle</code></div><span>play / pause (also <code>/mpv_pause</code>, <code>/mpv_unpause</code>)</span></div>
+          <div class="row"><div class="c"><code>/mpv_fwd</code> · <code>/mpv_back</code></div><span>seek +30s / −10s</span></div>
+          <div class="row"><div class="c"><code>/mpv_goto &lt;pos&gt;</code></div><span>jump to <code>1:23:45</code>, <code>90</code> (s) or <code>75%</code></span></div>
+          <div class="row"><div class="c"><code>/mpv_speed [x]</code></div><span>0.75–2× buttons, or any value like <code>1.5</code></span></div>
+          <div class="row"><div class="c"><code>/mpv_quit</code></div><span>stop playback entirely</span></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Playlist navigation</h3>
+        <div class="cmds">
+          <div class="row"><div class="c"><code>/mpv_next</code> · <code>/mpv_prev</code></div><span>next / previous item</span></div>
+          <div class="row"><div class="c"><code>/mpv_ep [n]</code></div><span>episode picker buttons, or jump straight to item n</span></div>
+          <div class="row"><div class="c"><code>/mpv_chapters</code></div><span>movie / YouTube chapters as jump buttons</span></div>
+          <div class="row"><div class="c"><code>/mpv_shuffle</code></div><span>shuffle the current playlist</span></div>
+          <div class="row"><div class="c"><code>/mpv_loop</code></div><span>toggle playlist looping</span></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Sound &amp; subtitles</h3>
+        <div class="cmds">
+          <div class="row"><div class="c"><code>/mpv_volup</code> · <code>/mpv_voldown</code></div><span>volume ±10 (<code>/mpv_mute</code> to silence)</span></div>
+          <div class="row"><div class="c"><code>/mpv_audio</code></div><span>switch audio track (e.g. Spanish → English)</span></div>
+          <div class="row"><div class="c"><code>/mpv_sub</code></div><span>switch subtitle track (<code>/mpv_sub_toggle</code> to hide)</span></div>
+          <div class="row"><div class="c"><code>/mpv_night</code></div><span>loudness normalization: explosions ↓, dialogue ↑</span></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Comfort</h3>
+        <div class="cmds">
+          <div class="row"><div class="c"><code>/mpv_sleep &lt;time&gt;</code></div><span>stop after <code>45m</code> / <code>1.5h</code> (<code>off</code> cancels)</span></div>
+          <div class="row"><div class="c"><code>/mpv_notify</code></div><span>toggle "⏭ now playing" / "✅ finished" messages</span></div>
+          <div class="row"><div class="c"><code>/mpv_shot</code></div><span>screenshot of the current frame, sent to the chat</span></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Library &amp; maintenance</h3>
+        <div class="cmds">
+          <div class="row"><div class="c"><code>/mpv_scan</code></div><span>create playlists for newly-added media</span></div>
+          <div class="row"><div class="c"><code>/mpv_doctor</code></div><span>report playlists with missing files</span></div>
+          <div class="row"><div class="c"><code>/mpv_fix</code></div><span>repair broken playlists (re-point moved files)</span></div>
+          <div class="row"><div class="c"><code>/mpv_health</code></div><span>one screen: mpv, yt-dlp, API server, disks</span></div>
+          <div class="row"><div class="c"><code>/mpv_update_ytdlp</code></div><span>bump yt-dlp — the fix when YouTube breaks</span></div>
+          <div class="row"><div class="c"><code>/help</code></div><span>all of this, inside Telegram</span></div>
+        </div>
+      </div>
     </div>
-    <p class="more">…and ~35 more in the <a href="https://github.com/antlis/tg-mpv-bot#commands">full command table</a>.</p>
   </div>
 </section>
 
