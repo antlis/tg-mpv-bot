@@ -99,6 +99,37 @@ def test_parse_radio_results():
     assert out[1]["country"] == "RU"
 
 
+def test_station_art_url():
+    from src.player import _station_art_url
+    assert _station_art_url("https://somafm.com/thetrip.pls") == (
+        "https://api.somafm.com/logos/512/thetrip512.jpg"
+    )
+    assert _station_art_url("https://radiorecord.hostingradio.ru/techno96.aacp") is None
+
+
+def test_radio_placeholder_asset_exists():
+    from src.player import _RADIO_PLACEHOLDER
+    assert _RADIO_PLACEHOLDER.is_file(), "bundled cover art missing from assets/"
+
+
+def test_radio_command_cover():
+    from src.player import build_radio_command
+    s = _settings(mpv_runner="")
+    cmd = build_radio_command(s, "https://x/r.pls", "R", cover=Path("/tmp/c.png"))
+    assert "--cover-art-files=/tmp/c.png" in cmd
+    assert not any("cover" in a for a in build_radio_command(s, "https://x/r.pls", "R"))
+
+
+def test_direct_command_cover_and_audio_only():
+    from src.player import _is_audio_only, build_direct_command
+    assert _is_audio_only({"url": "https://a", "vcodec": "none"})
+    assert _is_audio_only({"requested_formats": [{"url": "https://a"}]})  # vcodec absent
+    assert not _is_audio_only({"url": "https://v", "vcodec": "vp9"})
+    s = _settings(mpv_runner="")
+    cmd = build_direct_command(s, {"url": "https://a/t"}, "T", cover=Path("/tmp/c.png"))
+    assert "--cover-art-files=/tmp/c.png" in cmd
+
+
 def test_radio_command_shape():
     from src.player import build_radio_command
     s = _settings(mpv_runner="", media_proxy="http://127.0.0.1:2080")

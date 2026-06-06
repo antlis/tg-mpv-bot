@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -456,6 +457,41 @@ def fetch_subtitles(settings: Settings, info: dict, info_path: Path) -> list[Pat
     return sorted(tmp.glob(f"{_SUB_PREFIX}*"))[:3]  # a few tracks is plenty
 
 
+# Artwork for audio-only playback: a black TV is a wasted TV.
+_ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+_RADIO_PLACEHOLDER = _ASSETS_DIR / "radio-placeholder.png"
+_COVER_PATH = Path(tempfile.gettempdir()) / "tg-mpv-cover.img"
+
+
+def _station_art_url(stream_url: str) -> str | None:
+    """Derive official channel art where the pattern is known (SomaFM)."""
+    m = re.match(r"https?://somafm\.com/([a-z0-9]+)\.pls", stream_url)
+    if m:
+        # matches 44/46 channels; the rest 404 → placeholder fallback
+        return f"https://api.somafm.com/logos/512/{m.group(1)}512.jpg"
+    return None
+
+
+def _fetch_cover(settings: Settings, art_url: str | None) -> Path | None:
+    """Download station/track art (best-effort); fall back to the bundled
+    placeholder so audio playback always has *something* on screen."""
+    if art_url:
+        from urllib.request import ProxyHandler, Request, build_opener
+
+        handlers = (
+            [ProxyHandler({"http": settings.media_proxy, "https": settings.media_proxy})]
+            if settings.media_proxy else []
+        )
+        try:
+            req = Request(art_url, headers={"User-Agent": "tg-mpv-bot/1.2"})
+            with build_opener(*handlers).open(req, timeout=6) as resp:
+                _COVER_PATH.write_bytes(resp.read())
+            return _COVER_PATH
+        except (OSError, ValueError) as exc:
+            logger.warning("Cover fetch failed (%s) — using placeholder", exc)
+    return _RADIO_PLACEHOLDER if _RADIO_PLACEHOLDER.is_file() else None
+
+
 # Community radio database (radio-browser.info) — free, no auth, mirrored.
 _RADIO_BROWSER_MIRRORS = (
     "https://de1.api.radio-browser.info",
@@ -477,6 +513,7 @@ def _parse_radio_results(raw: list[dict], n: int) -> list[dict]:
             "codec": s.get("codec") or "",
             "bitrate": s.get("bitrate") or 0,
             "country": s.get("countrycode") or "",
+            "favicon": s.get("favicon") or "",
         })
         if len(out) >= n:
             break
@@ -511,11 +548,15 @@ def search_radio(settings: Settings, query: str, n: int = 8) -> list[dict]:
     raise UrlPlaybackError(str(last_error or "radio search failed"))
 
 
-def build_radio_command(settings: Settings, url: str, name: str) -> list[str]:
+def build_radio_command(
+    settings: Settings, url: str, name: str, cover: Path | None = None
+) -> list[str]:
     """argv for an internet-radio stream — straight to mpv, no probe.
 
     mpv parses ``.pls``/icecast natively, so stations start in ~a second.
     No resume/position flags: live streams have no meaningful position.
+    ``cover`` becomes the video track via ``--cover-art-files`` — station
+    art instead of a black screen.
     """
     cmd = [
         _mpv_base(settings),
@@ -524,15 +565,20 @@ def build_radio_command(settings: Settings, url: str, name: str) -> list[str]:
         "--force-window",  # something on the TV + icecast title via OSD/panel
         f"--force-media-title={name}",
     ]
+    if cover is not None:
+        cmd.append(f"--cover-art-files={cover}")
     if settings.media_proxy:
         cmd.append(f"--http-proxy={settings.media_proxy}")
     return cmd
 
 
-def play_radio(settings: Settings, url: str, name: str) -> None:
+def play_radio(
+    settings: Settings, url: str, name: str, art_url: str | None = None
+) -> None:
     """Tune the TV to an internet-radio stream (same kill→hooks→spawn path)."""
+    cover = _fetch_cover(settings, art_url or _station_art_url(url))
     env = _hook_env(settings, url, name)
-    _kill_and_launch(settings, build_radio_command(settings, url, name), env)
+    _kill_and_launch(settings, build_radio_command(settings, url, name, cover), env)
     state.record_last_played(settings.state_file, url, name=name)
 
 
@@ -593,12 +639,18 @@ def needs_pipe(info: dict) -> bool:
     return any("googlevideo" in str(f.get("url") or "") for f in formats)
 
 
+def _is_audio_only(info: dict) -> bool:
+    formats = info.get("requested_formats") or [info]
+    return all((f.get("vcodec") or "none") == "none" for f in formats)
+
+
 def build_direct_command(
     settings: Settings,
     info: dict,
     title: str,
     sub_files: list[Path] | None = None,
     start: float | None = None,
+    cover: Path | None = None,
 ) -> list[str]:
     """argv for mpv playing pre-resolved stream URL(s) directly.
 
@@ -626,6 +678,8 @@ def build_direct_command(
     if settings.media_proxy:
         # fetch from the same egress the probe minted the URL over
         cmd.append(f"--http-proxy={settings.media_proxy}")
+    if cover is not None:
+        cmd.append(f"--cover-art-files={cover}")
     for sub in sub_files or []:
         cmd.append(f"--sub-file={sub}")
     if start and start > 0:
@@ -810,7 +864,12 @@ def play_url(
     if not needs_pipe(info):
         # Direct URL: mpv fetches with range requests — full seeking, and
         # the only way moov-at-end progressive MP4s start at all.
-        mpv_cmd = build_direct_command(settings, info, title, sub_files, start)
+        cover = (
+            _fetch_cover(settings, info.get("thumbnail"))
+            if _is_audio_only(info)  # track art (SoundCloud etc.) over black
+            else None
+        )
+        mpv_cmd = build_direct_command(settings, info, title, sub_files, start, cover)
         logger.info("Launching direct: %s", " ".join(mpv_cmd))
         subprocess.Popen(mpv_cmd, stdout=mpv_log, stderr=mpv_log, **common)
     elif len(formats) >= 2:
