@@ -95,6 +95,33 @@ def test_pipe_player_single_stream_stdin():
     assert not any(a.startswith("--audio-file") for a in cmd)
 
 
+def test_subs_command_shape(tmp_path):
+    from src.player import build_subs_command
+    s = _settings(ytdl_sub_langs="en.*,ru.*", ytdl_options="force-ipv4")
+    cmd = build_subs_command(s, tmp_path / "i.json")
+    assert "--skip-download" in cmd and "--write-auto-subs" in cmd
+    assert cmd[cmd.index("--sub-langs") + 1] == "en.*,ru.*"
+    assert "--force-ipv4" in cmd  # same network path as the probe
+    assert "--load-info-json" in cmd  # no re-extraction
+
+
+def test_fetch_subtitles_skips_when_none_advertised(tmp_path):
+    from src.player import fetch_subtitles
+    s = _settings(ytdl_sub_langs="en.*")
+    # no subtitles/automatic_captions in the info → no subprocess spawn
+    assert fetch_subtitles(s, {"title": "x"}, tmp_path / "i.json") == []
+    s_off = _settings(ytdl_sub_langs="")
+    assert fetch_subtitles(s_off, {"subtitles": {"en": []}}, tmp_path / "i.json") == []
+
+
+def test_pipe_player_sub_files():
+    s = _settings(mpv_runner="")
+    cmd = build_pipe_player_command(
+        s, "T", sub_files=[Path("/tmp/tg-mpv-sub.en.vtt")]
+    )
+    assert "--sub-file=/tmp/tg-mpv-sub.en.vtt" in cmd
+
+
 def test_pipe_player_split_streams_use_fds():
     # split A/V can't share one pipe (interleaved bytes = garbage): each
     # stream gets its own fd and mpv muxes them itself.

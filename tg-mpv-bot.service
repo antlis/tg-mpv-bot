@@ -29,6 +29,7 @@ Environment=YTDL_COOKIES_BROWSER=firefox
 Environment=YTDL_OPTIONS=force-ipv4,extractor-args=youtube:player_client=android_vr;player_skip=webpage
 # Refresh the yt-dlp nightly weekly, before YouTube breakage bites.
 Environment=YTDL_UPDATE_DAYS=7
+Environment=YTDL_SUB_LANGS=en.*,ru.*
 # The user manager's inherited PATH can be minimal; ensure the std bin dirs are present.
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 

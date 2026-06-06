@@ -49,6 +49,9 @@ class Settings:
     # yt-dlp format selection for URL playback. Capped at 1080p by default so
     # streaming starts fast; raise it if your pipe and screen can take it.
     ytdl_format: str = "bv*[height<=1080]+ba/b"
+    # Subtitle languages to fetch for streamed URLs (yt-dlp --sub-langs
+    # syntax, e.g. "en.*,ru.*"). Empty disables subtitle fetching.
+    ytdl_sub_langs: str = "en.*"
     # Also pkill stray mpv instances (ones not started by the bot) before
     # playing. Guarantees a single player on screen, but is rude on machines
     # where mpv is used manually — set KILL_STRAY_MPV=0 there; the bot's own
@@ -103,6 +106,7 @@ def get_settings() -> Settings:
         ytdl_options=os.environ.get("YTDL_OPTIONS", ""),
         ytdl_cookies_browser=os.environ.get("YTDL_COOKIES_BROWSER", ""),
         ytdl_format=os.environ.get("YTDL_FORMAT", "bv*[height<=1080]+ba/b"),
+        ytdl_sub_langs=os.environ.get("YTDL_SUB_LANGS", "en.*"),
         kill_stray_mpv=os.environ.get("KILL_STRAY_MPV", "1").lower()
         in ("1", "true", "yes"),
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),

@@ -1037,6 +1037,7 @@ _URL_RE = re.compile(r"^https?://\S+$")
 _STAGE_TEXT = {
     "resolving": "⏳ Resolving link…",
     "escalating": "🍪 Site wants sign-in — retrying with browser cookies…",
+    "subs": "💬 Fetching subtitles…",
     "starting": "▶ Starting playback…",
 }
 _SPINNER = "◔◑◕●"

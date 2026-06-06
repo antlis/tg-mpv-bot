@@ -359,11 +359,55 @@ def build_fetch_command(
     return cmd
 
 
+_SUB_PREFIX = "tg-mpv-sub"  # subtitle files in tmp: tg-mpv-sub.<lang>.vtt
+
+
+def build_subs_command(settings: Settings, info_path: Path) -> list[str]:
+    """argv to fetch subtitles for the probed video (no re-extraction)."""
+    return [
+        _ytdlp_bin() or "yt-dlp",
+        "--no-warnings",
+        "--load-info-json", str(info_path),
+        "--skip-download",
+        "--write-subs", "--write-auto-subs",
+        "--sub-langs", settings.ytdl_sub_langs,
+        *_network_cli_args(settings),
+        "-o", str(Path(tempfile.gettempdir()) / _SUB_PREFIX),
+    ]
+
+
+def fetch_subtitles(settings: Settings, info: dict, info_path: Path) -> list[Path]:
+    """Download subtitle files for the probed stream; best-effort.
+
+    Skipped entirely when the info dict advertises no subtitles (saves a
+    spawn) or YTDL_SUB_LANGS is empty. mpv reads the resulting .vtt
+    natively — no conversion step, no ffmpeg dependency.
+    """
+    if not settings.ytdl_sub_langs:
+        return []
+    if not (info.get("subtitles") or info.get("automatic_captions")):
+        return []
+    tmp = Path(tempfile.gettempdir())
+    for old in tmp.glob(f"{_SUB_PREFIX}*"):
+        old.unlink(missing_ok=True)
+    try:
+        subprocess.run(
+            build_subs_command(settings, info_path),
+            capture_output=True, timeout=45, check=False,
+            env={**os.environ, "PATH": _augmented_path()},
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Subtitle fetch failed: %s", exc)
+        return []
+    return sorted(tmp.glob(f"{_SUB_PREFIX}*"))[:3]  # a few tracks is plenty
+
+
 def build_pipe_player_command(
     settings: Settings,
     title: str,
     video_fd: int | None = None,
     audio_fd: int | None = None,
+    sub_files: list[Path] | None = None,
 ) -> list[str]:
     """argv for mpv reading 1–2 piped streams.
 
@@ -385,6 +429,8 @@ def build_pipe_player_command(
     ]
     if audio_fd is not None:
         cmd.append(f"--audio-file=fd://{audio_fd}")
+    for sub in sub_files or []:
+        cmd.append(f"--sub-file={sub}")
     return cmd
 
 
@@ -510,6 +556,9 @@ def play_url(
     """
     info, info_path = probe_url(settings, url, progress=progress)
     if progress:
+        progress("subs")
+    sub_files = fetch_subtitles(settings, info, info_path)
+    if progress:
         progress("starting")
     title = info.get("title") or url
     formats = info.get("requested_formats") or [info]
@@ -529,7 +578,7 @@ def play_url(
             logger.info("Launching fetcher: %s", " ".join(cmd))
             subprocess.Popen(cmd, stdout=write_end, stderr=ytdl_log, **common)
             os.close(write_end)  # fetchers must own the only write ends
-        mpv_cmd = build_pipe_player_command(settings, title, video_r, audio_r)
+        mpv_cmd = build_pipe_player_command(settings, title, video_r, audio_r, sub_files)
         logger.info("Launching player: %s", " ".join(mpv_cmd))
         subprocess.Popen(
             mpv_cmd, pass_fds=(video_r, audio_r),
@@ -541,7 +590,7 @@ def play_url(
         cmd = build_fetch_command(settings, info_path)
         logger.info("Launching pipe: %s | mpv -", " ".join(cmd))
         fetcher = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=ytdl_log, **common)
-        mpv_cmd = build_pipe_player_command(settings, title)
+        mpv_cmd = build_pipe_player_command(settings, title, sub_files=sub_files)
         subprocess.Popen(
             mpv_cmd, env=env, stdin=fetcher.stdout,
             stdout=mpv_log, stderr=mpv_log, start_new_session=True,
