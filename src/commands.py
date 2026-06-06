@@ -899,6 +899,33 @@ async def cb_yt(query: CallbackQuery) -> None:
 # ── Telegram media files ────────────────────────────────────────────
 
 _FILES_DIR = Path(tempfile.gettempdir()) / "tg-mpv-files"
+# A TELEGRAM_LOCAL-mode Bot API server returns paths under this prefix.
+_LOCAL_API_PREFIX = "/var/lib/telegram-bot-api"
+# getFile doesn't answer until the server has pulled the whole file from
+# Telegram's datacenter — minutes for a 2 GB video, so not the default 60s.
+_FILE_TIMEOUT = 1800
+
+
+def _local_api_path(file_path: str) -> Path | None:
+    """Map a TELEGRAM_LOCAL getFile path to the host bind mount (if set)."""
+    files_dir = get_settings().api_local_files_dir
+    if files_dir and file_path.startswith(_LOCAL_API_PREFIX):
+        return Path(file_path.replace(_LOCAL_API_PREFIX, files_dir, 1)).expanduser()
+    return None
+
+
+async def _fetch_media(message: Message, media: Any, dest: Path) -> Path:
+    """Make the file playable locally; returns the path mpv should open.
+
+    With a TELEGRAM_LOCAL server the file already lands on our disk — play
+    it from there instead of copying gigabytes through /tmp (tmpfs = RAM).
+    """
+    file = await message.bot.get_file(media.file_id, request_timeout=_FILE_TIMEOUT)
+    local = _local_api_path(file.file_path or "")
+    if local is not None and local.is_file():
+        return local
+    await message.bot.download_file(file.file_path, destination=dest, timeout=_FILE_TIMEOUT)
+    return dest
 
 
 @router.message(F.video | F.audio | F.document)
@@ -911,27 +938,26 @@ async def msg_media_file(message: Message) -> None:
         return  # not a media document — none of our business
     name = Path(getattr(media, "file_name", None) or f"file-{media.file_unique_id}.mp4").name
     size_mb = (media.file_size or 0) / 1_000_000
-    note = await message.reply(f"⬇️ Downloading {name} ({size_mb:.0f} MB)…")
+    note = await message.reply(f"⬇️ Fetching {name} ({size_mb:.0f} MB)…")
 
     _FILES_DIR.mkdir(exist_ok=True)
     for old in _FILES_DIR.iterdir():  # one file plays at a time — drop the previous
         old.unlink(missing_ok=True)
-    dest = _FILES_DIR / name
 
-    task = asyncio.create_task(message.bot.download(media, destination=dest))
+    task = asyncio.create_task(_fetch_media(message, media, _FILES_DIR / name))
     started = time.monotonic()
-    while True:  # live elapsed while a big file transfers
+    while True:  # live elapsed while Telegram transfers a big file
         done, _ = await asyncio.wait({task}, timeout=4)
         if done:
             break
         try:
             await note.edit_text(
-                f"⬇️ Downloading {name} ({size_mb:.0f} MB)… {time.monotonic() - started:.0f}s"
+                f"⬇️ Fetching {name} ({size_mb:.0f} MB)… {time.monotonic() - started:.0f}s"
             )
         except TelegramBadRequest:
             pass
     try:
-        task.result()
+        path = task.result()
     except Exception as exc:  # noqa: BLE001 — surface the reason (e.g. 20MB API cap)
         hint = (
             "\nFiles over 20 MB need a local Bot API server (API_SERVER_URL)."
@@ -943,7 +969,7 @@ async def msg_media_file(message: Message) -> None:
 
     _remember_chat(message)
     title = Path(name).stem
-    await asyncio.to_thread(player.play_file, get_settings(), dest, title)
+    await asyncio.to_thread(player.play_file, get_settings(), path, title)
     await note.edit_text(f"▶ Playing: {title}")
 
 

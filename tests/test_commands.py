@@ -1,8 +1,18 @@
 """Tests for the pure helpers in src.commands (no Telegram / IPC needed)."""
 
+from pathlib import Path
+
 import pytest
 
-from src.commands import _URL_RE, _episode_list, _episodes_text, _parse_goto, _parse_sleep
+from src.commands import (
+    _URL_RE,
+    _episode_list,
+    _episodes_text,
+    _local_api_path,
+    _parse_goto,
+    _parse_sleep,
+)
+from src.config import get_settings
 
 
 class FakePlaylistClient:
@@ -68,6 +78,20 @@ def test_url_re(text, matches):
 ])
 def test_parse_sleep(raw, minutes):
     assert _parse_sleep(raw) == minutes
+
+
+def test_local_api_path_mapping(monkeypatch):
+    monkeypatch.setenv("BOT_TOKEN", "x")
+    monkeypatch.setenv("API_LOCAL_FILES_DIR", "/srv/botapi")
+    get_settings.cache_clear()
+    assert _local_api_path("/var/lib/telegram-bot-api/123:AA/videos/file_1.mp4") == Path(
+        "/srv/botapi/123:AA/videos/file_1.mp4"
+    )
+    assert _local_api_path("relative/cloud/path.mp4") is None  # cloud-style path
+    monkeypatch.delenv("API_LOCAL_FILES_DIR")
+    get_settings.cache_clear()
+    assert _local_api_path("/var/lib/telegram-bot-api/x") is None  # mapping unset
+    get_settings.cache_clear()
 
 
 def test_episodes_text():
