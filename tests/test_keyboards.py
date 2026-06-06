@@ -244,8 +244,25 @@ def test_radio_keyboard():
     from src.keyboards import radio_keyboard
     kb = radio_keyboard([("Groove Salad", "https://x/gs.pls"), ("FIP", "https://y/f.mp3")])
     buttons = [b for row in kb.inline_keyboard for b in row]
-    assert [b.callback_data for b in buttons] == ["rd:0", "rd:1"]
+    assert [b.callback_data for b in buttons] == ["rd:0", "rd:1"]  # no nav row when it fits
     assert buttons[0].text == "📻 Groove Salad"
+
+
+def test_radio_keyboard_paginates_with_global_indices():
+    from src.keyboards import radio_keyboard
+    stations = [(f"St {i}", f"https://x/{i}") for i in range(PER_PAGE * 2 + 3)]
+    kb = radio_keyboard(stations, page=1)
+    datas = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert f"rd:{PER_PAGE}" in datas      # page 2 starts at the global index
+    assert "rds:0" in datas and "rds:2" in datas  # nav both ways
+
+
+def test_default_station_catalog_sane():
+    from src.config import DEFAULT_RADIO_STATIONS
+    urls = [u for _, u in DEFAULT_RADIO_STATIONS]
+    assert len(urls) == len(set(urls)), "duplicate stream URLs"
+    assert sum(1 for u in urls if "somafm.com" in u) >= 40  # the full catalog
+    assert all(u.startswith("https://") for u in urls)
 
 
 def test_listing_keyboard():

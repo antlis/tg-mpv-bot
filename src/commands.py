@@ -402,6 +402,18 @@ async def cmd_radio(message: Message) -> None:
     )
 
 
+@router.callback_query(F.data.startswith("rds:"))
+async def cb_radio_page(query: CallbackQuery) -> None:
+    page = int(query.data[len("rds:"):])
+    try:
+        await query.message.edit_reply_markup(
+            reply_markup=radio_keyboard(get_settings().radio_stations, page)
+        )
+    except TelegramBadRequest:
+        pass
+    await query.answer()
+
+
 @router.callback_query(F.data.startswith("rd:"))
 async def cb_radio(query: CallbackQuery) -> None:
     i = int(query.data[len("rd:"):])

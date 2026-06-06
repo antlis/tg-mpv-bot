@@ -26,7 +26,7 @@ clashes (≤64 bytes):
     yt:<video_id>        → stream that YouTube result (ids are 11 chars — fits)
     ple:<i>              → play entry #i of the last probed listing page
                            (entry URLs exceed 64 bytes, hence the index)
-    rd:<i>               → tune to radio station #i of the configured presets
+    rd:<i> / rds:<pg>    → tune to preset radio station #i / picker page <pg>
     ch:<n> / chs:<pg>    → jump to chapter <n> of the current file / picker page
     cats / noop          → back to categories / inert (page counter)
 
@@ -210,12 +210,29 @@ def chapters_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def radio_keyboard(stations: list[tuple[str, str]]) -> InlineKeyboardMarkup:
-    """One tune-in button per configured station (callback ``rd:<i>``)."""
+def radio_keyboard(
+    stations: list[tuple[str, str]], page: int = 0
+) -> InlineKeyboardMarkup:
+    """Tune-in buttons for the configured stations (``rd:<i>``), paginated
+    (``rds:<page>``) — the full SomaFM catalog alone is ~46 entries."""
+    page = clamp_page(page, len(stations))
     rows = [
-        [InlineKeyboardButton(text=f"📻 {name[:52]}", callback_data=f"rd:{i}")]
-        for i, (name, _url) in enumerate(stations)
+        [InlineKeyboardButton(text=f"📻 {stations[i][0][:52]}", callback_data=f"rd:{i}")]
+        for i in page_slice(list(range(len(stations))), page)
     ]
+    total = page_count(len(stations))
+    if total > 1:
+        rows.append([
+            InlineKeyboardButton(
+                text="◀" if page > 0 else "·",
+                callback_data=f"rds:{page - 1}" if page > 0 else "noop",
+            ),
+            InlineKeyboardButton(text=f"{page + 1}/{total}", callback_data="noop"),
+            InlineKeyboardButton(
+                text="▶" if page < total - 1 else "·",
+                callback_data=f"rds:{page + 1}" if page < total - 1 else "noop",
+            ),
+        ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
