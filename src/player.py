@@ -93,11 +93,29 @@ def _is_gated_host(url: str) -> bool:
     return any(host == h or host.endswith("." + h) for h in GATED_HOSTS)
 
 
+_YOUTUBE_HOSTS = ("youtube.com", "youtu.be", "music.youtube.com")
+
+
+def _is_youtube_url(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return any(host == h or host.endswith("." + h) for h in _YOUTUBE_HOSTS)
+
+
 def _ytdl_cli_args(settings: Settings, url: str) -> list[str]:
-    """Translate the YTDL_* settings into yt-dlp CLI flags."""
+    """Translate the YTDL_* settings into yt-dlp CLI flags.
+
+    Network-pinning options (force-ipv4 etc.) apply to **YouTube only**:
+    they exist to keep the pipe's fetches on the proven proxy path. For
+    everything else the probe must use the same default network stack mpv
+    will fetch with — some CDNs embed the requesting IP in the minted URL
+    and reject a fetch whose egress differs from the minting request.
+    """
     args: list[str] = []
+    youtube = _is_youtube_url(url)
     for opt in filter(None, settings.ytdl_options.split(",")):
         key, _, value = opt.partition("=")
+        if not youtube and key in _NETWORK_KEYS:
+            continue
         args.append(f"--{key}")
         if value:
             args.append(value)
@@ -132,6 +150,11 @@ def _ytdlp_bin() -> str | None:
 
 class UrlPlaybackError(Exception):
     """Raised when a URL cannot be prepared for playback (user-facing msg)."""
+
+
+# probe_url raises this reason when the URL is a playlist/channel/listing —
+# callers can then offer probe_listing()'s entries instead of an error.
+PLAYLIST_URL = "__playlist_url__"
 
 
 # YouTube breaks extraction every few months; stable releases lag the fix.
@@ -211,6 +234,7 @@ _TERMINAL_ERRORS = (
     "has been removed",
     "is not a valid URL",
     "Unsupported URL",
+    PLAYLIST_URL,  # sentinel: the URL is a listing, not a single video
 )
 
 
@@ -241,6 +265,10 @@ def _run_probe(
         return None, f"site did not respond within {timeout:.0f}s (rate-limited?)"
     except OSError as exc:
         return None, str(exc)
+    lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+    if len(lines) > 1:
+        # -j prints one JSON object per entry: this URL is a whole listing
+        return None, PLAYLIST_URL
     try:
         return json.loads(result.stdout), ""
     except ValueError:
@@ -273,7 +301,9 @@ def probe_url(
     fast_args = _ytdl_cli_args(settings, url)
     info, reason = _run_probe(settings, url, fast_args, timeout)
     if info is None and _should_escalate(reason):
-        stock_args = _network_cli_args(settings) + (
+        stock_args = (
+            _network_cli_args(settings) if _is_youtube_url(url) else []
+        ) + (
             ["--cookies-from-browser", settings.ytdl_cookies_browser]
             if settings.ytdl_cookies_browser
             else []
@@ -421,6 +451,47 @@ def fetch_subtitles(settings: Settings, info: dict, info_path: Path) -> list[Pat
         logger.warning("Subtitle fetch failed: %s", exc)
         return []
     return sorted(tmp.glob(f"{_SUB_PREFIX}*"))[:3]  # a few tracks is plenty
+
+
+def build_listing_command(settings: Settings, url: str, limit: int = 12) -> list[str]:
+    """argv for a cheap flat probe of a playlist/channel/listing page."""
+    return [
+        _ytdlp_bin() or "yt-dlp",
+        "--no-warnings", "-J", "--flat-playlist",
+        "--playlist-items", f"1:{limit}",
+        *_network_cli_args(settings),
+        "--", url,
+    ]
+
+
+def probe_listing(settings: Settings, url: str, limit: int = 12) -> list[dict]:
+    """First ``limit`` entries of a listing URL: ``{title, url, duration}``.
+
+    Returns ``[]`` when the page isn't a listing yt-dlp understands (e.g. a
+    profile page with no extractor).
+    """
+    try:
+        result = subprocess.run(
+            build_listing_command(settings, url, limit),
+            capture_output=True, text=True, timeout=90, check=False,
+            env={**os.environ, "PATH": _augmented_path()},
+        )
+        data = json.loads(result.stdout)
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return []
+    entries = data.get("entries") or []
+    out = []
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        target = e.get("url") or e.get("webpage_url")
+        if target:
+            out.append({
+                "title": e.get("title") or target,
+                "url": target,
+                "duration": e.get("duration"),
+            })
+    return out
 
 
 def needs_pipe(info: dict) -> bool:

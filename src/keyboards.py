@@ -24,6 +24,8 @@ clashes (≤64 bytes):
     spd:<value>          → set playback speed (e.g. spd:1.5)
     h:<i>                → replay watch-history entry #i (newest-first order)
     yt:<video_id>        → stream that YouTube result (ids are 11 chars — fits)
+    ple:<i>              → play entry #i of the last probed listing page
+                           (entry URLs exceed 64 bytes, hence the index)
     ch:<n> / chs:<pg>    → jump to chapter <n> of the current file / picker page
     cats / noop          → back to categories / inert (page counter)
 
@@ -204,6 +206,20 @@ def chapters_keyboard(
                 callback_data=f"chs:{page + 1}" if page < total - 1 else "noop",
             ),
         ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def listing_keyboard(entries: list[dict]) -> InlineKeyboardMarkup:
+    """One play button per entry of a probed listing page (``ple:<i>``)."""
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"▶ {str(e['title'])[:48]}{_fmt_duration(e.get('duration'))}",
+                callback_data=f"ple:{i}",
+            )
+        ]
+        for i, e in enumerate(entries)
+    ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

@@ -240,6 +240,17 @@ def test_chapters_keyboard():
     assert any(b.text == "▶ 12:34  The Heist" and b.callback_data == "noop" for b in buttons)
 
 
+def test_listing_keyboard():
+    from src.keyboards import listing_keyboard
+    kb = listing_keyboard([
+        {"title": "Episode One", "url": "https://yt/x", "duration": 754},
+        {"title": "Episode Two", "url": "https://yt/y", "duration": None},
+    ])
+    buttons = [b for row in kb.inline_keyboard for b in row]
+    assert [b.callback_data for b in buttons] == ["ple:0", "ple:1"]
+    assert buttons[0].text == "▶ Episode One · 12:34"
+
+
 def test_yt_results_keyboard():
     from src.keyboards import yt_results_keyboard
     kb = yt_results_keyboard([

@@ -37,6 +37,7 @@ from .keyboards import (
     episodes_keyboard,
     has_subcategories,
     history_keyboard,
+    listing_keyboard,
     now_playing_keyboard,
     playlists_keyboard,
     search_results_keyboard,
@@ -1090,6 +1091,26 @@ _STAGE_TEXT = {
 _SPINNER = "◔◑◕●"
 
 
+# Entries of the most recently probed listing page (ple:<i> callbacks).
+_listing_cache: list[dict] = []
+
+
+async def _offer_listing(note: Message, url: str) -> bool:
+    """If ``url`` is a listing yt-dlp understands, offer its entries."""
+    entries = await asyncio.to_thread(player.probe_listing, get_settings(), url)
+    if not entries:
+        return False
+    _listing_cache[:] = entries
+    try:
+        await note.edit_text(
+            f"📜 That's a listing page — first {len(entries)} entries, tap to play:",
+            reply_markup=listing_keyboard(entries),
+        )
+    except TelegramBadRequest:
+        pass
+    return True
+
+
 async def _play_url(message: Message, url: str, start: float | None = None) -> None:
     _remember_chat(message)
     note = await message.reply(_STAGE_TEXT["resolving"])
@@ -1124,11 +1145,33 @@ async def _play_url(message: Message, url: str, start: float | None = None) -> N
         if start:
             text += f" (resuming at {_fmt_time(start)})"
     except player.UrlPlaybackError as exc:
-        text = f"❌ Can't play that link: {exc}"
+        reason = str(exc)
+        if reason == player.PLAYLIST_URL or "Unsupported URL" in reason:
+            # Maybe it's a playlist/channel page — offer its entries instead.
+            if await _offer_listing(note, url):
+                return
+        if "Unsupported URL" in reason:
+            text = (
+                "❌ That page doesn't contain a single playable video "
+                "(a profile or gallery page?). Send a direct video link."
+            )
+        else:
+            text = f"❌ Can't play that link: {exc}"
     try:
         await note.edit_text(text)
     except TelegramBadRequest:
         pass
+
+
+@router.callback_query(F.data.startswith("ple:"))
+async def cb_listing_entry(query: CallbackQuery) -> None:
+    i = int(query.data[len("ple:"):])
+    if not (0 <= i < len(_listing_cache)):
+        await query.answer("Listing expired — send the link again", show_alert=True)
+        return
+    entry = _listing_cache[i]
+    await query.answer(f"▶ {str(entry['title'])[:60]}")
+    await _play_url(query.message, entry["url"])
 
 
 @router.message(Command("mpv_url", "mpv_stream"))
