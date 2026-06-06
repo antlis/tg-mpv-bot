@@ -119,6 +119,9 @@ def _ytdl_cli_args(settings: Settings, url: str) -> list[str]:
         args.append(f"--{key}")
         if value:
             args.append(value)
+    if not youtube and settings.media_proxy:
+        # mint stream URLs from the same egress mpv will fetch them over
+        args += ["--proxy", settings.media_proxy]
     if settings.ytdl_cookies_browser and _is_gated_host(url):
         args += ["--cookies-from-browser", settings.ytdl_cookies_browser]
     return args
@@ -301,13 +304,12 @@ def probe_url(
     fast_args = _ytdl_cli_args(settings, url)
     info, reason = _run_probe(settings, url, fast_args, timeout)
     if info is None and _should_escalate(reason):
-        stock_args = (
-            _network_cli_args(settings) if _is_youtube_url(url) else []
-        ) + (
-            ["--cookies-from-browser", settings.ytdl_cookies_browser]
-            if settings.ytdl_cookies_browser
-            else []
-        )
+        if _is_youtube_url(url):
+            stock_args = _network_cli_args(settings)
+        else:
+            stock_args = ["--proxy", settings.media_proxy] if settings.media_proxy else []
+        if settings.ytdl_cookies_browser:
+            stock_args += ["--cookies-from-browser", settings.ytdl_cookies_browser]
         if stock_args != fast_args:
             logger.info("Probe failed (%s) — escalating with stock args for %s",
                         reason[:80], url)
@@ -423,6 +425,7 @@ def build_subs_command(settings: Settings, info_path: Path) -> list[str]:
         "--write-subs", "--write-auto-subs",
         "--sub-langs", settings.ytdl_sub_langs,
         *_network_cli_args(settings),
+        *(["--proxy", settings.media_proxy] if settings.media_proxy else []),
         "-o", str(Path(tempfile.gettempdir()) / _SUB_PREFIX),
     ]
 
@@ -540,6 +543,9 @@ def build_direct_command(
         cmd.append(f"--user-agent={headers['User-Agent']}")
     if headers.get("Referer"):
         cmd.append(f"--referrer={headers['Referer']}")
+    if settings.media_proxy:
+        # fetch from the same egress the probe minted the URL over
+        cmd.append(f"--http-proxy={settings.media_proxy}")
     for sub in sub_files or []:
         cmd.append(f"--sub-file={sub}")
     if start and start > 0:

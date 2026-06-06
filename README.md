@@ -256,6 +256,7 @@ Only `BOT_TOKEN` is required.
 | `KILL_STRAY_MPV` | `1` | Also `pkill` mpv instances the bot didn't start; `0` if you use mpv manually too |
 | `YTDL_FORMAT` | `bv*[height<=1080]+ba/b` | yt-dlp format for URL streaming (raise the cap for 4K) |
 | `YTDL_SUB_LANGS` | `en.*` | Subtitle/auto-caption languages fetched for streams (`--sub-langs` syntax; empty disables) — toggle on screen with `/mpv_sub` |
+| `MEDIA_PROXY` | *(none)* | Proxy for non-YouTube playback — the yt-dlp probe and mpv's fetch both use it, so IP-locked CDN URLs stay coherent; for hosts whose direct line can't reach some media CDNs |
 | `YTDL_OPTIONS` | *(none)* | Extra yt-dlp options, comma-separated `key=value` / bare flags — e.g. `force-ipv4` or the lean-YouTube `extractor-args=…` (see `.env.example`). Network-pinning keys (`force-ipv4/6`, `proxy`, …) apply to **YouTube URLs only** — other sites' IP-locked CDNs need the probe and mpv on the same default network path |
 | `YTDL_COOKIES_BROWSER` | *(none)* | Browser whose cookies unlock Instagram/Facebook and YouTube bot-checks (e.g. `firefox`); applied only to gated hosts / as an escalation, never globally |
 | `API_SERVER_URL` | *(none)* | Local [Bot API server](https://github.com/tdlib/telegram-bot-api) — lifts the 20 MB download cap to 2 GB for sent files (one-time `…/logOut` from the cloud API required when switching) |

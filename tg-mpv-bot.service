@@ -30,6 +30,10 @@ Environment=YTDL_OPTIONS=force-ipv4,extractor-args=youtube:player_client=android
 # Refresh the yt-dlp nightly weekly, before YouTube breakage bites.
 Environment=YTDL_UPDATE_DAYS=7
 Environment=YTDL_SUB_LANGS=en.*,ru.*
+# Non-YouTube playback goes through the local nekoray mixed proxy: the ISP
+# IPv6 line can't reach several media CDNs, and probe + mpv must share one
+# egress anyway (IP-locked CDN URLs).
+Environment=MEDIA_PROXY=http://127.0.0.1:2080
 # The user manager's inherited PATH can be minimal; ensure the std bin dirs
 # are present, plus ~/.local/bin so /mpv_update_ytdlp finds uv.
 Environment=PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
