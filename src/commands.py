@@ -40,6 +40,7 @@ from .keyboards import (
     listing_keyboard,
     now_playing_keyboard,
     playlists_keyboard,
+    radio_keyboard,
     search_results_keyboard,
     speed_keyboard,
     subcategories_keyboard,
@@ -389,6 +390,30 @@ async def cb_chapter(query: CallbackQuery) -> None:
     await query.answer(err.replace("❌ ", "") if err else f"📖 #{n + 1}")
     if not err:
         await _refresh_chapters(query, n // PER_PAGE)
+
+
+@router.message(Command("mpv_radio", "mpv_fm"))
+async def cmd_radio(message: Message) -> None:
+    """Internet-radio presets as tune-in buttons."""
+    stations = get_settings().radio_stations
+    await message.reply(
+        "📻 Pick a station:",
+        reply_markup=radio_keyboard(stations),
+    )
+
+
+@router.callback_query(F.data.startswith("rd:"))
+async def cb_radio(query: CallbackQuery) -> None:
+    i = int(query.data[len("rd:"):])
+    stations = get_settings().radio_stations
+    if not (0 <= i < len(stations)):
+        await query.answer("Station list changed — run /mpv_radio again", show_alert=True)
+        return
+    name, url = stations[i]
+    _remember_chat(query.message)
+    await asyncio.to_thread(player.play_radio, get_settings(), url, name)
+    await query.answer(f"📻 {name[:60]}")
+    await query.message.reply(f"📻 Tuned to {name} — /mpv_info shows the current track")
 
 
 @router.message(Command("mpv_random", "mpv_surprise"))
@@ -843,6 +868,15 @@ async def _replay(message: Message, target: str) -> None:
     mpv parse the video bytes as a playlist and play nothing. URLs resume
     from the listener's last position checkpoint.
     """
+    station = next(
+        ((n, u) for n, u in get_settings().radio_stations if u == target), None
+    )
+    if station is not None:  # radio retunes directly — no probe, no resume
+        name, url = station
+        _remember_chat(message)
+        await asyncio.to_thread(player.play_radio, get_settings(), url, name)
+        await message.reply(f"📻 Tuned to {name}")
+        return
     if target.startswith(("http://", "https://")):
         entry = next(
             (e for e in state.history(get_settings().state_file) if e.target == target),
@@ -1320,6 +1354,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_notify</b> — toggle episode-finished notifications\n"
         "<b>/mpv_url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
         "<b>/mpv_yt</b> &lt;search&gt; — search YouTube, tap a result to play\n"
+        "<b>/mpv_radio</b> — internet radio, pick a station\n"
         "…or just <b>send a video/audio file</b> — it plays on the TV\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"

@@ -62,6 +62,24 @@ def test_get_settings_reads_env(monkeypatch):
     get_settings.cache_clear()
 
 
+def test_parse_radio_stations():
+    from src.config import DEFAULT_RADIO_STATIONS, _parse_radio_stations
+
+    # unset/empty → curated defaults
+    assert _parse_radio_stations(None) == DEFAULT_RADIO_STATIONS
+    assert _parse_radio_stations("") == DEFAULT_RADIO_STATIONS
+    # first "=" splits, query strings survive intact
+    parsed = _parse_radio_stations(
+        "Groove=https://somafm.com/gs.pls, DI Techno=http://listen.di.fm/t.pls?listen_key=abc"
+    )
+    assert parsed == [
+        ("Groove", "https://somafm.com/gs.pls"),
+        ("DI Techno", "http://listen.di.fm/t.pls?listen_key=abc"),
+    ]
+    # garbage entries are dropped; all-garbage falls back to defaults
+    assert _parse_radio_stations("nourl,=x,name=") == DEFAULT_RADIO_STATIONS
+
+
 def test_default_playlist_dirs_shape(monkeypatch):
     monkeypatch.setenv("VIDEOS_DIR", "/media/vids")
     dirs = config._default_playlist_dirs()
