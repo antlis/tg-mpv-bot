@@ -456,6 +456,31 @@ def fetch_subtitles(settings: Settings, info: dict, info_path: Path) -> list[Pat
     return sorted(tmp.glob(f"{_SUB_PREFIX}*"))[:3]  # a few tracks is plenty
 
 
+def build_radio_command(settings: Settings, url: str, name: str) -> list[str]:
+    """argv for an internet-radio stream — straight to mpv, no probe.
+
+    mpv parses ``.pls``/icecast natively, so stations start in ~a second.
+    No resume/position flags: live streams have no meaningful position.
+    """
+    cmd = [
+        _mpv_base(settings),
+        url,
+        f"--input-ipc-server={settings.mpv_socket}",
+        "--force-window",  # something on the TV + icecast title via OSD/panel
+        f"--force-media-title={name}",
+    ]
+    if settings.media_proxy:
+        cmd.append(f"--http-proxy={settings.media_proxy}")
+    return cmd
+
+
+def play_radio(settings: Settings, url: str, name: str) -> None:
+    """Tune the TV to an internet-radio stream (same kill→hooks→spawn path)."""
+    env = _hook_env(settings, url, name)
+    _kill_and_launch(settings, build_radio_command(settings, url, name), env)
+    state.record_last_played(settings.state_file, url, name=name)
+
+
 def build_listing_command(settings: Settings, url: str, limit: int = 12) -> list[str]:
     """argv for a cheap flat probe of a playlist/channel/listing page."""
     return [

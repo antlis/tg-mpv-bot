@@ -26,6 +26,7 @@ clashes (≤64 bytes):
     yt:<video_id>        → stream that YouTube result (ids are 11 chars — fits)
     ple:<i>              → play entry #i of the last probed listing page
                            (entry URLs exceed 64 bytes, hence the index)
+    rd:<i>               → tune to radio station #i of the configured presets
     ch:<n> / chs:<pg>    → jump to chapter <n> of the current file / picker page
     cats / noop          → back to categories / inert (page counter)
 
@@ -206,6 +207,15 @@ def chapters_keyboard(
                 callback_data=f"chs:{page + 1}" if page < total - 1 else "noop",
             ),
         ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def radio_keyboard(stations: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    """One tune-in button per configured station (callback ``rd:<i>``)."""
+    rows = [
+        [InlineKeyboardButton(text=f"📻 {name[:52]}", callback_data=f"rd:{i}")]
+        for i, (name, _url) in enumerate(stations)
+    ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

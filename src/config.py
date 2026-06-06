@@ -10,6 +10,39 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+# Internet-radio presets for /mpv_radio (overridable via RADIO_STATIONS).
+# All free, no auth, verified reachable at curation time.
+DEFAULT_RADIO_STATIONS: list[tuple[str, str]] = [
+    ("SomaFM Groove Salad — ambient/downtempo", "https://somafm.com/groovesalad.pls"),
+    ("SomaFM The Trip — prog house/trance", "https://somafm.com/thetrip.pls"),
+    ("SomaFM Beat Blender — deep house", "https://somafm.com/beatblender.pls"),
+    ("SomaFM Drone Zone — deep ambient", "https://somafm.com/dronezone.pls"),
+    ("SomaFM DEF CON Radio — hacker techno", "https://somafm.com/defcon.pls"),
+    ("Record Techno", "https://radiorecord.hostingradio.ru/techno96.aacp"),
+    ("Record Trancemission", "https://radiorecord.hostingradio.ru/tm96.aacp"),
+    ("Record Deep", "https://radiorecord.hostingradio.ru/deep96.aacp"),
+    ("Radio Paradise — eclectic rock", "https://stream.radioparadise.com/mp3-192"),
+    ("FIP — eclectic, Radio France", "https://icecast.radiofrance.fr/fip-midfi.mp3"),
+    ("Nightride FM — synthwave", "https://stream.nightride.fm/nightride.mp3"),
+    ("KEXP Seattle — indie", "https://kexp-mp3-128.streamguys1.com/kexp128.mp3"),
+]
+
+
+def _parse_radio_stations(raw: str | None) -> list[tuple[str, str]]:
+    """``Name=URL,Name=URL`` → pairs; empty/unset → the curated defaults.
+
+    Split on the *first* ``=`` of each entry, so URLs with query strings
+    (``?listen_key=…``) survive intact.
+    """
+    if not raw:
+        return DEFAULT_RADIO_STATIONS
+    stations = []
+    for entry in raw.split(","):
+        name, sep, url = entry.strip().partition("=")
+        if sep and name.strip() and url.strip():
+            stations.append((name.strip(), url.strip()))
+    return stations or DEFAULT_RADIO_STATIONS
+
 
 def _default_playlist_dirs() -> list[Path]:
     videos = Path(os.environ.get("VIDEOS_DIR", str(Path.home() / "Videos"))).expanduser()
@@ -57,6 +90,10 @@ class Settings:
     # from the same egress. For hosts whose direct line can't reach some
     # media CDNs (broken/blocked IPv6 etc.), e.g. "http://127.0.0.1:2080".
     media_proxy: str = ""
+    # /mpv_radio presets: (display name, stream URL) pairs.
+    radio_stations: list[tuple[str, str]] = field(
+        default_factory=lambda: DEFAULT_RADIO_STATIONS
+    )
     # Also pkill stray mpv instances (ones not started by the bot) before
     # playing. Guarantees a single player on screen, but is rude on machines
     # where mpv is used manually — set KILL_STRAY_MPV=0 there; the bot's own
@@ -113,6 +150,7 @@ def get_settings() -> Settings:
         ytdl_format=os.environ.get("YTDL_FORMAT", "bv*[height<=1080]+ba/b"),
         ytdl_sub_langs=os.environ.get("YTDL_SUB_LANGS", "en.*"),
         media_proxy=os.environ.get("MEDIA_PROXY", ""),
+        radio_stations=_parse_radio_stations(os.environ.get("RADIO_STATIONS")),
         kill_stray_mpv=os.environ.get("KILL_STRAY_MPV", "1").lower()
         in ("1", "true", "yes"),
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),

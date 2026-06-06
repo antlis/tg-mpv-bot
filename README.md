@@ -58,6 +58,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_notify` | Toggle notifications: "⏭ Now playing: 5/12 — …" on episode change, "✅ Finished" at the end |
 | `/mpv_url <link>` | Stream a URL via yt-dlp — or just **send a link** as a message |
 | `/mpv_yt <search>` | Search YouTube from chat — top results as tap-to-play buttons |
+| `/mpv_radio` | Internet radio — curated free stations (SomaFM, Radio Record, FIP, KEXP, …) as tune-in buttons; bring your own via `RADIO_STATIONS` |
 | *(send a video/audio file)* | Downloads and plays it — >20 MB needs `API_SERVER_URL` (local Bot API server) |
 | `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_shot` | Send a screenshot of the current frame to the chat |
@@ -259,6 +260,7 @@ Only `BOT_TOKEN` is required.
 | `YTDL_FORMAT` | `bv*[height<=1080]+ba/b` | yt-dlp format for URL streaming (raise the cap for 4K) |
 | `YTDL_SUB_LANGS` | `en.*` | Subtitle/auto-caption languages fetched for streams (`--sub-langs` syntax; empty disables) — toggle on screen with `/mpv_sub` |
 | `MEDIA_PROXY` | *(none)* | Proxy for non-YouTube playback — the yt-dlp probe and mpv's fetch both use it, so IP-locked CDN URLs stay coherent; for hosts whose direct line can't reach some media CDNs |
+| `RADIO_STATIONS` | *(curated dozen)* | `/mpv_radio` presets as `Name=URL,Name=URL` (first `=` splits, so `?listen_key=` URLs work) — replaces the built-in list |
 | `YTDL_OPTIONS` | *(none)* | Extra yt-dlp options, comma-separated `key=value` / bare flags — e.g. `force-ipv4` or the lean-YouTube `extractor-args=…` (see `.env.example`). Network-pinning keys (`force-ipv4/6`, `proxy`, …) apply to **YouTube URLs only** — other sites' IP-locked CDNs need the probe and mpv on the same default network path |
 | `YTDL_COOKIES_BROWSER` | *(none)* | Browser whose cookies unlock Instagram/Facebook and YouTube bot-checks (e.g. `firefox`); applied only to gated hosts / as an escalation, never globally |
 | `API_SERVER_URL` | *(none)* | Local [Bot API server](https://github.com/tdlib/telegram-bot-api) — lifts the 20 MB download cap to 2 GB for sent files (one-time `…/logOut` from the cloud API required when switching) |

@@ -240,6 +240,14 @@ def test_chapters_keyboard():
     assert any(b.text == "▶ 12:34  The Heist" and b.callback_data == "noop" for b in buttons)
 
 
+def test_radio_keyboard():
+    from src.keyboards import radio_keyboard
+    kb = radio_keyboard([("Groove Salad", "https://x/gs.pls"), ("FIP", "https://y/f.mp3")])
+    buttons = [b for row in kb.inline_keyboard for b in row]
+    assert [b.callback_data for b in buttons] == ["rd:0", "rd:1"]
+    assert buttons[0].text == "📻 Groove Salad"
+
+
 def test_listing_keyboard():
     from src.keyboards import listing_keyboard
     kb = listing_keyboard([

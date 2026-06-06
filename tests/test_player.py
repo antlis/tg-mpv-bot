@@ -85,6 +85,17 @@ def test_file_command_shape():
     assert "--input-ipc-server=/tmp/sock" in cmd
 
 
+def test_radio_command_shape():
+    from src.player import build_radio_command
+    s = _settings(mpv_runner="", media_proxy="http://127.0.0.1:2080")
+    cmd = build_radio_command(s, "https://somafm.com/thetrip.pls", "The Trip")
+    assert cmd[1] == "https://somafm.com/thetrip.pls"
+    assert "--force-media-title=The Trip" in cmd
+    assert "--http-proxy=http://127.0.0.1:2080" in cmd
+    # live streams: no resume/save-position flags
+    assert not any("save-position" in a or a.startswith("--start") for a in cmd)
+
+
 def test_needs_pipe_only_for_youtube():
     from src.player import needs_pipe
     # googlevideo URLs are IP-locked → pipe required
