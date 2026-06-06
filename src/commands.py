@@ -428,7 +428,9 @@ async def cb_radio_search(query: CallbackQuery) -> None:
         return
     s = _radio_search_cache[i]
     _remember_chat(query.message)
-    await asyncio.to_thread(player.play_radio, get_settings(), s["url"], s["name"])
+    await asyncio.to_thread(
+        player.play_radio, get_settings(), s["url"], s["name"], s.get("favicon")
+    )
     await query.answer(f"📻 {s['name'][:60]}")
     await query.message.reply(f"📻 Tuned to {s['name']}")
 
