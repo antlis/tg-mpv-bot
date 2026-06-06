@@ -13,6 +13,8 @@ import html
 import logging
 import random
 import re
+import shutil
+import socket
 import tempfile
 import time
 import uuid
@@ -697,6 +699,14 @@ def refresh_cache() -> None:
     _all_playlists(refresh=True)
 
 
+def _continue_label() -> str | None:
+    entries = state.history(get_settings().state_file)
+    if not entries:
+        return None
+    e = entries[0]
+    return e.name if e.is_url else playlists.prettify(e.name)
+
+
 @router.message(Command("mpv_list", "mpv_browse"))
 async def cmd_list(message: Message) -> None:
     pls = await asyncio.to_thread(_all_playlists, refresh=True)
@@ -705,7 +715,7 @@ async def cmd_list(message: Message) -> None:
         return
     await message.reply(
         f"📋 {len(pls)} playlists — pick a category:",
-        reply_markup=categories_keyboard(pls),
+        reply_markup=categories_keyboard(pls, _continue_label()),
     )
 
 
@@ -719,7 +729,7 @@ async def cb_categories(query: CallbackQuery) -> None:
     pls = await asyncio.to_thread(_all_playlists)
     await query.message.edit_text(
         f"📋 {len(pls)} playlists — pick a category:",
-        reply_markup=categories_keyboard(pls),
+        reply_markup=categories_keyboard(pls, _continue_label()),
     )
     await query.answer()
 
@@ -1103,6 +1113,59 @@ async def msg_url(message: Message) -> None:
 # ── Doctor / help ───────────────────────────────────────────────────
 
 
+def _health_report() -> str:
+    """One screen: player, tooling, library, disks. Runs in a thread."""
+    s = get_settings()
+    lines = []
+
+    try:
+        v = MpvClient(s.mpv_socket).get_property("mpv-version")
+        lines.append(f"✅ mpv running — {v}")
+    except MpvNotRunning:
+        lines.append("💤 mpv not running (normal when idle)")
+    except MpvError as exc:
+        lines.append(f"⚠️ mpv socket error: {exc}")
+
+    ver = player.ytdlp_version()
+    lines.append(f"{'✅' if ver else '❌'} yt-dlp {ver or 'MISSING — URL playback disabled'}")
+
+    if s.api_server_url:
+        from urllib.parse import urlparse as _up
+        u = _up(s.api_server_url)
+        try:
+            socket.create_connection((u.hostname, u.port or 80), timeout=3).close()
+            lines.append(f"✅ Bot API server reachable ({u.netloc})")
+        except OSError:
+            lines.append(f"❌ Bot API server unreachable ({u.netloc})")
+
+    pls = _all_playlists(refresh=True)
+    cats = {p.category for p in pls}
+    lines.append(f"📋 {len(pls)} playlists in {len(cats)} categories")
+    lines.append(f"🕘 {len(state.history(s.state_file))} history entries")
+
+    seen_devs = set()
+    for d in [*s.playlist_dirs, s.state_file.parent, Path(tempfile.gettempdir())]:
+        probe = d if d.exists() else d.parent
+        if not probe.exists():
+            continue
+        dev = probe.stat().st_dev
+        if dev in seen_devs:
+            continue
+        seen_devs.add(dev)
+        usage = shutil.disk_usage(probe)
+        free_gb, total_gb = usage.free / 1e9, usage.total / 1e9
+        flag = "⚠️" if usage.free < 0.05 * usage.total else "💾"
+        lines.append(f"{flag} {probe}: {free_gb:.0f} / {total_gb:.0f} GB free")
+
+    return "\n".join(lines)
+
+
+@router.message(Command("mpv_health", "mpv_status_full"))
+async def cmd_health(message: Message) -> None:
+    report = await asyncio.to_thread(_health_report)
+    await message.reply(f"<pre>{html.escape(report)}</pre>", parse_mode=ParseMode.HTML)
+
+
 @router.message(Command("mpv_update_ytdlp"))
 async def cmd_update_ytdlp(message: Message) -> None:
     """Update the venv's yt-dlp nightly (the fix when YouTube breaks)."""
@@ -1191,6 +1254,7 @@ async def cmd_help(message: Message) -> None:
         "<b>/mpv_sub</b> switch subtitle · <b>/mpv_sub_toggle</b> show/hide\n"
         "<b>/mpv_volup</b> · <b>/mpv_voldown</b> · <b>/mpv_mute</b>\n"
         "<b>/mpv_doctor</b> — check for broken playlists\n"
+        "<b>/mpv_health</b> — system health: player, tools, disks\n"
         "<b>/mpv_fix</b> — repair broken playlists\n"
         "<b>/mpv_scan</b> — create playlists for newly-added media\n"
         "<b>/mpv_update_ytdlp</b> — update yt-dlp (when YouTube breaks)\n"

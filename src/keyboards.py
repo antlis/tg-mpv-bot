@@ -269,8 +269,15 @@ def episodes_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def categories_keyboard(playlists: list[Playlist]) -> InlineKeyboardMarkup:
+def categories_keyboard(
+    playlists: list[Playlist], continue_label: str | None = None
+) -> InlineKeyboardMarkup:
     rows = []
+    if continue_label:
+        # h:0 = newest history entry — same replay path as /mpv_history
+        rows.append(
+            [InlineKeyboardButton(text=f"▶ Continue: {continue_label[:42]}", callback_data="h:0")]
+        )
     for ci, cat in enumerate(categories(playlists)):
         count = sum(1 for p in playlists if p.category == cat)
         emoji = CATEGORY_EMOJI.get(cat, "📁")

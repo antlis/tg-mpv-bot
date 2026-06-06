@@ -82,6 +82,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_voldown` | Volume -10 |
 | `/mpv_mute` | Toggle mute |
 | `/mpv_doctor` | Report playlists with missing files on disk |
+| `/mpv_health` | One-screen health check: mpv, yt-dlp, Bot API server, library, disk space |
 | `/mpv_fix` | Repair broken playlists (re-point moved files, prune dead) |
 | `/mpv_scan` | Create playlists for newly-added media (idempotent) |
 | `/mpv_update_ytdlp` | Update the bot's yt-dlp to the latest nightly — the usual fix when YouTube playback breaks |

@@ -140,6 +140,20 @@ NIGHTLY_URL = (
 )
 
 
+def ytdlp_version() -> str | None:
+    """Installed yt-dlp version (venv copy preferred), or ``None``."""
+    binary = _ytdlp_bin()
+    if binary is None:
+        return None
+    try:
+        out = subprocess.run(
+            [binary, "--version"], capture_output=True, text=True, timeout=30
+        )
+        return out.stdout.strip() or None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
 def update_ytdlp(timeout: float = 300) -> str:
     """Update the venv's yt-dlp to the latest nightly; returns a status line.
 
@@ -152,16 +166,7 @@ def update_ytdlp(timeout: float = 300) -> str:
         return "❌ No venv pip found — the bot isn't running from a venv"
 
     def version() -> str:
-        binary = _ytdlp_bin()
-        if binary is None:
-            return "none"
-        try:
-            out = subprocess.run(
-                [binary, "--version"], capture_output=True, text=True, timeout=30
-            )
-            return out.stdout.strip() or "?"
-        except (OSError, subprocess.TimeoutExpired):
-            return "?"
+        return ytdlp_version() or "none"
 
     old = version()
     try:

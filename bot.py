@@ -68,6 +68,7 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_voldown", description="Volume -10"),
         BotCommand(command="mpv_mute", description="Toggle mute"),
         BotCommand(command="mpv_doctor", description="Check for broken playlists"),
+        BotCommand(command="mpv_health", description="System health: player, tools, disks"),
         BotCommand(command="mpv_fix", description="Repair broken playlists"),
         BotCommand(command="mpv_scan", description="Create playlists for new media"),
         BotCommand(command="mpv_update_ytdlp", description="Update yt-dlp (when YouTube breaks)"),
