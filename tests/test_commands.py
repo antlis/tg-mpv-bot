@@ -11,8 +11,10 @@ from src.commands import (
     _local_api_path,
     _parse_goto,
     _parse_sleep,
+    _status_text,
 )
 from src.config import get_settings
+from src.mpv_ipc import MpvError
 
 
 class FakePlaylistClient:
@@ -127,3 +129,48 @@ def test_local_api_path_mapping(monkeypatch):
 def test_episodes_text():
     assert _episodes_text(["a", "b"], 0) == "📜 2 items (now: #1) — tap to jump:"
     assert _episodes_text(["a"], None) == "📜 1 items — tap to jump:"
+
+
+class FakePropClient:
+    """get_property backed by a dict; missing keys raise MpvError like real mpv."""
+
+    def __init__(self, props):
+        self._props = props
+
+    def get_property(self, name):
+        if name in self._props:
+            return self._props[name]
+        raise MpvError(f"property unavailable: {name}")
+
+
+def test_status_text_radio_shows_icy_title():
+    client = FakePropClient({
+        "media-title": "Record Techno",          # forced station name
+        "metadata/icy-title": "SAMDMA - Drip Trip",
+        "time-pos": 42.0,
+        "pause": False,
+        "volume": 100.0,
+    })
+    text = _status_text(client)
+    assert "🎬 Record Techno" in text
+    assert "🎵 SAMDMA - Drip Trip" in text
+    assert text.index("🎬") < text.index("🎵")  # station first, track under it
+
+
+def test_status_text_no_icy_for_local_files():
+    client = FakePropClient({
+        "media-title": "Show S01E01",
+        "time-pos": 10.0,
+        "duration": 1200.0,
+        "pause": False,
+    })
+    assert "🎵" not in _status_text(client)
+
+
+def test_status_text_icy_equal_to_title_not_duplicated():
+    client = FakePropClient({
+        "media-title": "SAMDMA - Drip Trip",     # no forced title: media-title IS the icy title
+        "metadata/icy-title": "SAMDMA - Drip Trip",
+        "pause": False,
+    })
+    assert _status_text(client).count("SAMDMA - Drip Trip") == 1
