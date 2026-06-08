@@ -673,7 +673,13 @@ def _status_text(client: MpvClient) -> str:
     line2 = f"{state}   {pos} / {dur}"
     if isinstance(pct, (int, float)):
         line2 += f" ({pct:.0f}%)"
-    parts = [f"🎬 {title}", line2]
+    parts = [f"🎬 {title}"]
+    # Internet radio: the launcher forces media-title to the station name,
+    # but the stream's ICY metadata still carries the live track.
+    icy = safe("metadata/icy-title")
+    if icy and icy != title:
+        parts.append(f"🎵 {icy}")
+    parts.append(line2)
     line3 = []
     if vol is not None:
         line3.append(f"🔊 {vol:.0f}")
