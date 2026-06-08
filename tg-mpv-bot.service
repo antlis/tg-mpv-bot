@@ -14,9 +14,11 @@ RestartSec=5
 # BOT_TOKEN / ALLOWED_USERS live here, outside the repo:
 EnvironmentFile=%h/.config/environment.d/99-tg-mpv-bot.conf
 Environment=DISPLAY=:0
-# WM glue lives in hooks, not the bot. i3-msg finds its socket via X11 —
-# never hardcode I3SOCK (the path embeds i3's PID and goes stale on reboot).
-Environment="PRE_PLAY_HOOK=i3-msg workspace 10"
+# WM glue lives in hooks, not the bot. wake-tv.sh wakes a DPMS-asleep HDMI
+# TV (else mpv lands on the laptop) then switches workspace; it finds i3's
+# socket via X11 — never hardcode I3SOCK (the path embeds i3's PID and goes
+# stale on reboot).
+Environment="PRE_PLAY_HOOK=%h/Projects/tg-mpv-bot/scripts/wake-tv.sh"
 # URL playback: Firefox cookies for gated Instagram/Facebook ONLY — never
 # global (logged-in YouTube cookies make yt-dlp hang on bot checks).
 Environment=YTDL_COOKIES_BROWSER=firefox
