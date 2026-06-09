@@ -99,22 +99,26 @@ def page_slice(items: list[int], page: int, per_page: int = PER_PAGE) -> list[in
 
 
 # ── keyboards ────────────────────────────────────────────────────────
-def now_playing_keyboard(paused: bool | None = None) -> InlineKeyboardMarkup:
+def now_playing_keyboard(
+    paused: bool | None = None, recording: bool = False
+) -> InlineKeyboardMarkup:
     """Transport controls for the now-playing panel (callback data `ctl:<action>`).
 
     The middle button is the play/pause toggle; its label reflects state —
-    ``▶ Play`` when paused, ``⏸ Pause`` when playing, ``⏯`` when unknown.
+    ``▶ Play`` when paused, ``⏸ Pause`` when playing, ``⏯`` when unknown. The
+    record button toggles between ``⏺ Rec`` and ``⏺ Stop``.
     """
     def b(text: str, action: str) -> InlineKeyboardButton:
         return InlineKeyboardButton(text=text, callback_data=f"ctl:{action}")
 
     toggle = "▶ Play" if paused is True else "⏸ Pause" if paused is False else "⏯"
+    rec = "⏺ Stop" if recording else "⏺ Rec"
 
     return InlineKeyboardMarkup(inline_keyboard=[
         [b("⏮", "prev"), b("⏪", "back"), b(toggle, "toggle"), b("⏩", "fwd"), b("⏭", "next")],
         [b("0%", "p0"), b("25%", "p25"), b("50%", "p50"), b("75%", "p75")],
         [b("🔉", "voldown"), b("🔇", "mute"), b("🔊", "volup"), b("💬", "sub"), b("🎧", "audio")],
-        [b("🔀", "shuffle"), b("🔁", "loop"), b("⏹", "stop"), b("🔄 Refresh", "refresh")],
+        [b("🔀", "shuffle"), b("🔁", "loop"), b("⏹", "stop"), b(rec, "record"), b("🔄", "refresh")],
     ])
 
 
