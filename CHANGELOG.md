@@ -3,6 +3,13 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.1] — 2026-06-09
+### Fixed
+- **Recording A/V sync** — recorded video clips had audio roughly 80 ms ahead of
+  the picture. The re-encode now drops B-frames (`-bf 0`, so the first frame
+  starts at PTS 0), forces constant frame rate, and resamples the audio to lock
+  it to the video clock.
+
 ## [1.3.0] — 2026-06-09
 ### Added
 - **`/mpv_record`** — record what's playing and send it to the chat: the current
@@ -18,4 +25,5 @@ now-playing transport panel (seek-to-%, volume, speed, tracks), watch history /
 continue, screenshots, sleep timer, loudness normalization, and the
 health/doctor/scan tooling.
 
+[1.3.1]: https://github.com/antlis/tg-mpv-bot/releases/tag/v1.3.1
 [1.3.0]: https://github.com/antlis/tg-mpv-bot/releases/tag/v1.3.0

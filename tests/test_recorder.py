@@ -20,6 +20,9 @@ def test_hevc_video_reencodes_to_h264_720p():
     assert "libx264" in a
     assert "scale=-2:720" in a
     assert "copy" not in a
+    # A/V sync: no B-frames (so video starts at PTS 0) + audio resample
+    assert a[a.index("-bf") + 1] == "0"
+    assert any("aresample" in x for x in a)
 
 
 def test_seek_is_clamped_inside_the_file():
