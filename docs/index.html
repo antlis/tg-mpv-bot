@@ -379,6 +379,7 @@
       <div class="card"><span class="tile">🔎</span><b>Search YouTube from chat</b><p><code>/mpv_yt lofi beats</code> — top results with thumbnails, tap one to play.</p></div>
       <div class="card"><span class="tile">📨</span><b>Forward video files</b><p>Any Telegram video plays on the TV — up to 2&nbsp;GB with a local Bot API server.</p></div>
       <div class="card"><span class="tile">🎛</span><b>Full transport control</b><p>One now-playing panel: pause, seek, %-jump, volume, speed, audio &amp; subtitle tracks.</p></div>
+      <div class="card"><span class="tile">⏺</span><b>Record &amp; clip</b><p>Capture what's playing to an H.264 mp4, or the radio to a voice message, and get it right in the chat — tap once to start, again to stop.</p></div>
       <div class="card"><span class="tile">▶</span><b>Continue watching</b><p>Watch history with one-tap replay — playlists <em>and</em> streams resume where you left off.</p></div>
       <div class="card"><span class="tile">🔔</span><b>Knows when you're done</b><p>"⏭ Now playing: 6/12" on episode change, "✅ Finished" at the end. <code>/mpv_sleep 45m</code> for bedtime.</p></div>
       <div class="card"><span class="tile">📻</span><b>Internet radio</b><p>The full SomaFM catalog and friends as presets, plus search across ~50k stations — tuned in about a second.</p></div>
@@ -509,6 +510,7 @@ systemctl --user enable --now tg-mpv-bot</code></pre>
           <div class="row"><div class="c"><code>/mpv_sleep &lt;time&gt;</code></div><span>stop after <code>45m</code> / <code>1.5h</code> (<code>off</code> cancels)</span></div>
           <div class="row"><div class="c"><code>/mpv_notify</code></div><span>toggle "⏭ now playing" / "✅ finished" messages</span></div>
           <div class="row"><div class="c"><code>/mpv_shot</code></div><span>screenshot of the current frame, sent to the chat</span></div>
+          <div class="row"><div class="c"><code>/mpv_record</code></div><span>record the video (→ mp4) or radio (→ voice) and send it; tap again to stop</span></div>
         </div>
       </div>
 

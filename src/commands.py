@@ -28,7 +28,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, FSInputFile, Message
 
-from . import generate, keyboards, player, playlists, state
+from . import generate, keyboards, player, playlists, recorder, state
 from .config import get_settings
 from .keyboards import (
     PER_PAGE,
@@ -635,6 +635,140 @@ async def cmd_shot(message: Message) -> None:
         shot.unlink(missing_ok=True)
 
 
+# ── Record ──────────────────────────────────────────────────────────
+# A single mpv ⇒ at most one active recording at a time.
+_recording: dict | None = None
+
+
+def _is_recording() -> bool:
+    return _recording is not None
+
+
+def _record_source(client: MpvClient) -> dict | None:
+    """What's playing right now, as ffmpeg inputs. Raises MpvNotRunning if mpv
+    is down (so _ipc surfaces the friendly error)."""
+    src = client._safe_get("stream-open-filename") or client.get_property("path")
+    if not src:
+        return None
+    return {
+        "src": src,
+        "pos": client._safe_get("time-pos") or 0,
+        "dur": client._safe_get("duration") or 0,
+        "video": bool(client._safe_get("width")),
+        "vfmt": client._safe_get("video-format") or "",
+        "name": client._safe_get("media-title") or client._safe_get("filename") or "recording",
+    }
+
+
+async def _toggle_record(message: Message, secs: int = recorder.RECORD_MAX) -> None:
+    """Start a recording of the current media, or stop & send the running one."""
+    global _recording
+    if _recording is not None:        # toggle off
+        _recording["stop"].set()
+        await message.reply("⏹ Stopping & sending the recording…")
+        return
+    info, err = await _ipc(_record_source)
+    if err:
+        await message.reply(err)
+        return
+    if not info:
+        await message.reply("⏹ Nothing is playing to record.")
+        return
+    ext = "mp4" if info["video"] else "ogg"
+    out = str(Path(tempfile.gettempdir()) / f"tg-mpv-rec-{uuid.uuid4().hex}.{ext}")
+    errlog = out + ".log"
+    args = recorder.build_record_args(
+        info["src"], info["pos"], info["dur"], info["video"], info["vfmt"], out, secs
+    )
+    try:
+        proc = await recorder.spawn(args, errlog)
+    except Exception as exc:  # noqa: BLE001 — surface any spawn failure to the user
+        await message.reply(f"❌ couldn't start recording: {exc}")
+        return
+    kind = "video" if info["video"] else "audio"
+    status = await message.reply(
+        f"🔴 Recording {kind}: {html.escape(str(info['name'])[:60])}…\n"
+        "Send /mpv_record again (or tap ⏺ Stop) to finish."
+    )
+    _recording = {
+        "proc": proc, "out": out, "errlog": errlog, "video": info["video"],
+        "name": str(info["name"]), "stop": asyncio.Event(), "status": status,
+        "bot": message.bot, "chat_id": message.chat.id, "start": time.time(),
+    }
+    asyncio.ensure_future(_record_watch())
+
+
+async def _record_watch() -> None:
+    """Wait until the recording is stopped (toggle) or ffmpeg exits (cap reached),
+    then remux + upload it."""
+    global _recording
+    rec = _recording
+    if not rec:
+        return
+    proc = rec["proc"]
+    while True:
+        try:
+            await asyncio.wait_for(rec["stop"].wait(), timeout=5)
+        except TimeoutError:
+            pass
+        if rec["stop"].is_set() or proc.returncode is not None:
+            break
+    if proc.returncode is None:
+        try:
+            proc.terminate()
+            await asyncio.wait_for(proc.wait(), 10)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    _recording = None
+    bot, chat_id = rec["bot"], rec["chat_id"]
+    out, errlog = rec["out"], rec["errlog"]
+    tail = ""
+    try:
+        tail = Path(errlog).read_text()[-600:]
+    except OSError:
+        pass
+    Path(errlog).unlink(missing_ok=True)
+    try:
+        await rec["status"].delete()
+    except Exception:
+        pass
+    if not (Path(out).exists() and Path(out).stat().st_size > 4096):
+        logger.warning("recording produced no content. ffmpeg tail:\n%s", tail)
+        Path(out).unlink(missing_ok=True)
+        await bot.send_message(chat_id, "🚫 recording produced no content — check the logs.")
+        return
+    dur = _fmt_time(int(time.time() - rec["start"]))
+    name = rec["name"][:60]
+    send_path = out
+    try:
+        if rec["video"]:
+            send_path = await recorder.remux_faststart(out) or out
+            await bot.send_video(chat_id, FSInputFile(send_path),
+                                 caption=f"🎬 {name} · {dur}", supports_streaming=True)
+        else:
+            await bot.send_voice(chat_id, FSInputFile(out), caption=f"🎙 {name} · {dur}")
+    except Exception as exc:  # noqa: BLE001
+        await bot.send_message(chat_id, f"🚫 couldn't send the recording: {exc}")
+    finally:
+        Path(out).unlink(missing_ok=True)
+        if send_path != out:
+            Path(send_path).unlink(missing_ok=True)
+
+
+@router.message(Command("mpv_record", "mpv_rec"))
+async def cmd_record(message: Message, command: CommandObject) -> None:
+    secs = recorder.RECORD_MAX
+    if command.args:
+        try:
+            secs = max(1, min(recorder.RECORD_MAX, int(command.args.strip())))
+        except ValueError:
+            pass
+    await _toggle_record(message, secs)
+
+
 # ── Status ──────────────────────────────────────────────────────────
 
 
@@ -701,7 +835,7 @@ async def _send_panel(message: Message, *, edit: bool = False) -> None:
     """Render the now-playing panel (status text + transport buttons)."""
     state, err = await _ipc(_panel_state)
     body, paused = (state[0], state[1]) if state else (err, None)
-    kb = now_playing_keyboard(paused)
+    kb = now_playing_keyboard(paused, recording=_is_recording())
     if edit:
         try:
             await message.edit_text(body, reply_markup=kb)
@@ -741,6 +875,11 @@ _CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
 @router.callback_query(F.data.startswith("ctl:"))
 async def cb_ctl(query: CallbackQuery) -> None:
     action = query.data[len("ctl:"):]
+    if action == "record":  # start/stop is async + stateful, not a simple IPC call
+        await query.answer("⏹ stopping…" if _is_recording() else "⏺ recording…")
+        await _toggle_record(query.message)
+        await _send_panel(query.message, edit=True)
+        return
     fn = _CTL_ACTIONS.get(action)
     if fn is None:
         await query.answer()
@@ -1409,6 +1548,7 @@ async def cmd_help(message: Message) -> None:
         "…or just <b>send a video/audio file</b> — it plays on the TV\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"
+        "<b>/mpv_record</b> [secs] — record the current video/radio and send it (tap again to stop)\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s · <b>/mpv_goto</b> &lt;pos&gt;\n"

@@ -16,6 +16,7 @@ socket](https://mpv.io/manual/stable/#json-ipc) directly from Python.
 - 📨 **Send a file** — forward any video/audio from Telegram, it plays on the TV
 - 🎛 **Now-playing panel** — transport, seek-to-%, volume, tracks, one message
 - 📜 **Episode picker**, ▶ **continue watching**, 📸 **frame screenshots**
+- ⏺ **Record** the current video (→ H.264 mp4) or radio (→ voice message) and get it in chat
 - 🪝 **Hooks** instead of WM assumptions — `i3-msg`/`swaymsg`/`notify-send`, your call
 
 ![tg-mpv-bot demo](docs/demo.svg)
@@ -62,6 +63,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | *(send a video/audio file)* | Downloads and plays it — >20 MB needs `API_SERVER_URL` (local Bot API server) |
 | `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_shot` | Send a screenshot of the current frame to the chat |
+| `/mpv_record [secs]` | Record what's playing — video → H.264 mp4, radio/audio → voice message — and send it to the chat. Run again (or tap ⏺ Stop) to finish; auto-stops at 1 h |
 | `/mpv_toggle` | Play/pause toggle (one command) |
 | `/mpv_pause` | Pause playback |
 | `/mpv_unpause` | Resume playback |
