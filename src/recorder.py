@@ -45,10 +45,13 @@ def build_record_args(
         if vfmt == "h264":
             venc = ["-c:v", "copy"]
         else:
+            # -bf 0 (no B-frames) + cfr keep A/V aligned: the B-frame reorder
+            # delay otherwise leaves the first video frame at a positive PTS while
+            # audio starts at 0, i.e. audio ~80ms ahead of the video.
             venc = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                    "-vf", "scale=-2:720", "-pix_fmt", "yuv420p"]
+                    "-vf", "scale=-2:720", "-pix_fmt", "yuv420p", "-bf", "0", "-fps_mode", "cfr"]
         body = ["-i", src, "-t", str(secs), "-map", "0:v:0", "-map", "0:a:0",
-                *venc, "-c:a", "aac", "-b:a", "160k",
+                *venc, "-af", "aresample=async=1:first_pts=0", "-c:a", "aac", "-b:a", "160k",
                 "-movflags", "+frag_keyframe+empty_moov+default_base_moof", out]
     else:
         body = ["-i", src, "-t", str(secs), "-vn", "-ac", "1",
