@@ -65,6 +65,7 @@ async def _ipc(fn: Callable[[MpvClient], T]) -> tuple[T | None, str | None]:
     Returns ``(result, None)`` on success or ``(None, error_message)`` with a
     user-facing string when mpv is unreachable or rejects the command.
     """
+
     def run() -> T:
         return fn(_client())
 
@@ -147,11 +148,7 @@ def _cycle_sub_text(client: MpvClient) -> str:
     sid = safe("sid")
     if not sid:  # False / None / "no" → subtitles off
         return "💬 Subtitles: off"
-    label = (
-        safe("current-tracks/sub/title")
-        or safe("current-tracks/sub/lang")
-        or f"track {sid}"
-    )
+    label = safe("current-tracks/sub/title") or safe("current-tracks/sub/lang") or f"track {sid}"
     return f"💬 Subtitles: {label}"
 
 
@@ -180,9 +177,7 @@ def _cycle_audio_text(client: MpvClient) -> str:
     if not aid:
         return "🎧 Audio: off"
     label = (
-        safe("current-tracks/audio/title")
-        or safe("current-tracks/audio/lang")
-        or f"track {aid}"
+        safe("current-tracks/audio/title") or safe("current-tracks/audio/lang") or f"track {aid}"
     )
     return f"🎧 Audio: {label}"
 
@@ -278,13 +273,13 @@ async def _refresh_episode_picker(query: CallbackQuery, page: int) -> None:
 
 @router.callback_query(F.data.startswith("eps:"))
 async def cb_episodes_page(query: CallbackQuery) -> None:
-    await _refresh_episode_picker(query, int(query.data[len("eps:"):]))
+    await _refresh_episode_picker(query, int(query.data[len("eps:") :]))
     await query.answer()
 
 
 @router.callback_query(F.data.startswith("ep:"))
 async def cb_episode(query: CallbackQuery) -> None:
-    n = int(query.data[len("ep:"):])
+    n = int(query.data[len("ep:") :])
     _, err = await _ipc(lambda c: c.set_playlist_pos(n))
     await query.answer(err.replace("❌ ", "") if err else f"▶ #{n + 1}")
     if not err:
@@ -380,13 +375,13 @@ async def _refresh_chapters(query: CallbackQuery, page: int) -> None:
 
 @router.callback_query(F.data.startswith("chs:"))
 async def cb_chapters_page(query: CallbackQuery) -> None:
-    await _refresh_chapters(query, int(query.data[len("chs:"):]))
+    await _refresh_chapters(query, int(query.data[len("chs:") :]))
     await query.answer()
 
 
 @router.callback_query(F.data.startswith("ch:"))
 async def cb_chapter(query: CallbackQuery) -> None:
-    n = int(query.data[len("ch:"):])
+    n = int(query.data[len("ch:") :])
     _, err = await _ipc(lambda c: c.set_chapter(n))
     await query.answer(err.replace("❌ ", "") if err else f"📖 #{n + 1}")
     if not err:
@@ -422,7 +417,7 @@ async def cmd_radio(message: Message, command: CommandObject) -> None:
 
 @router.callback_query(F.data.startswith("rdq:"))
 async def cb_radio_search(query: CallbackQuery) -> None:
-    i = int(query.data[len("rdq:"):])
+    i = int(query.data[len("rdq:") :])
     if not (0 <= i < len(_radio_search_cache)):
         await query.answer("Search expired — run /mpv_radio <query> again", show_alert=True)
         return
@@ -437,7 +432,7 @@ async def cb_radio_search(query: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("rds:"))
 async def cb_radio_page(query: CallbackQuery) -> None:
-    page = int(query.data[len("rds:"):])
+    page = int(query.data[len("rds:") :])
     try:
         await query.message.edit_reply_markup(
             reply_markup=radio_keyboard(get_settings().radio_stations, page)
@@ -449,7 +444,7 @@ async def cb_radio_page(query: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("rd:"))
 async def cb_radio(query: CallbackQuery) -> None:
-    i = int(query.data[len("rd:"):])
+    i = int(query.data[len("rd:") :])
     stations = get_settings().radio_stations
     if not (0 <= i < len(stations)):
         await query.answer("Station list changed — run /mpv_radio again", show_alert=True)
@@ -474,9 +469,7 @@ async def cmd_random(message: Message, command: CommandObject) -> None:
         cats = {c.lower(): c for c in keyboards.categories(pls)}
         cat = cats.get(arg.lower())
         if cat is None:
-            await message.reply(
-                f"❌ No category '{arg}'. Have: {', '.join(sorted(cats.values()))}"
-            )
+            await message.reply(f"❌ No category '{arg}'. Have: {', '.join(sorted(cats.values()))}")
             return
         pool = [p for p in pls if p.category == cat]
     pl = random.choice(pool)
@@ -490,8 +483,8 @@ async def cmd_night(message: Message) -> None:
     """Toggle loudness normalization for late-night viewing."""
     on, err = await _ipc(lambda c: c.toggle_night())
     await message.reply(
-        err or ("🌙 Night mode ON — quiet dialogue up, explosions down"
-                if on else "🔊 Night mode off")
+        err
+        or ("🌙 Night mode ON — quiet dialogue up, explosions down" if on else "🔊 Night mode off")
     )
 
 
@@ -517,7 +510,8 @@ async def _sleep_fire(message: Message, minutes: int) -> None:
         await asyncio.sleep(minutes * 60)
         _, err = await _ipc(lambda c: c.quit())
         await message.answer(
-            "😴 Sleep timer: stopped playback" if not err
+            "😴 Sleep timer: stopped playback"
+            if not err
             else "😴 Sleep timer fired — nothing was playing"
         )
     finally:
@@ -572,7 +566,9 @@ async def cmd_speed(message: Message, command: CommandObject) -> None:
         try:
             val = float(arg)
         except ValueError:
-            await message.reply("Usage: /mpv_speed [value]  — e.g. /mpv_speed 1.5, or no arg for buttons")
+            await message.reply(
+                "Usage: /mpv_speed [value]  — e.g. /mpv_speed 1.5, or no arg for buttons"
+            )
             return
         speed, err = await _ipc(lambda c: c.set_speed(val))
         await message.reply(err or f"⏩ Speed: {speed:g}×")
@@ -586,7 +582,7 @@ async def cmd_speed(message: Message, command: CommandObject) -> None:
 
 @router.callback_query(F.data.startswith("spd:"))
 async def cb_speed(query: CallbackQuery) -> None:
-    val = float(query.data[len("spd:"):])
+    val = float(query.data[len("spd:") :])
     speed, err = await _ipc(lambda c: c.set_speed(val))
     await query.answer(err.replace("❌ ", "") if err else f"{speed:g}×")
     if not err:
@@ -663,7 +659,7 @@ def _record_source(client: MpvClient) -> dict | None:
 async def _toggle_record(message: Message, secs: int = recorder.RECORD_MAX) -> None:
     """Start a recording of the current media, or stop & send the running one."""
     global _recording
-    if _recording is not None:        # toggle off
+    if _recording is not None:  # toggle off
         _recording["stop"].set()
         await message.reply("⏹ Stopping & sending the recording…")
         return
@@ -691,9 +687,16 @@ async def _toggle_record(message: Message, secs: int = recorder.RECORD_MAX) -> N
         "Send /mpv_record again (or tap ⏺ Stop) to finish."
     )
     _recording = {
-        "proc": proc, "out": out, "errlog": errlog, "video": info["video"],
-        "name": str(info["name"]), "stop": asyncio.Event(), "status": status,
-        "bot": message.bot, "chat_id": message.chat.id, "start": time.time(),
+        "proc": proc,
+        "out": out,
+        "errlog": errlog,
+        "video": info["video"],
+        "name": str(info["name"]),
+        "stop": asyncio.Event(),
+        "status": status,
+        "bot": message.bot,
+        "chat_id": message.chat.id,
+        "start": time.time(),
     }
     asyncio.ensure_future(_record_watch())
 
@@ -745,9 +748,17 @@ async def _record_watch() -> None:
     send_path = out
     try:
         if rec["video"]:
-            send_path = await recorder.remux_faststart(out) or out
-            await bot.send_video(chat_id, FSInputFile(send_path),
-                                 caption=f"🎬 {name} · {dur}", supports_streaming=True)
+            remuxed = await recorder.remux_faststart(out)
+            if remuxed:
+                send_path = remuxed
+            else:
+                logger.warning("remux_faststart failed; sending raw recording")
+            await bot.send_video(
+                chat_id,
+                FSInputFile(send_path),
+                caption=f"🎬 {name} · {dur}",
+                supports_streaming=True,
+            )
         else:
             await bot.send_voice(chat_id, FSInputFile(out), caption=f"🎙 {name} · {dur}")
     except Exception as exc:  # noqa: BLE001
@@ -874,7 +885,7 @@ _CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
 
 @router.callback_query(F.data.startswith("ctl:"))
 async def cb_ctl(query: CallbackQuery) -> None:
-    action = query.data[len("ctl:"):]
+    action = query.data[len("ctl:") :]
     if action == "record":  # start/stop is async + stateful, not a simple IPC call
         await query.answer("⏹ stopping…" if _is_recording() else "⏺ recording…")
         await _toggle_record(query.message)
@@ -1002,7 +1013,7 @@ async def cb_subcategory(query: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("pl:"))
 async def cb_play(query: CallbackQuery) -> None:
-    idx = int(query.data[len("pl:"):])
+    idx = int(query.data[len("pl:") :])
     pls = await asyncio.to_thread(_all_playlists)
     if not (0 <= idx < len(pls)):
         await query.answer("Playlist no longer available", show_alert=True)
@@ -1058,9 +1069,7 @@ async def _replay(message: Message, target: str) -> None:
     mpv parse the video bytes as a playlist and play nothing. URLs resume
     from the listener's last position checkpoint.
     """
-    station = next(
-        ((n, u) for n, u in get_settings().radio_stations if u == target), None
-    )
+    station = next(((n, u) for n, u in get_settings().radio_stations if u == target), None)
     if station is not None:  # radio retunes directly — no probe, no resume
         name, url = station
         _remember_chat(message)
@@ -1093,7 +1102,8 @@ async def cmd_notify(message: Message) -> None:
     state.set_notify_enabled(sf, enabled)
     await message.reply(
         "🔔 Playback notifications ON — I'll message when an episode ends"
-        if enabled else "🔕 Playback notifications OFF"
+        if enabled
+        else "🔕 Playback notifications OFF"
     )
 
 
@@ -1111,7 +1121,7 @@ async def cmd_history(message: Message) -> None:
 
 @router.callback_query(F.data.startswith("h:"))
 async def cb_history(query: CallbackQuery) -> None:
-    i = int(query.data[len("h:"):])
+    i = int(query.data[len("h:") :])
     entries = state.history(get_settings().state_file)
     if not (0 <= i < len(entries)):
         await query.answer("History changed — run /mpv_history again", show_alert=True)
@@ -1188,7 +1198,7 @@ async def cmd_yt(message: Message, command: CommandObject) -> None:
 
 @router.callback_query(F.data.startswith("yt:"))
 async def cb_yt(query: CallbackQuery) -> None:
-    video_id = query.data[len("yt:"):]
+    video_id = query.data[len("yt:") :]
     await query.answer("▶ Starting…")
     await _play_url(query.message, f"https://www.youtube.com/watch?v={video_id}")
 
@@ -1343,7 +1353,9 @@ async def _play_url(message: Message, url: str, start: float | None = None) -> N
 
     task = asyncio.create_task(
         asyncio.to_thread(
-            player.play_url, get_settings(), url,
+            player.play_url,
+            get_settings(),
+            url,
             lambda name: stage.__setitem__("name", name),
             start,
         )
@@ -1389,7 +1401,7 @@ async def _play_url(message: Message, url: str, start: float | None = None) -> N
 
 @router.callback_query(F.data.startswith("ple:"))
 async def cb_listing_entry(query: CallbackQuery) -> None:
-    i = int(query.data[len("ple:"):])
+    i = int(query.data[len("ple:") :])
     if not (0 <= i < len(_listing_cache)):
         await query.answer("Listing expired — send the link again", show_alert=True)
         return
@@ -1438,6 +1450,7 @@ def _health_report() -> str:
 
     if s.api_server_url:
         from urllib.parse import urlparse as _up
+
         u = _up(s.api_server_url)
         try:
             socket.create_connection((u.hostname, u.port or 80), timeout=3).close()

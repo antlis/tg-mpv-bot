@@ -1,6 +1,6 @@
 [project]
 name = "tg-mpv-bot"
-version = "1.3.1"
+version = "1.3.2"
 description = "Telegram remote control for mpv — browse your library, stream links, control playback from your phone"
 readme = "README.md"
 license = "MIT"
