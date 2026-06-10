@@ -28,7 +28,8 @@ def build_record_args(
     - Live http (radio / streams): no seek, capture going forward.
     - Video: copy when already H.264, else re-encode to H.264 720p; audio always
       re-encoded to AAC (library MKVs are often E-AC3, which can't be copied into
-      mp4). Fragmented mp4 stays valid if a stop kills ffmpeg mid-write.
+      mp4).  ``+faststart`` puts the moov atom at the front so Telegram / Android
+      can stream the file without a remux pass.
     - Audio-only: mono Opus, sent as a voice message.
     """
     secs = max(1, min(RECORD_MAX, int(secs)))
@@ -42,20 +43,63 @@ def build_record_args(
             pre += ["-ss", str(int(p))]
         pre += ["-re"]
     if is_video:
-        if vfmt == "h264":
-            venc = ["-c:v", "copy"]
-        else:
-            # -bf 0 (no B-frames) + cfr keep A/V aligned: the B-frame reorder
-            # delay otherwise leaves the first video frame at a positive PTS while
-            # audio starts at 0, i.e. audio ~80ms ahead of the video.
-            venc = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                    "-vf", "scale=-2:720", "-pix_fmt", "yuv420p", "-bf", "0", "-fps_mode", "cfr"]
-        body = ["-i", src, "-t", str(secs), "-map", "0:v:0", "-map", "0:a:0",
-                *venc, "-af", "aresample=async=1:first_pts=0", "-c:a", "aac", "-b:a", "160k",
-                "-movflags", "+frag_keyframe+empty_moov+default_base_moof", out]
+        # Always re-encode to clean h264 yuv420p — even when the source is
+        # already h264.  A raw stream copy preserves the source's pixel format
+        # (e.g. yuv422p from MKV) which Telegram / Android can't play inline.
+        # -bf 0 (no B-frames) + cfr keep A/V aligned: the B-frame reorder
+        # delay otherwise leaves the first video frame at a positive PTS while
+        # audio starts at 0, i.e. audio ~80ms ahead of the video.
+        venc = [
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-vf",
+            "scale=-2:720",
+            "-pix_fmt",
+            "yuv420p",
+            "-bf",
+            "0",
+            "-fps_mode",
+            "cfr",
+        ]
+        body = [
+            "-i",
+            src,
+            "-t",
+            str(secs),
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0",
+            *venc,
+            "-af",
+            "aresample=async=1:first_pts=0",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "160k",
+            "-movflags",
+            "+faststart",
+            out,
+        ]
     else:
-        body = ["-i", src, "-t", str(secs), "-vn", "-ac", "1",
-                "-c:a", "libopus", "-b:a", "64k", out]
+        body = [
+            "-i",
+            src,
+            "-t",
+            str(secs),
+            "-vn",
+            "-ac",
+            "1",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "64k",
+            out,
+        ]
     return ["-y", "-nostdin", *pre, *body]
 
 
@@ -64,23 +108,79 @@ async def spawn(args: list[str], errlog: str):
     errf = open(errlog, "w")
     try:
         return await asyncio.create_subprocess_exec(
-            "ffmpeg", *args,
-            stdout=asyncio.subprocess.DEVNULL, stderr=errf,
+            "ffmpeg",
+            *args,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=errf,
         )
     finally:
         errf.close()  # the child keeps its own dup of the fd
 
 
 async def remux_faststart(src: str) -> str | None:
-    """Copy a fragmented-mp4 recording into a normal faststart mp4 (correct moov /
-    duration so Telegram plays it). Returns the new path, or None on failure."""
+    """Ensure a recording is a plain faststart mp4 suitable for Telegram / Android.
+
+    Since the recording is already written with ``+faststart``, a stream-copy
+    is usually enough.  If that fails (truncated file), fall back to re-encode
+    so the output is always standard H.264 yuv420p + AAC.
+    """
     dst = src[:-4] + "_final.mp4" if src.endswith(".mp4") else src + "_final.mp4"
+    # Fast path: just copy streams + force faststart (instant for a valid mp4).
     try:
         p = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-nostdin", "-i", src, "-c", "copy", "-movflags", "+faststart", dst,
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            "ffmpeg",
+            "-y",
+            "-nostdin",
+            "-i",
+            src,
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            dst,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
         )
         await asyncio.wait_for(p.wait(), 120)
+        if p.returncode == 0 and os.path.exists(dst) and os.path.getsize(dst) > 0:
+            return dst
+    except Exception:
+        pass
+    # Slow path: re-encode to guarantee a clean, compatible mp4.
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-y",
+            "-nostdin",
+            "-i",
+            src,
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a:0",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-pix_fmt",
+            "yuv420p",
+            "-bf",
+            "0",
+            "-fps_mode",
+            "cfr",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "160k",
+            "-movflags",
+            "+faststart",
+            dst,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(p.wait(), 300)
         if p.returncode == 0 and os.path.exists(dst) and os.path.getsize(dst) > 0:
             return dst
     except Exception:
