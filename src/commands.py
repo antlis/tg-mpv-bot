@@ -745,28 +745,29 @@ async def _record_watch() -> None:
         return
     dur = _fmt_time(int(time.time() - rec["start"]))
     name = rec["name"][:60]
-    send_path = out
     try:
         if rec["video"]:
             remuxed = await recorder.remux_faststart(out)
             if remuxed:
-                send_path = remuxed
+                await bot.send_video(
+                    chat_id,
+                    FSInputFile(remuxed),
+                    caption=f"🎬 {name} · {dur}",
+                    supports_streaming=True,
+                )
             else:
-                logger.warning("remux_faststart failed; sending raw recording")
-            await bot.send_video(
-                chat_id,
-                FSInputFile(send_path),
-                caption=f"🎬 {name} · {dur}",
-                supports_streaming=True,
-            )
+                logger.error("remux_faststart failed for %s; discarding recording", out)
+                await bot.send_message(
+                    chat_id,
+                    "🚫 couldn't process the recording — ffmpeg remux failed. "
+                    "Check the logs (remux stderr in /tmp/tg-mpv-remux-*.log).",
+                )
         else:
             await bot.send_voice(chat_id, FSInputFile(out), caption=f"🎙 {name} · {dur}")
     except Exception as exc:  # noqa: BLE001
         await bot.send_message(chat_id, f"🚫 couldn't send the recording: {exc}")
     finally:
         Path(out).unlink(missing_ok=True)
-        if send_path != out:
-            Path(send_path).unlink(missing_ok=True)
 
 
 @router.message(Command("mpv_record", "mpv_rec"))
