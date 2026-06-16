@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: meta
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
       # Patch/minor updates merge themselves once required checks are green;
       # major bumps wait for a human.
       - if: steps.meta.outputs.update-type != 'version-update:semver-major'
