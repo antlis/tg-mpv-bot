@@ -747,21 +747,12 @@ async def _record_watch() -> None:
     name = rec["name"][:60]
     try:
         if rec["video"]:
-            remuxed = await recorder.remux_faststart(out)
-            if remuxed:
-                await bot.send_video(
-                    chat_id,
-                    FSInputFile(remuxed),
-                    caption=f"🎬 {name} · {dur}",
-                    supports_streaming=True,
-                )
-            else:
-                logger.error("remux_faststart failed for %s; discarding recording", out)
-                await bot.send_message(
-                    chat_id,
-                    "🚫 couldn't process the recording — ffmpeg remux failed. "
-                    "Check the logs (remux stderr in /tmp/tg-mpv-remux-*.log).",
-                )
+            await bot.send_video(
+                chat_id,
+                FSInputFile(out),
+                caption=f"🎬 {name} · {dur}",
+                supports_streaming=True,
+            )
         else:
             await bot.send_voice(chat_id, FSInputFile(out), caption=f"🎙 {name} · {dur}")
     except Exception as exc:  # noqa: BLE001
@@ -1319,6 +1310,7 @@ _URL_RE = re.compile(r"^https?://\S+$")
 
 _STAGE_TEXT = {
     "resolving": "⏳ Resolving link…",
+    "retrying": "⏳ Retrying…",
     "escalating": "🍪 Site wants sign-in — retrying with browser cookies…",
     "subs": "💬 Fetching subtitles…",
     "starting": "▶ Starting playback…",

@@ -22,7 +22,7 @@ def _settings(**kw) -> Settings:
 
 def test_uses_runner_when_present(tmp_path):
     runner = tmp_path / "mpv-runner.sh"
-    runner.write_text("#!/bin/bash\nexec mpv \"$@\"\n")
+    runner.write_text('#!/bin/bash\nexec mpv "$@"\n')
     s = _settings(mpv_runner=str(runner))
     cmd = build_launch_command(s, Path("/media/show.m3u"))
     assert cmd[0] == str(runner)  # no setsid prefix; Popen(start_new_session) detaches
@@ -77,6 +77,7 @@ def test_fetch_command_keeps_network_args(tmp_path):
 
 def test_file_command_shape():
     from src.player import build_file_command
+
     s = _settings(mpv_runner="")
     cmd = build_file_command(s, Path("/tmp/tg-mpv-files/movie.mkv"), "movie")
     assert cmd[1] == "/tmp/tg-mpv-files/movie.mkv"  # positional file, not --playlist
@@ -87,8 +88,15 @@ def test_file_command_shape():
 
 def test_parse_radio_results():
     from src.player import _parse_radio_results
+
     raw = [
-        {"name": "A", "url_resolved": "https://a/x", "codec": "MP3", "bitrate": 192, "countrycode": "DE"},
+        {
+            "name": "A",
+            "url_resolved": "https://a/x",
+            "codec": "MP3",
+            "bitrate": 192,
+            "countrycode": "DE",
+        },
         {"name": "no-url", "url_resolved": "", "url": ""},  # dropped
         {"name": "B", "url": "http://b/y", "codec": "AAC+", "bitrate": 48, "countrycode": "RU"},
         {"name": "C", "url": "http://c/z"},
@@ -101,6 +109,7 @@ def test_parse_radio_results():
 
 def test_station_art_url():
     from src.player import _station_art_url
+
     assert _station_art_url("https://somafm.com/thetrip.pls") == (
         "https://api.somafm.com/logos/512/thetrip512.jpg"
     )
@@ -109,11 +118,13 @@ def test_station_art_url():
 
 def test_radio_placeholder_asset_exists():
     from src.player import _RADIO_PLACEHOLDER
+
     assert _RADIO_PLACEHOLDER.is_file(), "bundled cover art missing from assets/"
 
 
 def test_radio_command_cover():
     from src.player import build_radio_command
+
     s = _settings(mpv_runner="")
     cmd = build_radio_command(s, "https://x/r.pls", "R", cover=Path("/tmp/c.png"))
     assert "--cover-art-files=/tmp/c.png" in cmd
@@ -122,6 +133,7 @@ def test_radio_command_cover():
 
 def test_direct_command_cover_and_audio_only():
     from src.player import _is_audio_only, build_direct_command
+
     assert _is_audio_only({"url": "https://a", "vcodec": "none"})
     assert _is_audio_only({"requested_formats": [{"url": "https://a"}]})  # vcodec absent
     assert not _is_audio_only({"url": "https://v", "vcodec": "vp9"})
@@ -130,8 +142,10 @@ def test_direct_command_cover_and_audio_only():
     assert "--cover-art-files=/tmp/c.png" in cmd
 
 
-def test_radio_command_shape():
+def test_radio_command_shape(monkeypatch):
     from src.player import build_radio_command
+
+    monkeypatch.setattr("src.player._proxy_reachable", lambda proxy: True)
     s = _settings(mpv_runner="", media_proxy="http://127.0.0.1:2080")
     cmd = build_radio_command(s, "https://somafm.com/thetrip.pls", "The Trip")
     assert cmd[1] == "https://somafm.com/thetrip.pls"
@@ -143,6 +157,7 @@ def test_radio_command_shape():
 
 def test_needs_pipe_only_for_youtube():
     from src.player import needs_pipe
+
     # googlevideo URLs are IP-locked → pipe required
     assert needs_pipe({"extractor": "youtube", "url": "https://rr1.googlevideo.com/x"})
     assert needs_pipe({"requested_formats": [{"url": "https://rr3---sn.googlevideo.com/v"}]})
@@ -154,6 +169,7 @@ def test_needs_pipe_only_for_youtube():
 
 def test_direct_command_single_and_headers():
     from src.player import build_direct_command
+
     s = _settings(mpv_runner="")
     info = {
         "url": "https://cdn.example/v.mp4",
@@ -170,11 +186,14 @@ def test_direct_command_single_and_headers():
 
 def test_direct_command_split_av():
     from src.player import build_direct_command
+
     s = _settings(mpv_runner="")
-    info = {"requested_formats": [
-        {"url": "https://v.example/v", "http_headers": {}},
-        {"url": "https://a.example/a"},
-    ]}
+    info = {
+        "requested_formats": [
+            {"url": "https://v.example/v", "http_headers": {}},
+            {"url": "https://a.example/a"},
+        ]
+    }
     cmd = build_direct_command(s, info, "T")
     assert cmd[1] == "https://v.example/v"
     assert "--audio-file=https://a.example/a" in cmd
@@ -192,6 +211,7 @@ def test_pipe_player_single_stream_stdin():
 
 def test_subs_command_shape(tmp_path):
     from src.player import build_subs_command
+
     s = _settings(ytdl_sub_langs="en.*,ru.*", ytdl_options="force-ipv4")
     cmd = build_subs_command(s, tmp_path / "i.json")
     assert "--skip-download" in cmd and "--write-auto-subs" in cmd
@@ -202,6 +222,7 @@ def test_subs_command_shape(tmp_path):
 
 def test_fetch_subtitles_skips_when_none_advertised(tmp_path):
     from src.player import fetch_subtitles
+
     s = _settings(ytdl_sub_langs="en.*")
     # no subtitles/automatic_captions in the info → no subprocess spawn
     assert fetch_subtitles(s, {"title": "x"}, tmp_path / "i.json") == []
@@ -218,9 +239,7 @@ def test_pipe_player_start_offset():
 
 def test_pipe_player_sub_files():
     s = _settings(mpv_runner="")
-    cmd = build_pipe_player_command(
-        s, "T", sub_files=[Path("/tmp/tg-mpv-sub.en.vtt")]
-    )
+    cmd = build_pipe_player_command(s, "T", sub_files=[Path("/tmp/tg-mpv-sub.en.vtt")])
     assert "--sub-file=/tmp/tg-mpv-sub.en.vtt" in cmd
 
 
@@ -236,16 +255,21 @@ def test_pipe_player_split_streams_use_fds():
 def test_ytdl_cli_args_translation():
     s = _settings(ytdl_options="format-sort=res:1080,no-check-certificates")
     assert _ytdl_cli_args(s, "https://youtu.be/x") == [
-        "--format-sort", "res:1080", "--no-check-certificates",
+        "--format-sort",
+        "res:1080",
+        "--no-check-certificates",
     ]
 
 
 def test_ytdl_cli_args_value_with_equals_and_semicolons():
     # the lean-YouTube extractor-args value embeds '=' and ';' — only the
     # FIRST '=' splits key from value
-    s = _settings(ytdl_options="extractor-args=youtube:player_client=android_vr;player_skip=webpage")
+    s = _settings(
+        ytdl_options="extractor-args=youtube:player_client=android_vr;player_skip=webpage"
+    )
     assert _ytdl_cli_args(s, "https://youtu.be/x") == [
-        "--extractor-args", "youtube:player_client=android_vr;player_skip=webpage",
+        "--extractor-args",
+        "youtube:player_client=android_vr;player_skip=webpage",
     ]
 
 
@@ -255,14 +279,21 @@ def test_ytdl_cli_args_network_keys_youtube_only():
     # proxy pin must not leak beyond YouTube.
     s = _settings(ytdl_options="force-ipv4,format-sort=res:1080")
     assert _ytdl_cli_args(s, "https://youtu.be/x") == [
-        "--force-ipv4", "--format-sort", "res:1080",
+        "--force-ipv4",
+        "--format-sort",
+        "res:1080",
     ]
     assert _ytdl_cli_args(s, "https://www.videohost.example/video-x/y/") == [
-        "--format-sort", "res:1080",
+        "--format-sort",
+        "res:1080",
     ]
 
 
-def test_media_proxy_non_youtube_only():
+def test_media_proxy_non_youtube_only(monkeypatch):
+    from src.player import _proxy_cache
+
+    _proxy_cache.clear()
+    monkeypatch.setattr("src.player._proxy_reachable", lambda proxy: True)
     s = _settings(media_proxy="http://127.0.0.1:2080", ytdl_options="force-ipv4")
     # generic site: proxy in, network pin out
     args = _ytdl_cli_args(s, "https://www.videohost.example/v/x")
@@ -271,8 +302,17 @@ def test_media_proxy_non_youtube_only():
     assert _ytdl_cli_args(s, "https://youtu.be/x") == ["--force-ipv4"]
 
 
-def test_direct_command_uses_media_proxy():
+def test_media_proxy_skipped_when_unreachable(monkeypatch):
+    monkeypatch.setattr("src.player._proxy_reachable", lambda proxy: False)
+    s = _settings(media_proxy="http://127.0.0.1:2080")
+    args = _ytdl_cli_args(s, "https://www.videohost.example/v/x")
+    assert args == []
+
+
+def test_direct_command_uses_media_proxy(monkeypatch):
     from src.player import build_direct_command
+
+    monkeypatch.setattr("src.player._proxy_reachable", lambda proxy: True)
     s = _settings(mpv_runner="", media_proxy="http://127.0.0.1:2080")
     cmd = build_direct_command(s, {"url": "https://cdn.example/v.mp4"}, "T")
     assert "--http-proxy=http://127.0.0.1:2080" in cmd
@@ -284,7 +324,8 @@ def test_direct_command_uses_media_proxy():
 def test_ytdl_cli_args_cookies_gated_only():
     s = _settings(ytdl_cookies_browser="firefox")
     assert _ytdl_cli_args(s, "https://www.instagram.com/reel/x") == [
-        "--cookies-from-browser", "firefox",
+        "--cookies-from-browser",
+        "firefox",
     ]
     assert _ytdl_cli_args(s, "https://youtu.be/x") == []
 
@@ -304,11 +345,14 @@ def _probe_attempts(monkeypatch, settings, fail_first_with, second=({"title": "o
     return attempts
 
 
-@pytest.mark.parametrize("error", [
-    "ERROR: Sign in to confirm you're not a bot.",
-    "ERROR: Requested format is not available. Use --list-formats …",
-    "site did not respond within 120s (rate-limited?)",
-])
+@pytest.mark.parametrize(
+    "error",
+    [
+        "ERROR: Sign in to confirm you're not a bot.",
+        "ERROR: Requested format is not available. Use --list-formats …",
+        "site did not respond within 120s (rate-limited?)",
+    ],
+)
 def test_probe_escalates_on_degraded_client(monkeypatch, error):
     # YouTube cycles failure modes on flagged IPs — every non-terminal
     # failure of the lean fast path must trigger the stock+cookies retry.
@@ -318,7 +362,7 @@ def test_probe_escalates_on_degraded_client(monkeypatch, error):
     attempts = _probe_attempts(monkeypatch, s, error)
     info, _ = player.probe_url(s, "https://youtu.be/x")
     assert info == {"title": "ok"}
-    assert "--extractor-args" in attempts[0]          # fast path first…
+    assert "--extractor-args" in attempts[0]  # fast path first…
     assert "--cookies-from-browser" not in attempts[0]
     assert attempts[1] == ["--cookies-from-browser", "firefox"]  # …stock args + cookies
 
@@ -357,6 +401,7 @@ def test_probe_playlist_url_sentinel(monkeypatch):
             returncode = 0
             stderr = ""
             stdout = '{"id": "a"}\n{"id": "b"}\n'
+
         return R()
 
     monkeypatch.setattr(player.subprocess, "run", fake_run)
@@ -368,6 +413,7 @@ def test_probe_playlist_url_sentinel(monkeypatch):
 
 def test_listing_command_shape():
     from src.player import build_listing_command
+
     s = _settings(ytdl_options="force-ipv4")
     cmd = build_listing_command(s, "https://youtube.com/playlist?list=X", limit=8)
     assert "--flat-playlist" in cmd and "-J" in cmd
@@ -396,6 +442,7 @@ def test_update_ytdlp_reports_versions(monkeypatch):
             returncode = 0
             stderr = ""
             stdout = next(versions) + "\n" if "--version" in cmd else ""
+
         return R()
 
     monkeypatch.setattr(player.subprocess, "run", fake_run)
@@ -412,6 +459,7 @@ def test_update_ytdlp_pip_failure(monkeypatch):
             returncode = 0 if "--version" in cmd else 1
             stderr = "resolution impossible"
             stdout = "2026.05.25\n"
+
         return R()
 
     monkeypatch.setattr(player.subprocess, "run", fake_run)
@@ -451,6 +499,6 @@ def test_run_hook_empty_is_noop():
 
 def test_run_hook_failure_never_raises(caplog):
     env = _hook_env(_settings(), "/x.m3u", "x")
-    _run_hook("pre-play", "exit 3", env)            # non-zero exit
+    _run_hook("pre-play", "exit 3", env)  # non-zero exit
     _run_hook("pre-play", "/nonexistent-cmd-xyz", env)  # command not found
     assert any("hook" in r.message for r in caplog.records)
