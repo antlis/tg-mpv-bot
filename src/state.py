@@ -17,7 +17,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-HISTORY_LIMIT = 50
+HISTORY_LIMIT = 5000
 
 
 @dataclass(frozen=True)
