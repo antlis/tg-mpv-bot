@@ -684,6 +684,32 @@ def play_radio(settings: Settings, url: str, name: str, art_url: str | None = No
     state.record_last_played(settings.state_file, url, name=name)
 
 
+def build_iptv_command(settings: Settings, url: str, name: str) -> list[str]:
+    """argv for an IPTV live-TV stream — video, not audio-only radio.
+
+    Unlike :func:`build_radio_command`, this does NOT use ``--cover-art-files``
+    so mpv renders the stream's own video track.  ``--force-window`` keeps the
+    TV awake; the media title shows in the OSD / now-playing panel.
+    """
+    cmd = [
+        _mpv_base(settings),
+        url,
+        f"--input-ipc-server={settings.mpv_socket}",
+        "--force-window",
+        f"--force-media-title={name}",
+    ]
+    if settings.media_proxy and _proxy_reachable(settings.media_proxy):
+        cmd.append(f"--http-proxy={settings.media_proxy}")
+    return cmd
+
+
+def play_iptv(settings: Settings, url: str, name: str) -> None:
+    """Tune the TV to an IPTV live-TV channel (video stream)."""
+    env = _hook_env(settings, url, name)
+    _kill_and_launch(settings, build_iptv_command(settings, url, name), env)
+    state.record_last_played(settings.state_file, url, name=name)
+
+
 def build_listing_command(settings: Settings, url: str, limit: int = 12) -> list[str]:
     """argv for a cheap flat probe of a playlist/channel/listing page."""
     return [
@@ -752,17 +778,19 @@ def needs_pipe(info: dict) -> bool:
 
 def _is_audio_only(info: dict) -> bool:
     formats = info.get("requested_formats") or [info]
+
     def _no_video(f: dict) -> bool:
         vc = f.get("vcodec")
-        if vc == "none":   # extractor explicitly says no video track
+        if vc == "none":  # extractor explicitly says no video track
             return True
-        if vc:             # real codec string — definitely has video
+        if vc:  # real codec string — definitely has video
             return False
         # vc is None/absent: HLS manifests and some CDN URLs land here.
         # Treat as audio-only only when acodec IS known (SoundCloud etc.);
         # both unknown means the stream likely carries video (HLS mux).
         ac = f.get("acodec")
         return bool(ac and ac != "none")
+
     return all(_no_video(f) for f in formats)
 
 

@@ -43,6 +43,7 @@ _results: dict[int, list[dict]] = {}
 
 # ── M3U parsing ───────────────────────────────────────────────────────────────
 
+
 def _parse_m3u(text: str) -> list[dict]:
     out: list[dict] = []
     lines = text.splitlines()
@@ -61,7 +62,9 @@ def _parse_m3u(text: str) -> list[dict]:
             while j < len(lines) and (not lines[j].strip() or lines[j].strip().startswith("#")):
                 j += 1
             if j < len(lines) and lines[j].strip().startswith("http"):
-                out.append({"name": name, "url": lines[j].strip(), "logo": logo, "country": country})
+                out.append(
+                    {"name": name, "url": lines[j].strip(), "logo": logo, "country": country}
+                )
                 i = j + 1
                 continue
         i += 1
@@ -76,8 +79,11 @@ async def _get_channels() -> list[dict]:
         try:
             logger.info("IPTV: fetching index playlist…")
             raw = await asyncio.to_thread(
-                lambda: urllib.request.urlopen(_INDEX_URL, timeout=60)
-                        .read().decode("utf-8", errors="ignore")
+                lambda: (
+                    urllib.request.urlopen(_INDEX_URL, timeout=60)
+                    .read()
+                    .decode("utf-8", errors="ignore")
+                )
             )
             parsed = _parse_m3u(raw)
             logger.info("IPTV: loaded %d channels", len(parsed))
@@ -89,6 +95,7 @@ async def _get_channels() -> list[dict]:
 
 
 # ── Search ────────────────────────────────────────────────────────────────────
+
 
 def _search(channels: list[dict], query: str, limit: int = 8) -> list[dict]:
     q = query.lower()
@@ -104,6 +111,7 @@ def _search(channels: list[dict], query: str, limit: int = 8) -> list[dict]:
 
 # ── Keyboards ─────────────────────────────────────────────────────────────────
 
+
 def _results_keyboard(results: list[dict]) -> InlineKeyboardMarkup:
     rows = []
     for i, ch in enumerate(results):
@@ -111,24 +119,29 @@ def _results_keyboard(results: list[dict]) -> InlineKeyboardMarkup:
         if ch["country"]:
             label += f" · {ch['country']}"
         rows.append([InlineKeyboardButton(text=label[:64], callback_data=f"iptv:{i}")])
-    rows.append([
-        InlineKeyboardButton(text="📋 Browse by country", url=_COUNTRY_PLAYLISTS_URL),
-        InlineKeyboardButton(text="🔍 Search again", callback_data="iptv_help"),
-    ])
+    rows.append(
+        [
+            InlineKeyboardButton(text="📋 Browse by country", url=_COUNTRY_PLAYLISTS_URL),
+            InlineKeyboardButton(text="🔍 Search again", callback_data="iptv_help"),
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _help_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="📋 Channels by country", url=_COUNTRY_PLAYLISTS_URL),
-            InlineKeyboardButton(text="🌐 Full M3U playlist", url=_INDEX_URL),
-        ],
-        [InlineKeyboardButton(text="📦 iptv-org/iptv on GitHub", url=_REPO_URL)],
-    ])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📋 Channels by country", url=_COUNTRY_PLAYLISTS_URL),
+                InlineKeyboardButton(text="🌐 Full M3U playlist", url=_INDEX_URL),
+            ],
+            [InlineKeyboardButton(text="📦 iptv-org/iptv on GitHub", url=_REPO_URL)],
+        ]
+    )
 
 
 # ── Command ───────────────────────────────────────────────────────────────────
+
 
 @iptv_router.message(Command("mpv_iptv"))
 async def cmd_iptv(message: Message, command: CommandObject) -> None:
@@ -150,13 +163,12 @@ async def cmd_iptv(message: Message, command: CommandObject) -> None:
         )
         return
 
-    note = await message.reply(f"📺 Searching IPTV channels for <b>{query}</b>…",
-                               parse_mode="HTML")
+    note = await message.reply(f"📺 Searching IPTV channels for <b>{query}</b>…", parse_mode="HTML")
     channels = await _get_channels()
     if not channels:
         await note.edit_text(
             f"❌ Could not load the channel list — try again later.\n"
-            f"Browse manually: <a href=\"{_REPO_URL}\">iptv-org/iptv</a>",
+            f'Browse manually: <a href="{_REPO_URL}">iptv-org/iptv</a>',
             parse_mode="HTML",
             disable_web_page_preview=True,
         )
@@ -166,7 +178,7 @@ async def cmd_iptv(message: Message, command: CommandObject) -> None:
     if not results:
         await note.edit_text(
             f"❌ No channels found for <code>{query}</code>\n\n"
-            f"Browse: <a href=\"{_COUNTRY_PLAYLISTS_URL}\">channels by country</a>",
+            f'Browse: <a href="{_COUNTRY_PLAYLISTS_URL}">channels by country</a>',
             parse_mode="HTML",
             disable_web_page_preview=True,
         )
@@ -174,8 +186,7 @@ async def cmd_iptv(message: Message, command: CommandObject) -> None:
 
     _results[message.chat.id] = results
     names = "\n".join(
-        f"• {ch['name']}{' · ' + ch['country'] if ch['country'] else ''}"
-        for ch in results
+        f"• {ch['name']}{' · ' + ch['country'] if ch['country'] else ''}" for ch in results
     )
     await note.edit_text(
         f"📺 <b>IPTV — results for</b> <code>{query}</code>\n\n{names}\n\n"
@@ -187,11 +198,16 @@ async def cmd_iptv(message: Message, command: CommandObject) -> None:
 
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 
+
 @iptv_router.callback_query(F.data.regexp(r"^iptv:(\d+)$"))
 async def cb_iptv_pick(query: CallbackQuery) -> None:
     chat_id = query.message.chat.id
-    logger.info("IPTV: pick chat=%s user=%s data=%s",
-                chat_id, query.from_user.id if query.from_user else None, query.data)
+    logger.info(
+        "IPTV: pick chat=%s user=%s data=%s",
+        chat_id,
+        query.from_user.id if query.from_user else None,
+        query.data,
+    )
 
     m = re.match(r"^iptv:(\d+)$", query.data)
     idx = int(m.group(1))
@@ -213,9 +229,9 @@ async def cb_iptv_pick(query: CallbackQuery) -> None:
 
     settings = get_settings()
     try:
-        await asyncio.to_thread(player.play_radio, settings, url, name, logo or None)
+        await asyncio.to_thread(player.play_iptv, settings, url, name)
     except Exception as exc:
-        logger.warning("IPTV: play_radio failed for %s: %s", label, exc)
+        logger.warning("IPTV: play_iptv failed for %s: %s", label, exc)
         try:
             await query.message.edit_text(f"❌ IPTV error: <code>{exc}</code>", parse_mode="HTML")
         except Exception:
