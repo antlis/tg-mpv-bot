@@ -23,6 +23,9 @@ clashes (≤64 bytes):
     eps:<pg>             → page <pg> of the episode picker
     spd:<value>          → set playback speed (e.g. spd:1.5)
     h:<i>                → replay watch-history entry #i (newest-first order)
+    hcp:<i>              → send raw URL/path of history entry #i (for copying)
+    hdel:<i>:<pg>        → delete watch-history entry #i, re-render page <pg>
+    hp:<pg>              → navigate history to page <pg>
     yt:<video_id>        → stream that YouTube result (ids are 11 chars — fits)
     ple:<i>              → play entry #i of the last probed listing page
                            (entry URLs exceed 64 bytes, hence the index)
@@ -145,24 +148,37 @@ def search_results_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def history_keyboard(entries: list[HistoryEntry]) -> InlineKeyboardMarkup:
-    """Replay buttons for the watch history (callback ``h:<i>``).
-
-    Indices follow the newest-first history order at render time; a replay
-    reshuffles that order, so handlers re-read the list on tap (same
-    freshness contract as the category indices).
-    """
+def history_keyboard(entries: list[HistoryEntry], page: int = 0) -> InlineKeyboardMarkup:
+    """Paginated replay/copy/delete buttons for watch history (``h:<i>`` / ``hcp:<i>`` / ``hdel:<i>:<pg>`` / ``hp:<pg>``)."""
+    page = clamp_page(page, len(entries))
+    global_indices = page_slice(list(range(len(entries))), page)
     rows = [
         [
             InlineKeyboardButton(
-                # URL names are real media titles already; playlist stems get
-                # the usual display cleanup.
-                text=f"{'🔗' if e.is_url else '📁'} {(e.name if e.is_url else prettify(e.name))[:48]}",
+                text='🔗' if entries[i].is_url else '📁',
+                callback_data=f"hcp:{i}",
+            ),
+            InlineKeyboardButton(
+                text=(entries[i].name if entries[i].is_url else prettify(entries[i].name))[:30],
                 callback_data=f"h:{i}",
-            )
+            ),
+            InlineKeyboardButton(text="🗑", callback_data=f"hdel:{i}:{page}"),
         ]
-        for i, e in enumerate(entries)
+        for i in global_indices
     ]
+    total = page_count(len(entries))
+    if total > 1:
+        rows.append([
+            InlineKeyboardButton(
+                text="◀" if page > 0 else "·",
+                callback_data=f"hp:{page - 1}" if page > 0 else "noop",
+            ),
+            InlineKeyboardButton(text=f"{page + 1}/{total}", callback_data="noop"),
+            InlineKeyboardButton(
+                text="▶" if page < total - 1 else "·",
+                callback_data=f"hp:{page + 1}" if page < total - 1 else "noop",
+            ),
+        ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

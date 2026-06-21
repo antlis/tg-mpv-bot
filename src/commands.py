@@ -32,6 +32,8 @@ from . import generate, keyboards, player, playlists, recorder, state
 from .config import get_settings
 from .keyboards import (
     PER_PAGE,
+    clamp_page,
+    page_count,
     categories_keyboard,
     chapters_keyboard,
     episodes_keyboard,
@@ -1099,7 +1101,7 @@ async def cmd_notify(message: Message) -> None:
     )
 
 
-@router.message(Command("mpv_history", "mpv_recent"))
+@router.message(Command("mpv_history", "mpv_recent", "history"))
 async def cmd_history(message: Message) -> None:
     entries = state.history(get_settings().state_file)
     if not entries:
@@ -1118,9 +1120,59 @@ async def cb_history(query: CallbackQuery) -> None:
     if not (0 <= i < len(entries)):
         await query.answer("History changed — run /mpv_history again", show_alert=True)
         return
+    target = entries[i].target
     await query.answer(f"▶ {entries[i].name[:60]}")
-    await _replay(query.message, entries[i].target)
+    await _replay(query.message, target)
+    # _replay calls record_last_played, which moves the entry to index 0.
+    # Refresh the keyboard so remaining buttons reflect the new order.
+    updated = state.history(get_settings().state_file)
+    try:
+        await query.message.edit_reply_markup(reply_markup=history_keyboard(updated, 0))
+    except Exception:
+        pass
 
+
+
+
+@router.callback_query(F.data.startswith("hcp:"))
+async def cb_history_copy(query: CallbackQuery) -> None:
+    i = int(query.data[len("hcp:"):])
+    entries = state.history(get_settings().state_file)
+    if not (0 <= i < len(entries)):
+        await query.answer("History changed", show_alert=True)
+        return
+    await query.answer()
+    await query.message.reply(f"`{entries[i].target}`", parse_mode="Markdown")
+
+@router.callback_query(F.data.startswith("hdel:"))
+async def cb_history_delete(query: CallbackQuery) -> None:
+    parts = query.data[len("hdel:"):].split(":")
+    i, pg = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+    sf = get_settings().state_file
+    entries = state.history(sf)
+    if not (0 <= i < len(entries)):
+        await query.answer("Already gone", show_alert=True)
+        return
+    name = entries[i].name
+    state.delete_history_entry(sf, entries[i].target)
+    remaining = state.history(sf)
+    if remaining:
+        pg = min(pg, page_count(len(remaining)) - 1)
+        await query.message.edit_reply_markup(reply_markup=history_keyboard(remaining, pg))
+    else:
+        await query.message.edit_text("🕘 History is now empty.")
+    await query.answer(f"Removed: {name[:50]}")
+
+
+@router.callback_query(F.data.startswith("hp:"))
+async def cb_history_page(query: CallbackQuery) -> None:
+    pg = int(query.data[len("hp:"):])
+    entries = state.history(get_settings().state_file)
+    if not entries:
+        await query.answer("History is empty", show_alert=True)
+        return
+    await query.message.edit_reply_markup(reply_markup=history_keyboard(entries, pg))
+    await query.answer()
 
 @router.message(Command("mpv_search", "mpv_find"))
 async def cmd_search(message: Message, command: CommandObject) -> None:

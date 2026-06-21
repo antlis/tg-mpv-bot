@@ -217,11 +217,20 @@ def test_history_keyboard():
         HistoryEntry(target="/v/the-big-lebowski.m3u", name="the-big-lebowski", at=1),
     ]
     kb = history_keyboard(entries)
-    buttons = [b for row in kb.inline_keyboard for b in row]
-    assert [b.callback_data for b in buttons] == ["h:0", "h:1"]
-    # URL titles shown verbatim; playlist stems get display cleanup
-    assert buttons[0].text == "🔗 Some Video 1080p Title"
-    assert buttons[1].text == "📁 The Big Lebowski"
+    # each row has [icon, title, trash]; no nav row (only 2 entries < PER_PAGE)
+    assert len(kb.inline_keyboard) == 2
+    for row in kb.inline_keyboard:
+        assert len(row) == 3
+    icon_btns  = [row[0] for row in kb.inline_keyboard]
+    title_btns = [row[1] for row in kb.inline_keyboard]
+    del_btns   = [row[2] for row in kb.inline_keyboard]
+    # icon copies, title plays
+    assert [b.callback_data for b in icon_btns]  == ["hcp:0", "hcp:1"]
+    assert [b.callback_data for b in title_btns] == ["h:0", "h:1"]
+    assert [b.callback_data for b in del_btns]   == ["hdel:0:0", "hdel:1:0"]
+    assert icon_btns[0].text == "🔗"
+    assert icon_btns[1].text == "📁"
+    assert all(b.text == "🗑" for b in del_btns)
 
 
 def test_chapters_keyboard():

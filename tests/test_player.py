@@ -135,7 +135,10 @@ def test_direct_command_cover_and_audio_only():
     from src.player import _is_audio_only, build_direct_command
 
     assert _is_audio_only({"url": "https://a", "vcodec": "none"})
-    assert _is_audio_only({"requested_formats": [{"url": "https://a"}]})  # vcodec absent
+    # vcodec absent + acodec absent = unknown (HLS etc.) → not audio-only
+    assert not _is_audio_only({"requested_formats": [{"url": "https://a"}]})
+    # vcodec absent + acodec present = true audio-only (SoundCloud pattern)
+    assert _is_audio_only({"url": "https://a", "acodec": "mp4a.40.2"})
     assert not _is_audio_only({"url": "https://v", "vcodec": "vp9"})
     s = _settings(mpv_runner="")
     cmd = build_direct_command(s, {"url": "https://a/t"}, "T", cover=Path("/tmp/c.png"))
