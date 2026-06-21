@@ -3,6 +3,10 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.6.0] — 2026-06-21
+### Added
+- **IPTV (`/mpv_iptv <name>`)** — search 50 000+ live TV channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and stream them live via mpv. Results shown as inline buttons; channel logo sent as a photo card when streaming starts. `/mpv_iptv` with no args shows links to browse channels by country/category.
+
 ## [1.5.0] — 2026-06-21
 ### Added
 - **Watch history** (`/history`) — paginated list of recently played items

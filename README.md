@@ -18,6 +18,7 @@ socket](https://mpv.io/manual/stable/#json-ipc) directly from Python.
 - 📜 **Episode picker**, ▶ **continue watching**, 📸 **frame screenshots**
 - 🕘 **Watch history** (`/history`) — last 20 items, paginated; tap to replay, copy URL, or delete
 - ⏺ **Record** the current video (→ H.264 mp4) or radio (→ voice message) and get it in chat
+- 📺 **Live TV (IPTV)** — `/mpv_iptv <name>` searches 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and streams them live via mpv; channel logo sent as a photo card
 - 🪝 **Hooks** instead of WM assumptions — `i3-msg`/`swaymsg`/`notify-send`, your call
 
 ![tg-mpv-bot demo](docs/demo.svg)
@@ -61,6 +62,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/mpv_url <link>` | Stream a URL via yt-dlp — or just **send a link** as a message |
 | `/mpv_yt <search>` | Search YouTube from chat — top results as tap-to-play buttons |
 | `/mpv_radio [search]` | Internet radio — presets (full SomaFM catalog, Radio Record, FIP, KEXP, …; yours via `RADIO_STATIONS`) or search ~50k stations on [radio-browser.info](https://www.radio-browser.info) |
+| `/mpv_iptv [search]` | Live TV — search 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and stream live; `/mpv_iptv` with no args shows links to browse channels by country/category |
 | *(send a video/audio file)* | Downloads and plays it — >20 MB needs `API_SERVER_URL` (local Bot API server) |
 | `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_shot` | Send a screenshot of the current frame to the chat |
@@ -287,6 +289,7 @@ uv run ruff check .
 | `bot.py` | Entry point — aiogram polling bot + auth middleware |
 | `src/config.py` | Settings from env (single source of host paths) |
 | `src/commands.py` | Telegram command + callback handlers |
+| `src/iptv.py` | IPTV command + callbacks — M3U fetch/cache, channel search, streaming via `player.play_radio` |
 | `src/mpv_ipc.py` | Direct JSON-IPC client for mpv (pause/seek/volume/info) |
 | `src/playlists.py` | Playlist discovery, query matching, on-disk validation |
 | `src/player.py` | Launch mpv (pkill + pre/post-play hooks + detached spawn) |
