@@ -380,7 +380,7 @@
       <div class="card"><span class="tile">📨</span><b>Forward video files</b><p>Any Telegram video plays on the TV — up to 2&nbsp;GB with a local Bot API server.</p></div>
       <div class="card"><span class="tile">🎛</span><b>Full transport control</b><p>One now-playing panel: pause, seek, %-jump, volume, speed, audio &amp; subtitle tracks.</p></div>
       <div class="card"><span class="tile">⏺</span><b>Record &amp; clip</b><p>Capture what's playing to an H.264 mp4, or the radio to a voice message, and get it right in the chat — tap once to start, again to stop.</p></div>
-      <div class="card"><span class="tile">▶</span><b>Continue watching</b><p>Watch history with one-tap replay — playlists <em>and</em> streams resume where you left off.</p></div>
+      <div class="card"><span class="tile">🕘</span><b>Watch history</b><p>Last 20 played, paginated. Tap the title to replay (streams resume from the saved position), tap the icon to copy the URL/path, tap 🗑 to remove the entry. <code>/history</code> or <code>/mpv_history</code>.</p></div>
       <div class="card"><span class="tile">🔔</span><b>Knows when you're done</b><p>"⏭ Now playing: 6/12" on episode change, "✅ Finished" at the end. <code>/mpv_sleep 45m</code> for bedtime.</p></div>
       <div class="card"><span class="tile">📻</span><b>Internet radio</b><p>The full SomaFM catalog and friends as presets, plus search across ~50k stations — tuned in about a second.</p></div>
       <div class="card"><span class="tile">🩺</span><b>Runs itself</b><p>Auto-updating yt-dlp, playlist doctor &amp; repair, disk GC, one-screen health check.</p></div>
@@ -456,7 +456,7 @@ systemctl --user enable --now tg-mpv-bot</code></pre>
           <div class="row"><div class="c"><code>/mpv_search [cat] &lt;text&gt;</code></div><span>every match as a play button</span></div>
           <div class="row"><div class="c"><code>/mpv_random [category]</code></div><span>"just put something on"</span></div>
           <div class="row"><div class="c"><code>/mpv_last</code></div><span>resume the last playlist or stream where you left off</span></div>
-          <div class="row"><div class="c"><code>/mpv_history</code></div><span>last 20 played — tap to replay</span></div>
+          <div class="row"><div class="c"><code>/history</code></div><span>last 20 played, paginated — tap to replay, copy URL, or delete; streams resume from saved position (<code>/mpv_history</code> also works)</span></div>
         </div>
       </div>
 

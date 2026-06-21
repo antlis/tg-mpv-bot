@@ -3,7 +3,7 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [1.4.0] — 2026-06-21
+## [1.5.0] — 2026-06-21
 ### Added
 - **Watch history** (`/history`) — paginated list of recently played items
   (newest first, up to 20 entries, 8 per page). Each row shows a type icon
