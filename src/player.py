@@ -120,9 +120,11 @@ def _ytdl_cli_args(settings: Settings, url: str) -> list[str]:
         args.append(f"--{key}")
         if value:
             args.append(value)
-    if not youtube and settings.media_proxy:
+    if not youtube and settings.media_proxy and _proxy_reachable(settings.media_proxy):
         # mint stream URLs from the same egress mpv will fetch them over
         args += ["--proxy", settings.media_proxy]
+    elif not youtube and settings.media_proxy:
+        logger.warning("Proxy %s unreachable — probing without proxy", settings.media_proxy)
     if settings.ytdl_cookies_browser and _is_gated_host(url):
         args += ["--cookies-from-browser", settings.ytdl_cookies_browser]
     return args
@@ -132,6 +134,33 @@ def _ytdl_cli_args(settings: Settings, url: str) -> list[str]:
 # to extract — these must survive into escalation retries (falling back to a
 # dead address family would just trade one failure for another).
 _NETWORK_KEYS = {"force-ipv4", "force-ipv6", "proxy", "source-address", "socket-timeout"}
+
+
+_proxy_cache: dict[str, bool] = {}
+
+
+def _proxy_reachable(proxy: str) -> bool:
+    """Check if a proxy is reachable (cached — one check per process lifetime)."""
+    if not proxy:
+        return True
+    if proxy in _proxy_cache:
+        return _proxy_cache[proxy]
+    try:
+        import socket
+        from urllib.parse import urlparse
+
+        parsed = urlparse(proxy)
+        host = parsed.hostname or ""
+        port = parsed.port or 8080
+        sock = socket.create_connection((host, port), timeout=3)
+        sock.close()
+        reachable = True
+    except Exception:
+        reachable = False
+    _proxy_cache[proxy] = reachable
+    if not reachable:
+        logger.warning("Proxy %s unreachable — probing without proxy", proxy)
+    return reachable
 
 
 def _network_cli_args(settings: Settings) -> list[str]:
@@ -173,9 +202,7 @@ def ytdlp_version() -> str | None:
     if binary is None:
         return None
     try:
-        out = subprocess.run(
-            [binary, "--version"], capture_output=True, text=True, timeout=30
-        )
+        out = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=30)
         return out.stdout.strip() or None
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -184,9 +211,7 @@ def ytdlp_version() -> str | None:
 def _installer_command() -> list[str] | None:
     """How to install into the bot's venv: ``uv pip`` (uv venvs ship no pip)
     or the venv's own pip as a fallback."""
-    uv = _which("uv") or (
-        str(p) if (p := Path.home() / ".local/bin/uv").exists() else None
-    )
+    uv = _which("uv") or (str(p) if (p := Path.home() / ".local/bin/uv").exists() else None)
     if uv:
         return [uv, "pip", "install", "--python", sys.executable]
     pip = Path(sys.executable).parent / "pip"
@@ -215,7 +240,9 @@ def update_ytdlp(timeout: float = 300) -> str:
     try:
         result = subprocess.run(
             [*installer, "--quiet", "--upgrade", NIGHTLY_URL],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired:
         return f"❌ pip timed out after {timeout:.0f}s"
@@ -228,6 +255,10 @@ def update_ytdlp(timeout: float = 300) -> str:
 
 
 _INFO_JSON = "tg-mpv-bot-info.json"  # one play at a time → fixed, self-cleaning
+
+# Transient network errors (Qrator anti-bot etc.) get a short-delay retry.
+_PROBE_RETRIES = 2  # additional attempts after the initial one
+_PROBE_RETRY_DELAY = 2  # seconds between retries
 
 
 # Errors that no retry can fix — fail fast, don't waste a slow second probe.
@@ -249,20 +280,46 @@ def _should_escalate(error: str) -> bool:
     return not any(t in error for t in _TERMINAL_ERRORS)
 
 
+# Errors caused by transient network issues (flaky CDNs, anti-bot layers
+# dropping TLS connections).  Worth a retry with a short delay.
+_TRANSIENT_ERRORS = (
+    "SSL:",
+    "UNEXPECTED_EOF",
+    "Connection reset",
+    "Connection refused",
+    "timed out",
+    "RemoteDisconnected",
+)
+
+
+def _is_transient(error: str) -> bool:
+    """Retryable network/SSL error?  Anti-bot layers (e.g. Qrator on Rutube)
+    randomly drop TLS connections, causing intermittent probe failures."""
+    return any(t in error for t in _TRANSIENT_ERRORS)
+
+
 def _run_probe(
     settings: Settings, url: str, extra_args: list[str], timeout: float
 ) -> tuple[dict | None, str]:
     """One yt-dlp -j attempt; returns ``(info, "")`` or ``(None, reason)``."""
     cmd = [
         _ytdlp_bin() or "yt-dlp",
-        "--no-warnings", "--no-playlist", "-j",
-        "-f", settings.ytdl_format,
+        "--no-warnings",
+        "--no-playlist",
+        "-j",
+        "-f",
+        settings.ytdl_format,
         *extra_args,
-        "--", url,
+        "--",
+        url,
     ]
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, check=False,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
             env={**os.environ, "PATH": _augmented_path()},
         )
     except subprocess.TimeoutExpired:
@@ -299,26 +356,49 @@ def probe_url(
     fails with anything non-terminal (bot-check demand, missing formats —
     YouTube cycles failure modes on flagged IPs), retry once with stock
     client args plus browser cookies if configured.
+
+    Transient network errors (SSL EOF, connection reset — common with
+    anti-bot layers like Qrator on Rutube) trigger a short-delay retry
+    before giving up.
     """
     if _ytdlp_bin() is None:
         raise UrlPlaybackError("yt-dlp is not installed on the host")
     fast_args = _ytdl_cli_args(settings, url)
-    info, reason = _run_probe(settings, url, fast_args, timeout)
-    if info is None and _should_escalate(reason):
-        if _is_youtube_url(url):
-            stock_args = _network_cli_args(settings)
-        else:
-            stock_args = ["--proxy", settings.media_proxy] if settings.media_proxy else []
-        if settings.ytdl_cookies_browser:
-            stock_args += ["--cookies-from-browser", settings.ytdl_cookies_browser]
-        if stock_args != fast_args:
-            logger.info("Probe failed (%s) — escalating with stock args for %s",
-                        reason[:80], url)
+    last_reason = ""
+    for attempt in range(1 + _PROBE_RETRIES):
+        if attempt > 0:
+            logger.info(
+                "Probe retry %d/%d (%s) for %s", attempt, _PROBE_RETRIES, last_reason[:60], url
+            )
             if progress:
-                progress("escalating")
-            info, reason = _run_probe(settings, url, stock_args, timeout)
+                progress("retrying")
+            time.sleep(_PROBE_RETRY_DELAY)
+
+        info, reason = _run_probe(settings, url, fast_args, timeout)
+
+        if info is None and _should_escalate(reason) and _is_youtube_url(url):
+            # Escalation (stock args + cookies) only helps YouTube where
+            # failure modes cycle on flagged IPs.  For other sites it just
+            # adds extra requests that worsen rate-limiting (Qrator, etc).
+            stock_args = _network_cli_args(settings)
+            if settings.ytdl_cookies_browser:
+                stock_args += ["--cookies-from-browser", settings.ytdl_cookies_browser]
+            if stock_args != fast_args:
+                logger.info(
+                    "Probe failed (%s) — escalating with stock args for %s", reason[:80], url
+                )
+                if progress:
+                    progress("escalating")
+                info, reason = _run_probe(settings, url, stock_args, timeout)
+
+        if info is not None:
+            break
+        last_reason = reason
+        if not _is_transient(reason):
+            break
+
     if info is None:
-        raise UrlPlaybackError(reason)
+        raise UrlPlaybackError(last_reason)
     info_path = Path(tempfile.gettempdir()) / _INFO_JSON
     info_path.write_text(json.dumps(info))
     return info, info_path
@@ -353,13 +433,20 @@ def search_youtube(settings: Settings, query: str, n: int = 5) -> list[dict]:
     if ytdlp is None:
         raise UrlPlaybackError("yt-dlp is not installed on the host")
     cmd = [
-        ytdlp, "--no-warnings", "-j", "--flat-playlist",
+        ytdlp,
+        "--no-warnings",
+        "-j",
+        "--flat-playlist",
         *_network_cli_args(settings),
         f"ytsearch{n}:{query}",
     ]
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=60, check=False,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
             env={**os.environ, "PATH": _augmented_path()},
         )
     except subprocess.TimeoutExpired:
@@ -374,13 +461,15 @@ def search_youtube(settings: Settings, query: str, n: int = 5) -> list[dict]:
             continue
         if e.get("id"):
             thumbs = e.get("thumbnails") or []
-            results.append({
-                "id": e["id"],
-                "title": e.get("title") or e["id"],
-                "duration": e.get("duration"),
-                "channel": e.get("channel") or e.get("uploader") or "",
-                "thumb": thumbs[-1]["url"] if thumbs else None,  # largest last
-            })
+            results.append(
+                {
+                    "id": e["id"],
+                    "title": e.get("title") or e["id"],
+                    "duration": e.get("duration"),
+                    "channel": e.get("channel") or e.get("uploader") or "",
+                    "thumb": thumbs[-1]["url"] if thumbs else None,  # largest last
+                }
+            )
     if not results:
         reason = result.stderr.strip().splitlines()[-1:] or ["no results"]
         raise UrlPlaybackError(reason[0][:200])
@@ -401,8 +490,10 @@ def build_fetch_command(
     cmd = [
         _ytdlp_bin() or "yt-dlp",
         "--no-warnings",
-        "--load-info-json", str(info_path),
-        "-o", "-",
+        "--load-info-json",
+        str(info_path),
+        "-o",
+        "-",
         # The probe minted the URLs over this network path; fetching over a
         # different one (e.g. v6 when the URLs are bound to the v4 proxy IP)
         # gets tarpitted by IP-locked CDNs.
@@ -421,13 +512,21 @@ def build_subs_command(settings: Settings, info_path: Path) -> list[str]:
     return [
         _ytdlp_bin() or "yt-dlp",
         "--no-warnings",
-        "--load-info-json", str(info_path),
+        "--load-info-json",
+        str(info_path),
         "--skip-download",
-        "--write-subs", "--write-auto-subs",
-        "--sub-langs", settings.ytdl_sub_langs,
+        "--write-subs",
+        "--write-auto-subs",
+        "--sub-langs",
+        settings.ytdl_sub_langs,
         *_network_cli_args(settings),
-        *(["--proxy", settings.media_proxy] if settings.media_proxy else []),
-        "-o", str(Path(tempfile.gettempdir()) / _SUB_PREFIX),
+        *(
+            ["--proxy", settings.media_proxy]
+            if settings.media_proxy and _proxy_reachable(settings.media_proxy)
+            else []
+        ),
+        "-o",
+        str(Path(tempfile.gettempdir()) / _SUB_PREFIX),
     ]
 
 
@@ -448,7 +547,9 @@ def fetch_subtitles(settings: Settings, info: dict, info_path: Path) -> list[Pat
     try:
         subprocess.run(
             build_subs_command(settings, info_path),
-            capture_output=True, timeout=45, check=False,
+            capture_output=True,
+            timeout=45,
+            check=False,
             env={**os.environ, "PATH": _augmented_path()},
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -480,7 +581,8 @@ def _fetch_cover(settings: Settings, art_url: str | None) -> Path | None:
 
         handlers = (
             [ProxyHandler({"http": settings.media_proxy, "https": settings.media_proxy})]
-            if settings.media_proxy else []
+            if settings.media_proxy and _proxy_reachable(settings.media_proxy)
+            else []
         )
         try:
             req = Request(art_url, headers={"User-Agent": "tg-mpv-bot/1.2"})
@@ -507,14 +609,16 @@ def _parse_radio_results(raw: list[dict], n: int) -> list[dict]:
         url = s.get("url_resolved") or s.get("url")
         if not url:
             continue
-        out.append({
-            "name": s.get("name") or url,
-            "url": url,
-            "codec": s.get("codec") or "",
-            "bitrate": s.get("bitrate") or 0,
-            "country": s.get("countrycode") or "",
-            "favicon": s.get("favicon") or "",
-        })
+        out.append(
+            {
+                "name": s.get("name") or url,
+                "url": url,
+                "codec": s.get("codec") or "",
+                "bitrate": s.get("bitrate") or 0,
+                "country": s.get("countrycode") or "",
+                "favicon": s.get("favicon") or "",
+            }
+        )
         if len(out) >= n:
             break
     return out
@@ -567,14 +671,12 @@ def build_radio_command(
     ]
     if cover is not None:
         cmd.append(f"--cover-art-files={cover}")
-    if settings.media_proxy:
+    if settings.media_proxy and _proxy_reachable(settings.media_proxy):
         cmd.append(f"--http-proxy={settings.media_proxy}")
     return cmd
 
 
-def play_radio(
-    settings: Settings, url: str, name: str, art_url: str | None = None
-) -> None:
+def play_radio(settings: Settings, url: str, name: str, art_url: str | None = None) -> None:
     """Tune the TV to an internet-radio stream (same kill→hooks→spawn path)."""
     cover = _fetch_cover(settings, art_url or _station_art_url(url))
     env = _hook_env(settings, url, name)
@@ -586,10 +688,14 @@ def build_listing_command(settings: Settings, url: str, limit: int = 12) -> list
     """argv for a cheap flat probe of a playlist/channel/listing page."""
     return [
         _ytdlp_bin() or "yt-dlp",
-        "--no-warnings", "-J", "--flat-playlist",
-        "--playlist-items", f"1:{limit}",
+        "--no-warnings",
+        "-J",
+        "--flat-playlist",
+        "--playlist-items",
+        f"1:{limit}",
         *_network_cli_args(settings),
-        "--", url,
+        "--",
+        url,
     ]
 
 
@@ -602,7 +708,10 @@ def probe_listing(settings: Settings, url: str, limit: int = 12) -> list[dict]:
     try:
         result = subprocess.run(
             build_listing_command(settings, url, limit),
-            capture_output=True, text=True, timeout=90, check=False,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
             env={**os.environ, "PATH": _augmented_path()},
         )
         data = json.loads(result.stdout)
@@ -615,11 +724,13 @@ def probe_listing(settings: Settings, url: str, limit: int = 12) -> list[dict]:
             continue
         target = e.get("url") or e.get("webpage_url")
         if target:
-            out.append({
-                "title": e.get("title") or target,
-                "url": target,
-                "duration": e.get("duration"),
-            })
+            out.append(
+                {
+                    "title": e.get("title") or target,
+                    "url": target,
+                    "duration": e.get("duration"),
+                }
+            )
     return out
 
 
@@ -675,7 +786,7 @@ def build_direct_command(
         cmd.append(f"--user-agent={headers['User-Agent']}")
     if headers.get("Referer"):
         cmd.append(f"--referrer={headers['Referer']}")
-    if settings.media_proxy:
+    if settings.media_proxy and _proxy_reachable(settings.media_proxy):
         # fetch from the same egress the probe minted the URL over
         cmd.append(f"--http-proxy={settings.media_proxy}")
     if cover is not None:
@@ -755,7 +866,9 @@ def _run_hook(label: str, command: str, env: dict[str, str]) -> None:
         )
         if result.returncode != 0:
             logger.warning(
-                "%s hook exited %d: %s", label, result.returncode,
+                "%s hook exited %d: %s",
+                label,
+                result.returncode,
                 (result.stderr or result.stdout).strip()[:200],
             )
     except subprocess.TimeoutExpired:
@@ -830,6 +943,50 @@ def _log_file(name: str):
         return subprocess.DEVNULL
 
 
+def _build_mpv_ytdl_command(settings: Settings, url: str) -> list[str]:
+    """argv for mpv with its built-in ytdl hook — fallback when our probe fails."""
+    cmd = [
+        _mpv_base(settings),
+        url,
+        f"--input-ipc-server={settings.mpv_socket}",
+        "--force-window",
+        "--network-timeout=120",
+    ]
+    ytdlp = _ytdlp_bin()
+    if ytdlp:
+        # Use the impersonate wrapper so mpv's ytdl_hook sends a browser TLS
+        # fingerprint — bypasses Qrator/CDN bot detection.  The wrapper
+        # prepends --impersonate chrome to the venv yt-dlp.
+        wrapper = Path(__file__).resolve().parent.parent / "scripts" / "yt-dlp-impersonate.sh"
+        if wrapper.exists():
+            cmd.append(f"--script-opts=ytdl_hook-ytdl_path={wrapper}")
+        else:
+            cmd.append(f"--script-opts=ytdl_hook-ytdl_path={ytdlp}")
+    return cmd
+
+
+def _launch_mpv_ytdl(settings: Settings, url: str) -> None:
+    """Launch mpv with its built-in ytdl hook for a URL."""
+    env = _hook_env(settings, url, url)
+    _stop_current(settings)
+    _run_hook("pre-play", settings.pre_play_hook, env)
+    mpv_log = _log_file("tg-mpv-bot-mpv.log")
+    mpv_cmd = _build_mpv_ytdl_command(settings, url)
+    logger.info("Launching ytdl-hook: %s", " ".join(mpv_cmd))
+    subprocess.Popen(
+        mpv_cmd,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=mpv_log,
+        stderr=mpv_log,
+        start_new_session=True,
+    )
+    if mpv_log is not subprocess.DEVNULL:
+        mpv_log.close()
+    _run_hook("post-play", settings.post_play_hook, env)
+    state.record_last_played(settings.state_file, url, name=url)
+
+
 def play_url(
     settings: Settings,
     url: str,
@@ -845,7 +1002,20 @@ def play_url(
     (called from this worker thread) receives stage names — "escalating"
     when the cookie retry kicks in, "starting" once the probe succeeded.
     """
-    info, info_path = probe_url(settings, url, progress=progress)
+    # Non-YouTube: skip probe entirely — one clean request from mpv's ytdl
+    # hook (same as ``mpv <url>`` from CLI) avoids CDN rate-limiting that our
+    # probe triggers (Qrator, Cloudflare, etc.).
+    if not _is_youtube_url(url) and _ytdlp_bin() is not None:
+        logger.info("Skipping probe for non-YouTube URL: %s", url)
+        if progress:
+            progress("starting")
+        _launch_mpv_ytdl(settings, url)
+        return url  # title unknown — mpv will figure it out
+
+    try:
+        info, info_path = probe_url(settings, url, progress=progress)
+    except UrlPlaybackError:
+        raise
     if progress:
         progress("subs")
     sub_files = fetch_subtitles(settings, info, info_path)
@@ -885,8 +1055,11 @@ def play_url(
         )
         logger.info("Launching player: %s", " ".join(mpv_cmd))
         subprocess.Popen(
-            mpv_cmd, pass_fds=(video_r, audio_r),
-            stdout=mpv_log, stderr=mpv_log, **common,
+            mpv_cmd,
+            pass_fds=(video_r, audio_r),
+            stdout=mpv_log,
+            stderr=mpv_log,
+            **common,
         )
         os.close(video_r)
         os.close(audio_r)
@@ -896,8 +1069,12 @@ def play_url(
         fetcher = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=ytdl_log, **common)
         mpv_cmd = build_pipe_player_command(settings, title, sub_files=sub_files, start=start)
         subprocess.Popen(
-            mpv_cmd, env=env, stdin=fetcher.stdout,
-            stdout=mpv_log, stderr=mpv_log, start_new_session=True,
+            mpv_cmd,
+            env=env,
+            stdin=fetcher.stdout,
+            stdout=mpv_log,
+            stderr=mpv_log,
+            start_new_session=True,
         )
         fetcher.stdout.close()  # mpv's exit must SIGPIPE yt-dlp, not us
     for f in (ytdl_log, mpv_log):
