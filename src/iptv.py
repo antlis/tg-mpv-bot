@@ -21,8 +21,8 @@ from aiogram.types import (
     Message,
 )
 
-from .config import get_settings
 from . import player, state
+from .config import get_settings
 
 logger = logging.getLogger(__name__)
 
