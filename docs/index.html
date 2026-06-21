@@ -383,6 +383,7 @@
       <div class="card"><span class="tile">🕘</span><b>Watch history</b><p>Last 20 played, paginated. Tap the title to replay (streams resume from the saved position), tap the icon to copy the URL/path, tap 🗑 to remove the entry. <code>/history</code> or <code>/mpv_history</code>.</p></div>
       <div class="card"><span class="tile">🔔</span><b>Knows when you're done</b><p>"⏭ Now playing: 6/12" on episode change, "✅ Finished" at the end. <code>/mpv_sleep 45m</code> for bedtime.</p></div>
       <div class="card"><span class="tile">📻</span><b>Internet radio</b><p>The full SomaFM catalog and friends as presets, plus search across ~50k stations — tuned in about a second.</p></div>
+      <div class="card"><span class="tile">📺</span><b>Live TV (IPTV)</b><p><code>/mpv_iptv BBC</code> searches 50 000+ channels from the <a href="https://github.com/iptv-org/iptv">iptv-org</a> catalogue — tap a result to stream live on the TV, with the channel logo sent to the chat.</p></div>
       <div class="card"><span class="tile">🩺</span><b>Runs itself</b><p>Auto-updating yt-dlp, playlist doctor &amp; repair, disk GC, one-screen health check.</p></div>
     </div>
 
@@ -468,6 +469,7 @@ systemctl --user enable --now tg-mpv-bot</code></pre>
           <div class="row"><div class="c"><code>/mpv_url &lt;link&gt;</code></div><span>the explicit version of sending a link</span></div>
           <div class="row"><div class="c"><code>/mpv_yt &lt;search&gt;</code></div><span>search YouTube — top results as buttons with thumbnails</span></div>
           <div class="row"><div class="c"><code>/mpv_radio [search]</code></div><span>internet radio: 50+ presets incl. the full SomaFM catalog — or search ~50k stations</span></div>
+          <div class="row"><div class="c"><code>/mpv_iptv [search]</code></div><span>live TV — search 50 000+ channels from the iptv-org catalogue and stream on the TV</span></div>
         </div>
       </div>
 
