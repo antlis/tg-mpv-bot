@@ -247,7 +247,7 @@ async def cb_iptv_pick(query: CallbackQuery) -> None:
     except Exception:
         pass
 
-    caption = f"📺 <b>Now streaming:</b> {label}\n🔴 <i>Live IPTV</i>"
+    caption = f"📺 <b>Now streaming:</b> {label}\n🔴 <i>Live IPTV</i>\n\n🔗 <code>{url}</code>"
     if logo:
         try:
             await query.message.answer_photo(logo, caption=caption, parse_mode="HTML")
