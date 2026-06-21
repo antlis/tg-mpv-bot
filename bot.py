@@ -28,6 +28,7 @@ from aiogram.types import (
 from src import lock
 from src.commands import router
 from src.config import get_settings
+from src.iptv import iptv_router
 
 logger = logging.getLogger("tg-mpv-bot")
 
@@ -43,6 +44,7 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_url", description="Stream a link (YouTube/SoundCloud/…)"),
         BotCommand(command="mpv_yt", description="Search YouTube, tap to play"),
         BotCommand(command="mpv_radio", description="Internet radio — presets or search 50k stations"),
+        BotCommand(command="mpv_iptv", description="Live TV — search iptv-org (50k+ channels)"),
         BotCommand(command="mpv_info", description="Show current status"),
         BotCommand(command="mpv_shot", description="Screenshot the current frame"),
         BotCommand(command="mpv_record", description="Record the current video/radio and send it"),
@@ -121,6 +123,7 @@ async def main() -> None:
 
     dp = Dispatcher()
     dp.include_router(router)
+    dp.include_router(iptv_router)
 
     # ── Global error handler ─────────────────────────────────────
     # Any unhandled handler error is logged AND the callback spinner is
