@@ -32,8 +32,6 @@ from . import generate, keyboards, player, playlists, recorder, state
 from .config import get_settings
 from .keyboards import (
     PER_PAGE,
-    clamp_page,
-    page_count,
     categories_keyboard,
     chapters_keyboard,
     episodes_keyboard,
@@ -41,6 +39,7 @@ from .keyboards import (
     history_keyboard,
     listing_keyboard,
     now_playing_keyboard,
+    page_count,
     playlists_keyboard,
     radio_keyboard,
     radio_search_keyboard,
