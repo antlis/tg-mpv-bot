@@ -752,7 +752,18 @@ def needs_pipe(info: dict) -> bool:
 
 def _is_audio_only(info: dict) -> bool:
     formats = info.get("requested_formats") or [info]
-    return all((f.get("vcodec") or "none") == "none" for f in formats)
+    def _no_video(f: dict) -> bool:
+        vc = f.get("vcodec")
+        if vc == "none":   # extractor explicitly says no video track
+            return True
+        if vc:             # real codec string — definitely has video
+            return False
+        # vc is None/absent: HLS manifests and some CDN URLs land here.
+        # Treat as audio-only only when acodec IS known (SoundCloud etc.);
+        # both unknown means the stream likely carries video (HLS mux).
+        ac = f.get("acodec")
+        return bool(ac and ac != "none")
+    return all(_no_video(f) for f in formats)
 
 
 def build_direct_command(

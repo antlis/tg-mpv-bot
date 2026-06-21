@@ -3,6 +3,29 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.0] — 2026-06-21
+### Added
+- **Watch history** (`/history`) — paginated list of recently played items
+  (newest first, up to 20 entries, 8 per page). Each row shows a type icon
+  (🔗 URL / 📁 local file), the title, and a 🗑 delete button. Tapping the
+  icon sends the raw URL or file path so you can copy it; tapping the title
+  replays the item; tapping 🗑 removes it from history and refreshes in place.
+  History persists across restarts.
+- **`/history` alias** — shorter alternative to `/mpv_history` / `/mpv_recent`.
+- **`state.delete_history_entry`** — removes one entry from the JSON state file
+  by target URL/path.
+
+### Fixed
+- **Stale history indices after replay** — tapping a history entry moved it to
+  position 0 (newest), making subsequent taps hit the wrong item. The keyboard
+  is now refreshed immediately after each replay so indices stay current.
+- **HLS streams shown as static thumbnail** — `_is_audio_only` used
+  `vcodec or "none"` which treated Python `None` (HLS manifests don't expose
+  per-format codec info) the same as the explicit string `"none"`. Streams where
+  both `vcodec` and `acodec` are `None`/absent are now correctly treated as
+  video-bearing (HLS mux); audio-only detection fires only when `vcodec=="none"`
+  or when `vcodec` is absent but `acodec` is present (SoundCloud pattern).
+
 ## [1.3.1] — 2026-06-09
 ### Fixed
 - **Recording A/V sync** — recorded video clips had audio roughly 80 ms ahead of

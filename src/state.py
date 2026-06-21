@@ -17,7 +17,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-HISTORY_LIMIT = 20
+HISTORY_LIMIT = 5000
 
 
 @dataclass(frozen=True)
@@ -140,3 +140,11 @@ def last_played(state_file: Path) -> str | None:
     """The most recent playlist path or URL; ``None`` if unknown/gone/corrupt."""
     entries = history(state_file)
     return entries[0].target if entries else None
+
+
+
+def delete_history_entry(state_file: Path, target: str) -> None:
+    """Remove one entry from the watch history by target URL/path."""
+    doc = _read_doc(state_file)
+    doc["history"] = [e for e in doc.get("history", []) if e.get("target") != target]
+    _write_doc(state_file, doc)
