@@ -66,7 +66,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | *(send a video/audio file)* | Downloads and plays it — >20 MB needs `API_SERVER_URL` (local Bot API server) |
 | `/mpv_info` | Now-playing panel with inline transport buttons |
 | `/mpv_shot` | Send a screenshot of the current frame to the chat |
-| `/mpv_record [secs]` | Record what's playing — video → H.264 mp4, radio/audio → voice message — and send it to the chat. Run again (or tap ⏺ Stop) to finish; auto-stops at 1 h |
+| `/mpv_record [duration]` · `/mpv_record START END` | Record what's playing — video → H.264 mp4, radio/audio → voice message — and send it to the chat. Run again (or tap ⏺ Stop) to finish; auto-stops at 1 h. `duration` accepts `30m`, `1h`, `HH:MM:SS`; `START END` (e.g. `01:30:00 02:00:00`) clips a specific range for local files — live streams use the duration and ignore the start |
 | `/mpv_toggle` | Play/pause toggle (one command) |
 | `/mpv_pause` | Pause playback |
 | `/mpv_unpause` | Resume playback |

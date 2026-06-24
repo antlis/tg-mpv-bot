@@ -47,7 +47,7 @@ def _build_menu() -> list[BotCommand]:
         BotCommand(command="mpv_iptv", description="Live TV — search iptv-org (50k+ channels)"),
         BotCommand(command="mpv_info", description="Show current status"),
         BotCommand(command="mpv_shot", description="Screenshot the current frame"),
-        BotCommand(command="mpv_record", description="Record the current video/radio and send it"),
+        BotCommand(command="mpv_record", description="Record video/radio; /mpv_record 01:30 02:00 to clip a range"),
         BotCommand(command="mpv_toggle", description="Play/pause toggle"),
         BotCommand(command="mpv_pause", description="Pause playback"),
         BotCommand(command="mpv_unpause", description="Resume playback"),

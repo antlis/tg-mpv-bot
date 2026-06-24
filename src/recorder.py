@@ -19,13 +19,46 @@ import asyncio
 RECORD_MAX = 3600  # hard cap (1 hour)
 
 
+def parse_time(s: str) -> int | None:
+    """Parse a time string to int seconds. Accepts HH:MM:SS, MM:SS, Nh/Nm/Ns, or plain int."""
+    s = s.strip()
+    if ":" in s:
+        parts = s.split(":")
+        try:
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+        except ValueError:
+            pass
+        return None
+    if s and s[-1] in "hms":
+        try:
+            return int(s[:-1]) * {"h": 3600, "m": 60, "s": 1}[s[-1]]
+        except ValueError:
+            return None
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
+
 def build_record_args(
-    src: str, pos: float, dur: float, is_video: bool, vfmt: str, out: str, secs: int = RECORD_MAX
+    src: str,
+    pos: float,
+    dur: float,
+    is_video: bool,
+    vfmt: str,
+    out: str,
+    secs: int = RECORD_MAX,
+    start_secs: int | None = None,
 ) -> list[str]:
     """ffmpeg argv (after the ``ffmpeg`` binary) to capture ``src`` into ``out``.
 
     - Local files: seek to ``pos`` (clamped inside ``dur``) and pace at realtime.
-    - Live http (radio / streams): no seek, capture going forward.
+      If ``start_secs`` is given it overrides ``pos`` as the seek target.
+    - Live http (radio / streams): no seek, capture going forward; ``start_secs``
+      is ignored (the caller uses the derived duration instead).
     - Video: always re-encode to H.264 yuv420p 720p AAC — the pixel format and
       codec profile that Telegram / Android plays inline.  faststart moves the
       moov atom to the front so the file is streamable.  If ffmpeg is killed
@@ -37,9 +70,14 @@ def build_record_args(
     is_http = str(src).startswith("http")
     pre: list[str] = []
     if not is_http:
-        p = pos or 0
-        if dur and dur > 0:
-            p = max(0, min(p, dur - 2))
+        if start_secs is not None:
+            p = start_secs
+            if dur and dur > 0:
+                p = min(p, int(dur) - 2)
+        else:
+            p = pos or 0
+            if dur and dur > 0:
+                p = max(0, min(p, dur - 2))
         if p > 0:
             pre += ["-ss", str(int(p))]
         pre += ["-re"]
