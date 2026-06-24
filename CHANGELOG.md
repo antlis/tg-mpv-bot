@@ -3,6 +3,12 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.7.0] — 2026-06-25
+### Added
+- **`/mpv_record START END`** — clip a specific time range from what's playing. Accepts `HH:MM:SS`, `MM:SS`, `Nh`/`Nm`/`Ns`, or plain seconds for both arguments (e.g. `/mpv_record 01:30:00 02:00:00` records 30 minutes starting at 1 h 30 m). Works for local files; for live HTTP streams (radio, IPTV) the start offset is ignored and only the duration (`END − START`) is used, with a note in the status message.
+- **Duration shorthand** for `/mpv_record` — e.g. `/mpv_record 30m` or `/mpv_record 1h` alongside the existing plain-seconds form.
+- **Ahead-of-playback warning** — when the requested start time is ahead of the current mpv position (meaning the file may not be downloaded that far yet), the recording starts but the status message warns that the clip may be shorter than expected.
+
 ## [1.6.0] — 2026-06-21
 ### Added
 - **IPTV (`/mpv_iptv <name>`)** — search 50 000+ live TV channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and stream them live via mpv. Results shown as inline buttons; channel logo sent as a photo card when streaming starts. `/mpv_iptv` with no args shows links to browse channels by country/category.

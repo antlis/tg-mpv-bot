@@ -657,7 +657,9 @@ def _record_source(client: MpvClient) -> dict | None:
     }
 
 
-async def _toggle_record(message: Message, secs: int = recorder.RECORD_MAX) -> None:
+async def _toggle_record(
+    message: Message, secs: int = recorder.RECORD_MAX, start_secs: int | None = None
+) -> None:
     """Start a recording of the current media, or stop & send the running one."""
     global _recording
     if _recording is not None:  # toggle off
@@ -671,11 +673,19 @@ async def _toggle_record(message: Message, secs: int = recorder.RECORD_MAX) -> N
     if not info:
         await message.reply("⏹ Nothing is playing to record.")
         return
+    is_http = str(info["src"]).startswith("http")
+    not_downloaded_yet = False
+    if start_secs is not None and not is_http:
+        if info["dur"] and info["dur"] > 0 and start_secs >= info["dur"]:
+            await message.reply("❌ Start time is beyond the end of the track.")
+            return
+        not_downloaded_yet = start_secs > info["pos"] + 5
     ext = "mp4" if info["video"] else "ogg"
     out = str(Path(tempfile.gettempdir()) / f"tg-mpv-rec-{uuid.uuid4().hex}.{ext}")
     errlog = out + ".log"
     args = recorder.build_record_args(
-        info["src"], info["pos"], info["dur"], info["video"], info["vfmt"], out, secs
+        info["src"], info["pos"], info["dur"], info["video"], info["vfmt"], out, secs,
+        start_secs=start_secs,
     )
     try:
         proc = await recorder.spawn(args, errlog)
@@ -683,8 +693,16 @@ async def _toggle_record(message: Message, secs: int = recorder.RECORD_MAX) -> N
         await message.reply(f"❌ couldn't start recording: {exc}")
         return
     kind = "video" if info["video"] else "audio"
+    if start_secs is not None and not is_http:
+        range_note = f"\n⏱ {_fmt_time(start_secs)} → {_fmt_time(start_secs + secs)}"
+        if not_downloaded_yet:
+            range_note += "\n⚠️ Start is ahead of playback — may be incomplete if not fully downloaded yet."
+    elif start_secs is not None:
+        range_note = f"\n(start offset ignored for live streams — recording {_fmt_time(secs)} from now)"
+    else:
+        range_note = ""
     status = await message.reply(
-        f"🔴 Recording {kind}: {html.escape(str(info['name'])[:60])}…\n"
+        f"🔴 Recording {kind}: {html.escape(str(info['name'])[:60])}…{range_note}\n"
         "Send /mpv_record again (or tap ⏺ Stop) to finish."
     )
     _recording = {
@@ -764,13 +782,29 @@ async def _record_watch() -> None:
 
 @router.message(Command("mpv_record", "mpv_rec"))
 async def cmd_record(message: Message, command: CommandObject) -> None:
+    start_secs = None
     secs = recorder.RECORD_MAX
-    if command.args:
-        try:
-            secs = max(1, min(recorder.RECORD_MAX, int(command.args.strip())))
-        except ValueError:
-            pass
-    await _toggle_record(message, secs)
+    args = command.args.split() if command.args else []
+
+    if len(args) >= 2:
+        t0 = recorder.parse_time(args[0])
+        t1 = recorder.parse_time(args[1])
+        if t0 is None or t1 is None or t1 <= t0:
+            await message.reply(
+                "❌ Invalid times. Examples:\n"
+                "• /mpv_record — record now\n"
+                "• /mpv_record 30m — record for 30 minutes\n"
+                "• /mpv_record 01:30:00 02:00:00 — clip from 1h30m to 2h"
+            )
+            return
+        start_secs = t0
+        secs = t1 - t0
+    elif len(args) == 1:
+        t = recorder.parse_time(args[0])
+        if t is not None:
+            secs = max(1, min(recorder.RECORD_MAX, t))
+
+    await _toggle_record(message, secs, start_secs=start_secs)
 
 
 # ── Status ──────────────────────────────────────────────────────────
@@ -1605,7 +1639,7 @@ async def cmd_help(message: Message) -> None:
         "…or just <b>send a video/audio file</b> — it plays on the TV\n"
         "<b>/mpv_info</b> — now-playing panel with controls\n"
         "<b>/mpv_shot</b> — screenshot the current frame to chat\n"
-        "<b>/mpv_record</b> [secs] — record the current video/radio and send it (tap again to stop)\n"
+        "<b>/mpv_record</b> [duration | START END] — record video/radio and send it; clip a range with two times e.g. <code>01:30:00 02:00:00</code> (tap again to stop)\n"
         "<b>/mpv_toggle</b> — play/pause (one tap)\n"
         "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
         "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s · <b>/mpv_goto</b> &lt;pos&gt;\n"

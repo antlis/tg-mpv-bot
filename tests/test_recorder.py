@@ -1,4 +1,4 @@
-from src.recorder import RECORD_MAX, build_record_args
+from src.recorder import RECORD_MAX, build_record_args, parse_time
 
 
 def _val(args, flag):
@@ -50,3 +50,67 @@ def test_duration_capped_at_one_hour():
         "/m/ep.mp4", pos=0, dur=600, is_video=True, vfmt="h264", out="/tmp/o.mp4", secs=999999
     )
     assert _val(a, "-t") == str(RECORD_MAX)
+
+
+# ── parse_time ───────────────────────────────────────────────────────
+
+
+def test_parse_time_hms():
+    assert parse_time("01:30:00") == 5400
+    assert parse_time("00:05:30") == 330
+
+
+def test_parse_time_ms():
+    assert parse_time("5:30") == 330
+
+
+def test_parse_time_suffix():
+    assert parse_time("30m") == 1800
+    assert parse_time("2h") == 7200
+    assert parse_time("45s") == 45
+
+
+def test_parse_time_plain_int():
+    assert parse_time("120") == 120
+
+
+def test_parse_time_invalid():
+    assert parse_time("abc") is None
+    assert parse_time("1:2:x") is None
+
+
+# ── start_secs ───────────────────────────────────────────────────────
+
+
+def test_start_secs_overrides_position():
+    a = build_record_args(
+        "/m/ep.mp4", pos=100, dur=7200, is_video=False, vfmt="", out="/tmp/o.ogg",
+        secs=1800, start_secs=5400,
+    )
+    assert _val(a, "-ss") == "5400"
+    assert _val(a, "-t") == "1800"
+
+
+def test_start_secs_clamped_to_dur():
+    a = build_record_args(
+        "/m/ep.mp4", pos=0, dur=600, is_video=False, vfmt="", out="/tmp/o.ogg",
+        start_secs=599,
+    )
+    assert _val(a, "-ss") == "598"  # min(599, 600 - 2)
+
+
+def test_start_secs_zero_omits_ss_flag():
+    a = build_record_args(
+        "/m/ep.mp4", pos=50, dur=600, is_video=False, vfmt="", out="/tmp/o.ogg",
+        start_secs=0,
+    )
+    assert "-ss" not in a
+
+
+def test_start_secs_ignored_for_http():
+    a = build_record_args(
+        "http://stream/", pos=0, dur=0, is_video=False, vfmt="", out="/tmp/o.ogg",
+        secs=300, start_secs=600,
+    )
+    assert "-ss" not in a
+    assert "-re" not in a
