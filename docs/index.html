@@ -1,358 +1,788 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tg-mpv-bot — Telegram remote control for mpv</title>
 <meta name="description" content="Turn any Linux box plugged into a TV into a Telegram-controlled media center. Browse your library, stream any link, forward video files — no cloud, no ports, no smart-TV apps.">
-<meta name="theme-color" content="#0a1019">
+<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
 <meta property="og:title" content="tg-mpv-bot — your TV's remote is now Telegram">
 <meta property="og:description" content="Browse your media library, stream YouTube/SoundCloud links, play forwarded Telegram files — all from your phone. Self-hosted, no AI, no cloud.">
 <meta property="og:url" content="https://antlis.is-a.dev/tg-mpv-bot/">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0a1019;
-    --bg-raise: #0e1622;
-    --surface: rgba(255, 255, 255, .03);
-    --border: rgba(255, 255, 255, .09);
-    --border-strong: rgba(255, 255, 255, .16);
-    --text: #eef4fa;
-    --dim: #8da3b9;
-    --accent: #2aabee;
-    --accent-soft: rgba(42, 171, 238, .12);
-    --code-bg: #070d15;
-    --radius: 16px;
-    --font: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
-    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Consolas, monospace;
-    /* the spacing system: one macro unit for section breaks, micro inside */
-    --space-section: clamp(96px, 13vh, 160px);
-    --space-block: 48px;
+    --bg: #fafafa;
+    --text: #1a1a1a;
+    --text-secondary: #555;
+    --border: #e5e5e5;
+    --card-bg: #fff;
+    --card-hover: #f5f5f5;
+    --accent: #E35206;
+    --accent-hover: #c44a0a;
+    --code-bg: #f3f3f3;
   }
+
+  [data-theme="dark"] {
+    --bg: #0a0a0a;
+    --text: #e5e5e5;
+    --text-secondary: #b0b0b0;
+    --border: #2a2a2a;
+    --card-bg: #111;
+    --card-hover: #1d1d1d;
+    --accent: #F77814;
+    --accent-hover: #f9a04f;
+    --code-bg: #0d0d0d;
+  }
+
   * { box-sizing: border-box; margin: 0; }
-  html { scroll-behavior: smooth; overflow-x: clip; }
+
+  html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    scroll-behavior: smooth;
+    overflow-x: clip;
+  }
+
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: var(--font);
-    font-size: 16px;
-    line-height: 1.65;
-    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.7;
+    overflow-wrap: break-word;
     overflow-x: clip;
   }
-  ::selection { background: rgba(42, 171, 238, .35); }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; text-underline-offset: 3px; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 
-  /* width container: inline padding ONLY — vertical rhythm belongs to sections */
-  .wrap { max-width: 1040px; margin-inline: auto; padding-inline: 24px; }
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
 
-  /* ── nav ─────────────────────────────────────────── */
-  nav {
-    position: sticky; top: 0; z-index: 10;
-    background: rgba(10, 16, 25, .8);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+  a {
+    text-decoration: none;
+    color: inherit;
+    transition: color 0.2s;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-size: 0.85em;
+    padding: 0.15rem 0.4rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  /* ─── Nav ─── */
+  header {
     border-bottom: 1px solid var(--border);
   }
-  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 60px; }
-  .brand { font-weight: 800; font-size: 1rem; color: var(--text); letter-spacing: -.01em; }
-  .brand:hover { text-decoration: none; }
-  .nav-links { display: flex; gap: 26px; align-items: center; }
-  .nav-links a { color: var(--dim); font-size: .9rem; font-weight: 500; }
-  .nav-links a:hover { color: var(--text); text-decoration: none; }
-  .nav-links .gh { color: var(--text); border: 1px solid var(--border-strong); padding: 6px 14px; border-radius: 99px; }
-  .nav-links .gh:hover { border-color: var(--accent); }
-  @media (max-width: 640px) { .nav-links a:not(.gh) { display: none; } }
 
-  /* ── hero ─────────────────────────────────────────── */
-  .hero {
-    position: relative;
-    text-align: center;
-    padding-block: clamp(80px, 13vh, 140px) clamp(88px, 13vh, 150px);
+  nav {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1rem clamp(1rem, 3vw, 2rem);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
-  .hero::before {
-    content: "";
-    position: absolute; left: 50%; top: -120px;
-    width: min(900px, 120vw); height: 520px;
-    transform: translateX(-50%);
-    background: radial-gradient(50% 55% at 50% 25%, rgba(42, 171, 238, .16), transparent 70%);
-    pointer-events: none;
-  }
-  .hero > * { position: relative; }
-  .eyebrow {
-    display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
-    font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--dim);
-    border: 1px solid var(--border);
-    background: var(--surface);
-    padding: 7px 16px; border-radius: 99px;
-    margin-bottom: 30px;
-  }
-  .eyebrow b { color: var(--accent); font-weight: 600; }
-  h1 {
-    font-size: clamp(2.1rem, 7.5vw, 4.2rem);
-    font-weight: 800;
-    letter-spacing: -.035em;
-    line-height: 1.06;
-    text-wrap: balance;
-  }
-  h1 .grad {
-    background: linear-gradient(92deg, #2aabee 10%, #8fd6ff 90%);
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: transparent;
-  }
-  .lead {
-    color: var(--dim);
-    font-size: clamp(1.02rem, 2.4vw, 1.2rem);
-    max-width: 600px;
-    margin: 26px auto 0;
-    text-wrap: pretty;
-  }
-  .lead b { color: var(--text); font-weight: 600; }
-  .cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 38px; }
-  .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 13px 28px; border-radius: 12px;
-    font-weight: 600; font-size: .96rem;
-    border: 1px solid var(--border-strong);
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 600;
+    font-size: 1rem;
     color: var(--text);
-    transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
   }
-  .btn:hover { text-decoration: none; transform: translateY(-1px); border-color: var(--accent); }
-  .btn.primary {
-    background: linear-gradient(135deg, #2aabee, #1b86c9);
-    border-color: transparent;
-    color: #051422;
-    box-shadow: 0 10px 30px -8px rgba(42, 171, 238, .5);
-  }
-  .btn.primary:hover { box-shadow: 0 14px 34px -8px rgba(42, 171, 238, .65); }
 
-  .diagram {
-    display: flex; align-items: stretch; justify-content: center; gap: 16px;
-    flex-wrap: wrap;
-    margin-top: 64px;
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--text);
+    color: var(--bg);
+    display: grid;
+    place-items: center;
+    font-size: 16px;
   }
-  .node {
-    display: flex; flex-direction: column; justify-content: center;
-    min-width: 176px;
-    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+
+  .nav-link {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+  }
+
+  .nav-link:hover, .nav-link.active {
+    color: var(--text);
+  }
+
+  .nav-end {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.35rem;
+    padding: 0.48rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.15s ease, box-shadow 0.15s ease;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .btn:hover {
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+
+  .btn-primary {
+    color: var(--bg);
+    background: var(--text);
+    border-color: var(--text);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 14px 30px color-mix(in srgb, var(--text) 22%, transparent);
+  }
+
+  .btn-secondary {
+    background: var(--card-bg);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--text-secondary);
+    background: var(--card-hover);
+  }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 24px;
-    text-align: center;
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
   }
-  .node .em { font-size: 1.7rem; line-height: 1.3; }
-  .node b { font-size: .94rem; font-weight: 600; margin-top: 6px; }
-  .node small { color: var(--dim); font-size: .81rem; line-height: 1.45; margin-top: 2px; }
+
+  .theme-toggle:hover {
+    color: var(--text);
+    border-color: var(--text-secondary);
+  }
+
+  .theme-toggle .icon-sun { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+
+  [data-theme="light"] .theme-toggle .icon-sun { display: block; }
+  [data-theme="light"] .theme-toggle .icon-moon { display: none; }
+
+  .menu-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 11;
+  }
+
+  .hamburger,
+  .hamburger::before,
+  .hamburger::after {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--text);
+    border-radius: 1px;
+    transition: transform 0.3s, opacity 0.3s;
+  }
+
+  .hamburger { position: relative; }
+
+  .hamburger::before,
+  .hamburger::after {
+    content: '';
+    position: absolute;
+    left: 0;
+  }
+
+  .hamburger::before { top: -6px; }
+  .hamburger::after { top: 6px; }
+
+  .menu-toggle[aria-expanded="true"] .hamburger { background: transparent; }
+  .menu-toggle[aria-expanded="true"] .hamburger::before { top: 0; transform: rotate(45deg); }
+  .menu-toggle[aria-expanded="true"] .hamburger::after { top: 0; transform: rotate(-45deg); }
+
+  .mobile-menu {
+    display: none;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+  }
+
+  @media (max-width: 640px) {
+    nav {
+      flex-wrap: wrap;
+      padding: 0.75rem 1rem;
+      justify-content: flex-start;
+      gap: 0;
+    }
+    .nav-links { display: none; }
+    .nav-end {
+      display: flex;
+      margin-left: auto;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .menu-toggle { display: flex; }
+    .mobile-menu {
+      display: block;
+      width: 100%;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease, opacity 0.3s ease, padding-top 0.3s ease;
+    }
+    .mobile-menu.open {
+      max-height: 400px;
+      opacity: 1;
+      padding-top: 0.75rem;
+    }
+    .mobile-links {
+      display: flex;
+      flex-direction: column;
+      margin: 0 -1rem -1rem;
+      border-top: 1px solid var(--border);
+    }
+    .mobile-link {
+      display: block;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+      transition: color 0.2s;
+    }
+    .mobile-link:last-child { border-bottom: none; }
+    .mobile-link:hover, .mobile-link.active { color: var(--text); }
+  }
+
+  /* ─── Main ─── */
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 clamp(1rem, 3vw, 2rem);
+  }
+
+  /* ─── Hero ─── */
+  .hero {
+    padding: 3rem 0 2.75rem;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.35rem, 1.7rem + 3vw, 4rem);
+    font-weight: 600;
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    max-width: 15ch;
+    margin-bottom: 1rem;
+    text-wrap: balance;
+    color: var(--text);
+  }
+
+  .hero p {
+    max-width: 620px;
+    font-size: clamp(1.05rem, 1rem + 0.25vw, 1.15rem);
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+
+  .hero p strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    margin-top: 1.4rem;
+  }
+
+  /* ─── Diagram ─── */
+  .diagram {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 2.5rem;
+  }
+
+  .node {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 176px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    text-align: center;
+    transition: border-color 0.2s, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .node:hover {
+    border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+    transform: translateY(-1px);
+    box-shadow: 0 14px 34px color-mix(in srgb, #000 8%, transparent);
+  }
+
+  .node .em { font-size: 1.5rem; line-height: 1.3; }
+  .node b { font-size: 0.92rem; font-weight: 600; margin-top: 0.35rem; color: var(--text); }
+  .node small { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.45; margin-top: 0.15rem; }
+
   .link-arrow {
     align-self: center;
     color: var(--accent);
-    font-family: var(--mono); font-size: .85rem; font-weight: 600;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
     white-space: nowrap;
-    text-shadow: 0 0 18px rgba(42, 171, 238, .6);
   }
+
   @media (max-width: 700px) {
-    .diagram { flex-direction: column; align-items: center; gap: 12px; }
+    .diagram { flex-direction: column; align-items: center; gap: 0.5rem; }
     .node { width: min(100%, 320px); }
-    .link-arrow { transform: rotate(90deg); margin: 4px 0; }
+    .link-arrow { transform: rotate(90deg); margin: 0.25rem 0; }
   }
 
-  /* ── sections: full-bleed bands, width-wrap inside ── */
-  section { padding-block: var(--space-section); scroll-margin-top: 60px; }
-  section.alt {
-    background: var(--bg-raise);
-    border-block: 1px solid var(--border);
+  /* ─── Section ─── */
+  section {
+    padding: 2rem 0;
+    border-top: 1px solid var(--border);
+    scroll-margin-top: 60px;
   }
-  .head { max-width: 620px; }
-  .head.center { margin-inline: auto; text-align: center; }
-  .kicker {
-    display: flex; align-items: center; gap: 10px;
-    font-size: .78rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 14px;
-  }
-  .head.center .kicker { justify-content: center; }
-  .kicker::before { content: ""; width: 22px; height: 1.5px; background: var(--accent); border-radius: 2px; }
-  h2 {
-    font-size: clamp(1.65rem, 4vw, 2.25rem);
-    font-weight: 800; letter-spacing: -.025em; line-height: 1.15;
-    text-wrap: balance;
-  }
-  .sub { color: var(--dim); margin-top: 14px; text-wrap: pretty; }
 
-  /* ── features ─────────────────────────────────────── */
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.15rem;
+    gap: 1rem;
+  }
+
+  .section-header h2 {
+    font-size: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  .lead {
+    color: var(--text-secondary);
+    max-width: 620px;
+    margin-bottom: 1.5rem;
+    font-size: clamp(1rem, 0.95rem + 0.25vw, 1.1rem);
+    line-height: 1.7;
+  }
+
+  /* ─── Feature Cards ─── */
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-    margin-top: var(--space-block);
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
   }
+
   .card {
-    background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+    padding: 0.9rem 1rem;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 26px;
-    transition: border-color .2s ease, transform .2s ease;
+    border-radius: 8px;
+    background: var(--card-bg);
+    transition: border-color 0.2s, transform 0.15s ease, box-shadow 0.15s ease;
   }
+
   @media (hover: hover) {
-    .card:hover { border-color: rgba(42, 171, 238, .45); transform: translateY(-2px); }
+    .card:hover {
+      border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+      transform: translateY(-1px);
+      box-shadow: 0 14px 34px color-mix(in srgb, #000 8%, transparent);
+    }
   }
+
   .tile {
-    display: inline-grid; place-items: center;
-    width: 42px; height: 42px;
-    border-radius: 12px;
-    background: var(--accent-soft);
-    font-size: 1.2rem;
-    margin-bottom: 16px;
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    font-size: 1.1rem;
+    margin-bottom: 0.75rem;
   }
-  .card b { display: block; font-size: 1.02rem; font-weight: 600; letter-spacing: -.01em; }
-  .card p { color: var(--dim); font-size: .93rem; margin-top: 7px; text-wrap: pretty; }
-  .card code { font-family: var(--mono); font-size: .85em; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; }
 
-  .shot { margin-top: var(--space-block); }
+  .card b {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    margin-bottom: 0.2rem;
+  }
+
+  .card p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-top: 0;
+    line-height: 1.6;
+  }
+
+  .card code {
+    color: var(--accent);
+  }
+
+  .shot {
+    margin-top: 1.5rem;
+  }
+
   .shot img {
-    width: 100%; display: block;
-    border-radius: var(--radius);
-    border: 1px solid var(--border-strong);
-    box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .85);
+    width: 100%;
+    display: block;
+    border-radius: 8px;
+    border: 1px solid var(--border);
   }
 
-  /* ── install ──────────────────────────────────────── */
+  /* ─── Install ─── */
   .install-cols {
     display: grid;
     grid-template-columns: minmax(260px, 5fr) 7fr;
-    gap: 48px;
+    gap: 2rem;
     align-items: start;
   }
-  @media (max-width: 880px) { .install-cols { grid-template-columns: 1fr; gap: 32px; } }
-  /* grid items default to min-width:auto — a long URL in the <pre> would
-     force the column (and the page) wider than the viewport */
-  .install-cols > * { min-width: 0; }
-  .tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
-  .tabs button {
-    font: inherit; font-size: .9rem; font-weight: 600;
-    color: var(--dim);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 99px;
-    padding: 9px 22px;
-    cursor: pointer;
-    transition: all .15s ease;
+
+  @media (max-width: 880px) {
+    .install-cols { grid-template-columns: 1fr; gap: 1.5rem; }
   }
-  .tabs button:hover { color: var(--text); border-color: var(--border-strong); }
-  .tabs button.on { color: #051422; background: var(--accent); border-color: var(--accent); }
+
+  .install-cols > * { min-width: 0; }
+
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1.25rem;
+  }
+
+  .tabs button {
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .tabs button:hover {
+    color: var(--text);
+    border-color: var(--text-secondary);
+  }
+
+  .tabs button.on {
+    color: var(--bg);
+    background: var(--text);
+    border-color: var(--text);
+  }
+
   .window {
     background: var(--code-bg);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 24px 60px -28px rgba(0, 0, 0, .8);
   }
+
   .window-bar {
-    display: flex; align-items: center; gap: 8px;
-    padding: 13px 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.65rem 1rem;
     border-bottom: 1px solid var(--border);
   }
-  .dot { width: 11px; height: 11px; border-radius: 50%; }
+
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
   .dot:nth-child(1) { background: #ff5f57; }
   .dot:nth-child(2) { background: #febc2e; }
   .dot:nth-child(3) { background: #28c840; }
-  .window-bar span { margin-left: 8px; color: var(--dim); font-family: var(--mono); font-size: .8rem; }
-  pre { padding: 22px 24px; overflow-x: auto; font-size: .88rem; line-height: 1.75; }
-  code { font-family: var(--mono); }
-  pre .c { color: #54708c; }
-  pre .p { color: #8fd6ff; }
+
+  .window-bar span {
+    margin-left: 0.5rem;
+    color: var(--text-secondary);
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-size: 0.8rem;
+  }
+
+  pre {
+    padding: 1.1rem 1.25rem;
+    overflow-x: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-size: 0.85rem;
+    line-height: 1.75;
+    color: var(--text);
+    margin: 0;
+  }
+
+  pre .c { color: var(--text-secondary); }
+  pre .p { color: var(--accent); }
+
   .tabpane { display: none; }
   .tabpane.on { display: block; }
 
-  /* ── commands ─────────────────────────────────────── */
+  /* ─── Commands ─── */
   .cmd-groups {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 24px;
-    margin-top: var(--space-block);
+    gap: 1.25rem;
+    margin-top: 1.5rem;
     align-items: start;
   }
-  @media (max-width: 880px) { .cmd-groups { grid-template-columns: 1fr; } }
-  .group h3 {
-    display: flex; align-items: center; gap: 10px;
-    font-size: .82rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
-    color: var(--dim);
-    margin-bottom: 12px;
+
+  @media (max-width: 880px) {
+    .cmd-groups { grid-template-columns: 1fr; }
   }
-  .group h3::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+  .group h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 0.65rem;
+  }
+
+  .group h3::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
   .cmds {
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: 8px;
     overflow: hidden;
   }
-  .row {
-    display: flex; gap: 16px; align-items: baseline;
-    padding: 11px 18px;
-    border-bottom: 1px solid var(--border);
-    transition: background .15s ease;
-  }
-  .row:nth-child(odd) { background: var(--surface); }
-  .row:last-child { border-bottom: none; }
-  .row:hover { background: rgba(42, 171, 238, .06); }
-  .row .c { flex: 0 0 200px; color: var(--dim); font-size: .86rem; }
-  .row .c code { color: var(--accent); }
-  .row > span { color: var(--dim); font-size: .88rem; }
-  .row > span code {
-    font-size: .82em; color: var(--text);
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 5px; padding: 0 5px;
-  }
-  @media (max-width: 560px) {
-    .row { flex-direction: column; gap: 1px; }
-    .row .c { flex: none; }
-  }
-  .more { margin-top: 24px; color: var(--dim); font-size: .94rem; }
 
-  /* ── footer ───────────────────────────────────────── */
-  footer { border-top: 1px solid var(--border); padding-block: 44px 60px; }
-  .foot {
-    display: flex; justify-content: space-between; align-items: center;
-    flex-wrap: wrap; gap: 16px;
-    color: var(--dim); font-size: .9rem;
+  .row {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    padding: 0.55rem 0.9rem;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s ease;
   }
-  .foot-links { display: flex; gap: 24px; }
-  .foot-links a { color: var(--dim); }
-  .foot-links a:hover { color: var(--text); text-decoration: none; }
+
+  .row:nth-child(odd) { background: var(--card-bg); }
+  .row:last-child { border-bottom: none; }
+
+  .row:hover { background: color-mix(in srgb, var(--accent) 5%, var(--card-bg)); }
+
+  .row .cmd-name {
+    flex: 0 0 200px;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+  }
+
+  .row .cmd-name code {
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 0.82rem;
+  }
+
+  .row > span {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+  }
+
+  .row > span code {
+    font-size: 0.8em;
+    color: var(--text);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 0.3rem;
+  }
+
+  @media (max-width: 560px) {
+    .row { flex-direction: column; gap: 0.1rem; }
+    .row .cmd-name { flex: none; }
+  }
+
+  /* ─── Chips ─── */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .chip {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-size: 0.8rem;
+    color: var(--text);
+    background: var(--card-bg);
+    border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+  }
+
+  /* ─── Footer ─── */
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+  }
+
+  .footer-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem clamp(1rem, 3vw, 2rem);
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .copyright {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .footer-links a {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+  }
+
+  .footer-links a:hover { color: var(--text); }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 920px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 640px) {
+    .hero { padding: 2rem 0; }
+    section { padding: 1.5rem 0; }
+    .grid { grid-template-columns: 1fr; }
+    .hero-actions { flex-direction: column; }
+    .btn { width: 100%; justify-content: center; }
+    footer { margin-top: 1rem; }
+    .footer-inner {
+      flex-direction: column;
+      text-align: center;
+      gap: 1rem;
+    }
+    .footer-links { justify-content: center; }
+  }
 </style>
 </head>
 <body>
 
-<nav>
-  <div class="wrap nav-inner">
-    <a class="brand" href="#">🎬 tg-mpv-bot</a>
-    <div class="nav-links">
-      <a href="#features">Features</a>
-      <a href="#install">Install</a>
-      <a href="#commands">Commands</a>
-      <a class="gh" href="https://github.com/antlis/tg-mpv-bot">GitHub ↗</a>
-    </div>
-  </div>
-</nav>
+<header>
+  <nav>
+    <a href="#" class="logo" aria-label="tg-mpv-bot home">
+      <span class="logo-icon">🎬</span>
+      tg-mpv-bot
+    </a>
 
-<header class="hero">
-  <div class="wrap">
-    <div class="eyebrow">self-hosted · <b>no cloud, no AI</b> · MIT</div>
-    <h1>Your TV's remote<br>is now <span class="grad">Telegram</span></h1>
-    <p class="lead">
+    <div class="nav-links">
+      <a href="#features" class="nav-link active">Features</a>
+      <a href="#install" class="nav-link">Install</a>
+      <a href="#commands" class="nav-link">Commands</a>
+    </div>
+
+    <div class="nav-end">
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+        <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a class="btn btn-secondary" href="https://github.com/antlis/tg-mpv-bot" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">GitHub ↗</a>
+      <button class="menu-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <span class="hamburger"></span>
+      </button>
+    </div>
+
+    <div class="mobile-menu" id="mobile-menu" aria-hidden="true" inert>
+      <div class="mobile-links">
+        <a href="#features" class="mobile-link active">Features</a>
+        <a href="#install" class="mobile-link">Install</a>
+        <a href="#commands" class="mobile-link">Commands</a>
+        <a href="https://github.com/antlis/tg-mpv-bot" class="mobile-link">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Your TV's remote is now Telegram</h1>
+    <p>
       A bot that turns any Linux box plugged into a TV into an
-      <a href="https://mpv.io">mpv</a>-powered media center you control from
-      the couch — or the other side of the world. <b>No port forwarding, no
-      VPN, no smart-TV apps</b> — it only makes outbound connections.
+      <a href="https://mpv.io" style="color: var(--accent);">mpv</a>-powered media center you control from
+      the couch — or the other side of the world. <strong>No port forwarding, no
+      VPN, no smart-TV apps</strong> — it only makes outbound connections.
     </p>
-    <div class="cta">
-      <a class="btn primary" href="#install">Get started</a>
-      <a class="btn" href="https://github.com/antlis/tg-mpv-bot">Source ↗</a>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#install">Get started</a>
+      <a class="btn btn-secondary" href="https://github.com/antlis/tg-mpv-bot">Source ↗</a>
     </div>
 
     <div class="diagram" role="img" aria-label="Phone with Telegram controls a home server, which plays on the TV over HDMI">
@@ -362,179 +792,174 @@
       <div class="link-arrow">─HDMI─▶</div>
       <div class="node"><span class="em">📺</span><b>Your TV</b><small>fullscreen mpv,<br>nothing else installed</small></div>
     </div>
-  </div>
-</header>
+  </section>
 
-<section id="features">
-  <div class="wrap">
-    <div class="head">
-      <p class="kicker">Features</p>
-      <h2>Everything a couch needs</h2>
-      <p class="sub">Around 40 commands behind a Telegram user-ID allowlist — these are the highlights.</p>
+  <section id="features">
+    <div class="section-header">
+      <h2>Features</h2>
     </div>
+    <p class="lead">Around 40 commands behind a Telegram user-ID allowlist — these are the highlights.</p>
 
     <div class="grid">
       <div class="card"><span class="tile">📋</span><b>Browse your library</b><p>Categories → playlists as inline buttons, full-text search, an episode picker and chapter jumps.</p></div>
       <div class="card"><span class="tile">🔗</span><b>Stream any link</b><p>Send a YouTube / SoundCloud / any yt-dlp URL — it plays on the TV, subtitles fetched automatically.</p></div>
       <div class="card"><span class="tile">🔎</span><b>Search YouTube from chat</b><p><code>/mpv_yt lofi beats</code> — top results with thumbnails, tap one to play.</p></div>
-      <div class="card"><span class="tile">📨</span><b>Forward video files</b><p>Any Telegram video plays on the TV — up to 2&nbsp;GB with a local Bot API server.</p></div>
+      <div class="card"><span class="tile">📨</span><b>Forward video files</b><p>Any Telegram video plays on the TV — up to 2 GB with a local Bot API server.</p></div>
       <div class="card"><span class="tile">🎛</span><b>Full transport control</b><p>One now-playing panel: pause, seek, %-jump, volume, speed, audio &amp; subtitle tracks.</p></div>
       <div class="card"><span class="tile">⏺</span><b>Record &amp; clip</b><p>Capture what's playing to an H.264 mp4, or the radio to a voice message, and get it right in the chat — tap once to start, again to stop.</p></div>
-      <div class="card"><span class="tile">🕘</span><b>Watch history</b><p>Last 20 played, paginated. Tap the title to replay (streams resume from the saved position), tap the icon to copy the URL/path, tap 🗑 to remove the entry. <code>/history</code> or <code>/mpv_history</code>.</p></div>
+      <div class="card"><span class="tile">🕘</span><b>Watch history</b><p>Last 20 played, paginated. Tap the title to replay (streams resume from the saved position), tap the icon to copy the URL/path, tap 🗑 to remove the entry.</p></div>
       <div class="card"><span class="tile">🔔</span><b>Knows when you're done</b><p>"⏭ Now playing: 6/12" on episode change, "✅ Finished" at the end. <code>/mpv_sleep 45m</code> for bedtime.</p></div>
       <div class="card"><span class="tile">📻</span><b>Internet radio</b><p>The full SomaFM catalog and friends as presets, plus search across ~50k stations — tuned in about a second.</p></div>
-      <div class="card"><span class="tile">📺</span><b>Live TV (IPTV)</b><p><code>/mpv_iptv BBC</code> searches 50 000+ channels from the <a href="https://github.com/iptv-org/iptv">iptv-org</a> catalogue — tap a result to stream live on the TV, with the channel logo sent to the chat.</p></div>
+      <div class="card"><span class="tile">📺</span><b>Live TV (IPTV)</b><p><code>/mpv_iptv BBC</code> searches 50 000+ channels from the <a href="https://github.com/iptv-org/iptv" style="color: var(--accent);">iptv-org</a> catalogue — tap a result to stream live on the TV.</p></div>
       <div class="card"><span class="tile">🩺</span><b>Runs itself</b><p>Auto-updating yt-dlp, playlist doctor &amp; repair, disk GC, one-screen health check.</p></div>
     </div>
 
     <div class="shot">
       <img src="demo.svg" alt="Telegram chat with tg-mpv-bot: category buttons, URL streaming and the now-playing panel">
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="alt" id="install">
-  <div class="wrap install-cols">
-    <div class="head">
-      <p class="kicker">Install</p>
-      <h2>Three ways in</h2>
-      <p class="sub">You need a token from <a href="https://t.me/BotFather">@BotFather</a> and your user ID from <a href="https://t.me/userinfobot">@userinfobot</a>. mpv on the host.</p>
-      <div class="tabs" role="tablist">
-        <button class="on" data-t="src" role="tab">Any distro</button>
-        <button data-t="aur" role="tab">Arch (AUR)</button>
-        <button data-t="docker" role="tab">Docker</button>
+  <section id="install">
+    <div class="install-cols">
+      <div>
+        <div class="section-header" style="margin-bottom: 0;">
+          <h2>Install</h2>
+        </div>
+        <p class="lead">You need a token from <a href="https://t.me/BotFather" style="color: var(--accent);">@BotFather</a> and your user ID from <a href="https://t.me/userinfobot" style="color: var(--accent);">@userinfobot</a>. mpv on the host.</p>
+        <div class="tabs" role="tablist">
+          <button class="on" data-t="src" role="tab">Any distro</button>
+          <button data-t="aur" role="tab">Arch (AUR)</button>
+          <button data-t="docker" role="tab">Docker</button>
+        </div>
       </div>
-    </div>
 
-    <div>
-      <div class="tabpane on" id="src">
-        <div class="window">
-          <div class="window-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>install from source</span></div>
+      <div>
+        <div class="tabpane on" id="src">
+          <div class="window">
+            <div class="window-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>install from source</span></div>
 <pre><code><span class="c"># needs uv → https://docs.astral.sh/uv/</span>
 git clone https://github.com/antlis/tg-mpv-bot
 cd tg-mpv-bot <span class="p">&amp;&amp;</span> uv sync
 cp .env.example .env   <span class="c"># BOT_TOKEN + ALLOWED_USERS</span>
 set -a; source .env; set +a
 uv run bot.py</code></pre>
+          </div>
         </div>
-      </div>
-      <div class="tabpane" id="aur">
-        <div class="window">
-          <div class="window-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>tg-mpv-bot-git</span></div>
+        <div class="tabpane" id="aur">
+          <div class="window">
+            <div class="window-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>tg-mpv-bot-git</span></div>
 <pre><code>yay -S tg-mpv-bot-git
 install -m600 /usr/share/doc/tg-mpv-bot/env.example \
   ~/.config/tg-mpv-bot.env
 $EDITOR ~/.config/tg-mpv-bot.env
 systemctl --user enable --now tg-mpv-bot</code></pre>
+          </div>
         </div>
-      </div>
-      <div class="tabpane" id="docker">
-        <div class="window">
-          <div class="window-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>ghcr.io</span></div>
+        <div class="tabpane" id="docker">
+          <div class="window">
+            <div class="window-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>ghcr.io</span></div>
 <pre><code>docker pull ghcr.io/antlis/tg-mpv-bot:latest
 <span class="c"># host networking + X11 bind mounts —
 # see docker-compose.yml in the repo</span></code></pre>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section id="commands">
-  <div class="wrap">
-    <div class="head center">
-      <p class="kicker">Commands</p>
-      <h2>The complete interface</h2>
-      <p class="sub">Every command the bot understands — plus two that aren't commands at all: just send a link or a video file.</p>
+  <section id="commands">
+    <div class="section-header" style="justify-content: center; text-align: center;">
+      <h2>Commands</h2>
     </div>
+    <p class="lead" style="text-align: center; margin-inline: auto;">Every command the bot understands — plus two that aren't commands at all: just send a link or a video file.</p>
 
     <div class="cmd-groups">
       <div class="group">
         <h3>Browse &amp; play</h3>
         <div class="cmds">
-          <div class="row"><div class="c"><code>/mpv_list</code></div><span>browse by category — opens with "▶ Continue: last watched"</span></div>
-          <div class="row"><div class="c"><code>/mpv_play &lt;query&gt;</code></div><span>play by name or number (<code>/mpv</code> works too)</span></div>
-          <div class="row"><div class="c"><code>/mpv_search [cat] &lt;text&gt;</code></div><span>every match as a play button</span></div>
-          <div class="row"><div class="c"><code>/mpv_random [category]</code></div><span>"just put something on"</span></div>
-          <div class="row"><div class="c"><code>/mpv_last</code></div><span>resume the last playlist or stream where you left off</span></div>
-          <div class="row"><div class="c"><code>/history</code></div><span>last 20 played, paginated — tap to replay, copy URL, or delete; streams resume from saved position (<code>/mpv_history</code> also works)</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_list</code></div><span>browse by category — opens with "▶ Continue: last watched"</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_play &lt;query&gt;</code></div><span>play by name or number (<code>/mpv</code> works too)</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_search [cat] &lt;text&gt;</code></div><span>every match as a play button</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_random [category]</code></div><span>"just put something on"</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_last</code></div><span>resume the last playlist or stream where you left off</span></div>
+          <div class="row"><div class="cmd-name"><code>/history</code></div><span>last 20 played, paginated — tap to replay, copy URL, or delete</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Streaming &amp; files</h3>
         <div class="cmds">
-          <div class="row"><div class="c"><code>(send a link)</code></div><span>any YouTube / SoundCloud / yt-dlp URL just plays</span></div>
-          <div class="row"><div class="c"><code>(send a video file)</code></div><span>plays on the TV — up to 2 GB with a local Bot API server</span></div>
-          <div class="row"><div class="c"><code>/mpv_url &lt;link&gt;</code></div><span>the explicit version of sending a link</span></div>
-          <div class="row"><div class="c"><code>/mpv_yt &lt;search&gt;</code></div><span>search YouTube — top results as buttons with thumbnails</span></div>
-          <div class="row"><div class="c"><code>/mpv_radio [search]</code></div><span>internet radio: 50+ presets incl. the full SomaFM catalog — or search ~50k stations</span></div>
-          <div class="row"><div class="c"><code>/mpv_iptv [search]</code></div><span>live TV — search 50 000+ channels from the iptv-org catalogue and stream on the TV</span></div>
+          <div class="row"><div class="cmd-name"><code>(send a link)</code></div><span>any YouTube / SoundCloud / yt-dlp URL just plays</span></div>
+          <div class="row"><div class="cmd-name"><code>(send a video file)</code></div><span>plays on the TV — up to 2 GB with a local Bot API server</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_url &lt;link&gt;</code></div><span>the explicit version of sending a link</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_yt &lt;search&gt;</code></div><span>search YouTube — top results as buttons with thumbnails</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_radio [search]</code></div><span>internet radio: 50+ presets incl. the full SomaFM catalog</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_iptv [search]</code></div><span>live TV — search 50 000+ channels from the iptv-org catalogue</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Transport</h3>
         <div class="cmds">
-          <div class="row"><div class="c"><code>/mpv_info</code></div><span>now-playing panel with all controls as buttons</span></div>
-          <div class="row"><div class="c"><code>/mpv_toggle</code></div><span>play / pause (also <code>/mpv_pause</code>, <code>/mpv_unpause</code>)</span></div>
-          <div class="row"><div class="c"><code>/mpv_fwd</code> · <code>/mpv_back</code></div><span>seek +30s / −10s</span></div>
-          <div class="row"><div class="c"><code>/mpv_goto &lt;pos&gt;</code></div><span>jump to <code>1:23:45</code>, <code>90</code> (s) or <code>75%</code></span></div>
-          <div class="row"><div class="c"><code>/mpv_speed [x]</code></div><span>0.75–2× buttons, or any value like <code>1.5</code></span></div>
-          <div class="row"><div class="c"><code>/mpv_quit</code></div><span>stop playback entirely</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_info</code></div><span>now-playing panel with all controls as buttons</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_toggle</code></div><span>play / pause (also <code>/mpv_pause</code>, <code>/mpv_unpause</code>)</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_fwd</code> · <code>/mpv_back</code></div><span>seek +30s / −10s</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_goto &lt;pos&gt;</code></div><span>jump to <code>1:23:45</code>, <code>90</code> (s) or <code>75%</code></span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_speed [x]</code></div><span>0.75–2× buttons, or any value like <code>1.5</code></span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_quit</code></div><span>stop playback entirely</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Playlist navigation</h3>
         <div class="cmds">
-          <div class="row"><div class="c"><code>/mpv_next</code> · <code>/mpv_prev</code></div><span>next / previous item</span></div>
-          <div class="row"><div class="c"><code>/mpv_ep [n]</code></div><span>episode picker buttons, or jump straight to item n</span></div>
-          <div class="row"><div class="c"><code>/mpv_chapters</code></div><span>movie / YouTube chapters as jump buttons</span></div>
-          <div class="row"><div class="c"><code>/mpv_shuffle</code></div><span>shuffle the current playlist</span></div>
-          <div class="row"><div class="c"><code>/mpv_loop</code></div><span>toggle playlist looping</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_next</code> · <code>/mpv_prev</code></div><span>next / previous item</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_ep [n]</code></div><span>episode picker buttons, or jump straight to item n</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_chapters</code></div><span>movie / YouTube chapters as jump buttons</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_shuffle</code></div><span>shuffle the current playlist</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_loop</code></div><span>toggle playlist looping</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Sound &amp; subtitles</h3>
         <div class="cmds">
-          <div class="row"><div class="c"><code>/mpv_volup</code> · <code>/mpv_voldown</code></div><span>volume ±10 (<code>/mpv_mute</code> to silence)</span></div>
-          <div class="row"><div class="c"><code>/mpv_audio</code></div><span>switch audio track (e.g. Spanish → English)</span></div>
-          <div class="row"><div class="c"><code>/mpv_sub</code></div><span>switch subtitle track (<code>/mpv_sub_toggle</code> to hide)</span></div>
-          <div class="row"><div class="c"><code>/mpv_night</code></div><span>loudness normalization: explosions ↓, dialogue ↑</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_volup</code> · <code>/mpv_voldown</code></div><span>volume ±10 (<code>/mpv_mute</code> to silence)</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_audio</code></div><span>switch audio track (e.g. Spanish → English)</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_sub</code></div><span>switch subtitle track (<code>/mpv_sub_toggle</code> to hide)</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_night</code></div><span>loudness normalization: explosions ↓, dialogue ↑</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Comfort</h3>
         <div class="cmds">
-          <div class="row"><div class="c"><code>/mpv_sleep &lt;time&gt;</code></div><span>stop after <code>45m</code> / <code>1.5h</code> (<code>off</code> cancels)</span></div>
-          <div class="row"><div class="c"><code>/mpv_notify</code></div><span>toggle "⏭ now playing" / "✅ finished" messages</span></div>
-          <div class="row"><div class="c"><code>/mpv_shot</code></div><span>screenshot of the current frame, sent to the chat</span></div>
-          <div class="row"><div class="c"><code>/mpv_record</code></div><span>record the video (→ mp4) or radio (→ voice) and send it; tap again to stop</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_sleep &lt;time&gt;</code></div><span>stop after <code>45m</code> / <code>1.5h</code> (<code>off</code> cancels)</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_notify</code></div><span>toggle "⏭ now playing" / "✅ finished" messages</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_shot</code></div><span>screenshot of the current frame, sent to the chat</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_record</code></div><span>record the video (→ mp4) or radio (→ voice) and send it</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Library &amp; maintenance</h3>
         <div class="cmds">
-          <div class="row"><div class="c"><code>/mpv_scan</code></div><span>create playlists for newly-added media</span></div>
-          <div class="row"><div class="c"><code>/mpv_doctor</code></div><span>report playlists with missing files</span></div>
-          <div class="row"><div class="c"><code>/mpv_fix</code></div><span>repair broken playlists (re-point moved files)</span></div>
-          <div class="row"><div class="c"><code>/mpv_health</code></div><span>one screen: mpv, yt-dlp, API server, disks</span></div>
-          <div class="row"><div class="c"><code>/mpv_update_ytdlp</code></div><span>bump yt-dlp — the fix when YouTube breaks</span></div>
-          <div class="row"><div class="c"><code>/help</code></div><span>all of this, inside Telegram</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_scan</code></div><span>create playlists for newly-added media</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_doctor</code></div><span>report playlists with missing files</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_fix</code></div><span>repair broken playlists (re-point moved files)</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_health</code></div><span>one screen: mpv, yt-dlp, API server, disks</span></div>
+          <div class="row"><div class="cmd-name"><code>/mpv_update_ytdlp</code></div><span>bump yt-dlp — the fix when YouTube breaks</span></div>
+          <div class="row"><div class="cmd-name"><code>/help</code></div><span>all of this, inside Telegram</span></div>
         </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
+</main>
 
 <footer>
-  <div class="wrap foot">
-    <div>🎬 tg-mpv-bot · MIT · built by <a href="https://github.com/antlis">antlis</a></div>
-    <div class="foot-links">
+  <div class="footer-inner">
+    <p class="copyright">🎬 tg-mpv-bot · MIT · built by <a href="https://github.com/antlis" style="color: var(--accent);">antlis</a></p>
+    <div class="footer-links">
       <a href="https://github.com/antlis/tg-mpv-bot">Source</a>
       <a href="https://github.com/antlis/tg-mpv-bot/releases">Releases</a>
       <a href="https://aur.archlinux.org/packages/tg-mpv-bot-git">AUR</a>
@@ -543,6 +968,59 @@ systemctl --user enable --now tg-mpv-bot</code></pre>
 </footer>
 
 <script>
+  // Theme toggle
+  const toggle = document.getElementById('theme-toggle');
+  const html = document.documentElement;
+
+  toggle.addEventListener('click', () => {
+    const current = html.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+  });
+
+  // Mobile menu
+  const menuToggle = document.querySelector('.menu-toggle');
+  const mobileMenu = document.getElementById('mobile-menu');
+
+  menuToggle.addEventListener('click', () => {
+    const expanded = menuToggle.getAttribute('aria-expanded') === 'true';
+    menuToggle.setAttribute('aria-expanded', String(!expanded));
+    mobileMenu.setAttribute('aria-hidden', String(expanded));
+    mobileMenu.toggleAttribute('inert', expanded);
+    mobileMenu.classList.toggle('open', !expanded);
+  });
+
+  mobileMenu.querySelectorAll('.mobile-link').forEach(link => {
+    link.addEventListener('click', () => {
+      menuToggle.setAttribute('aria-expanded', 'false');
+      mobileMenu.setAttribute('aria-hidden', 'true');
+      mobileMenu.toggleAttribute('inert', true);
+      mobileMenu.classList.remove('open');
+    });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && menuToggle.getAttribute('aria-expanded') === 'true') {
+      menuToggle.setAttribute('aria-expanded', 'false');
+      mobileMenu.setAttribute('aria-hidden', 'true');
+      mobileMenu.toggleAttribute('inert', true);
+      mobileMenu.classList.remove('open');
+      menuToggle.focus();
+    }
+  });
+
+  // Smooth scroll for nav links
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  });
+
+  // Install tabs
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
     document.querySelectorAll('.tabpane').forEach(x => x.classList.remove('on'));
