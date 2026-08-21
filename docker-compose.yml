@@ -27,10 +27,18 @@ services:
       # A container-launched window isn't reliably left focused/raised by
       # every WM the way a host-native mpv process's would be — without
       # this, keyboard shortcuts (space/m/seek/etc.) silently go nowhere
-      # even though the window is visible. windowactivate uses plain
-      # EWMH, so this isn't i3-specific and is safe to leave on for any
-      # X11 WM.
-      POST_PLAY_HOOK: "xdotool search --sync --name mpv windowfocus windowactivate"
+      # even though the window is visible and _NET_ACTIVE_WINDOW says
+      # it's focused. `windowactivate` alone sends a proper EWMH
+      # _NET_ACTIVE_WINDOW client message and lets the WM do the actual
+      # focusing, so its internal state stays consistent — safe for any
+      # EWMH-compliant WM. Do NOT add `windowfocus` here: that's a raw
+      # XSetInputFocus that bypasses the WM entirely, and under i3
+      # specifically that desyncs the WM's focus tracking from reality —
+      # confirmed by XGetInputFocus reverting to PointerRoot (i.e.
+      # keyboard input following whatever's under the mouse, not the
+      # window i3 *reports* as active) as soon as i3 touches focus again
+      # (e.g. on the next workspace switch).
+      POST_PLAY_HOOK: "xdotool search --sync --name mpv windowactivate"
       # If mpv plays video but no sound: the container runs as root while
       # the host's PulseAudio/PipeWire socket is owned by your desktop
       # user, and libpulse's default runtime-dir discovery flat-out
