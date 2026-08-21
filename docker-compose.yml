@@ -15,16 +15,33 @@ services:
     environment:
       DISPLAY: ":0"
       HOME: ${HOME}
-      MPV_SOCKET: /tmp/mpv-socket
-      MPV_RUNNER: /tmp/mpv-runner.sh
+      MPV_SOCKET: /tmp/tg-mpv-bot-run/mpv-socket
+      # mpv now runs inside the container (installed in the image) rather
+      # than via a host-side wrapper script, so there's no runner to point
+      # at — falls back to the container's own `mpv` binary. See
+      # _mpv_base() in src/player.py.
+      MPV_RUNNER: ""
       # Optional WM glue (runs inside the container — add the tool to the
       # image first, e.g. i3 for i3-msg):
       # PRE_PLAY_HOOK: i3-msg workspace 10
+    devices:
+      # GPU render node — without this the container has no /dev/dri at
+      # all, so mpv's default vo=gpu falls through vulkan/opengl to a
+      # broken partial EGL/DRI path and deadlocks (core lock held forever,
+      # IPC and playback both hang). Passing the real device through lets
+      # mpv hardware-accelerate normally instead of needing --vo=x11.
+      - /dev/dri:/dev/dri
     volumes:
       # X11 display socket — required for mpv windows
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      # mpv IPC socket — shared with host mpv instances
-      - /tmp/mpv-socket:/tmp/mpv-socket:rw
+      # mpv IPC socket dir. Mounting a directory (not the socket file
+      # itself) matters: if the host path doesn't exist yet, Docker
+      # auto-creates missing bind-mount sources as directories, and a
+      # directory sitting where mpv expects to bind a socket breaks IPC
+      # silently. Mounting the parent dir sidesteps that — mpv creates the
+      # actual socket file inside it at runtime, and the mount point
+      # recreates cleanly even after /tmp is cleared on reboot.
+      - /tmp/tg-mpv-bot-run:/tmp/tg-mpv-bot-run:rw
       # watch history / notification target — survives container recreation
       - ~/.local/state/tg-mpv-bot:${HOME}/.local/state/tg-mpv-bot:rw
       # Video directories with playlists — the container path mirrors the host
@@ -33,7 +50,5 @@ services:
       - ~/Videos/movie/playlists:${HOME}/Videos/movie/playlists:ro
       - ~/Videos/shows/playlists:${HOME}/Videos/shows/playlists:ro
       - ~/Videos/tutorials/playlists:${HOME}/Videos/tutorials/playlists:ro
-      # mpv-runner.sh wrapper (recreated on reboot by mpvctl.sh)
-      - /tmp/mpv-runner.sh:/tmp/mpv-runner.sh:rw
     network_mode: host
     restart: unless-stopped

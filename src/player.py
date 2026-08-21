@@ -65,7 +65,11 @@ def _mpv_base(settings: Settings) -> str:
     works even when the wrapper hasn't been recreated after a reboot.
     """
     runner = settings.mpv_runner
-    return runner if runner and Path(runner).exists() else (_which("mpv") or "mpv")
+    return (
+        runner
+        if runner and Path(runner).is_file() and os.access(runner, os.X_OK)
+        else (_which("mpv") or "mpv")
+    )
 
 
 def build_launch_command(settings: Settings, playlist: Path) -> list[str]:
