@@ -236,6 +236,76 @@ and your playlist dirs (paths in `docker-compose.yml`). Note hooks run
 > host, but Telegram allows only one poller globally — a second instance
 > elsewhere causes `TelegramConflictError`).
 
+#### Docker gotchas
+
+mpv runs *inside* the container (it's in the image) and renders onto the
+host's X11 display over the bind-mounted socket. That setup has a few sharp
+edges that don't show up until playback actually breaks — each cost real
+debugging time, so they're documented here in full rather than left as a
+one-line comment:
+
+- **Bind-mount the socket's *directory*, not the socket file itself.** If
+  the host path in a bind mount doesn't exist yet, Docker silently creates
+  it as a directory — fine for a directory mount, wrong for a file mount.
+  Point `MPV_SOCKET` at a path inside a directory you mount (e.g.
+  `/tmp/tg-mpv-bot-run/mpv-socket` with `/tmp/tg-mpv-bot-run` as the
+  volume), not at the exact socket path. Get this wrong and mpv's IPC
+  bind fails silently — playback looks like it works but every `/mpv_*`
+  control command times out. This also means the fix survives `/tmp`
+  being cleared on reboot, unlike mounting the file path directly.
+- **`MPV_RUNNER` should be empty in Docker.** It exists to point at a
+  host-side wrapper script for non-container installs; since mpv now runs
+  from inside the image, leave it unset (or `""`) so it falls back to the
+  container's own `mpv` binary — pointing it at a host path that doesn't
+  exist inside the container just wastes a stat() call.
+- **Pass through `/dev/dri` or mpv's GPU output deadlocks.** Without a GPU
+  device node in the container, mpv's default `vo=gpu` falls through
+  vulkan → opengl → a broken partial EGL/DRI path and hangs completely —
+  not just video, the *whole player* (IPC included) stops responding,
+  confirmed via thread/futex inspection. Add:
+  ```yaml
+  devices:
+    - /dev/dri:/dev/dri
+  ```
+  If the container doesn't run as root, also add the host's `video`
+  group's numeric GID via `group_add` so the container user can open the
+  card device (the render node, `renderD128`, is usually world-writable
+  and doesn't need this).
+- **No sound? Point `PULSE_SERVER` at the real socket.** The container
+  runs as root while the host's PipeWire/PulseAudio socket is owned by
+  your desktop user — libpulse's *default* runtime-dir discovery flatly
+  refuses that combination (`XDG_RUNTIME_DIR ... not owned by us ...
+  don't do that`), and mpv silently falls through to a working-but-silent
+  audio output. Skip that discovery path by setting the server directly:
+  ```yaml
+  environment:
+    PULSE_SERVER: "unix:/run/user/<your-uid>/pulse/native"
+  volumes:
+    - /run/user/<your-uid>:/run/user/<your-uid>:rw
+  ```
+  If sound still seems dead after this, check mpv's own `mute` property
+  before suspecting the pipeline again — `echo '{"command":["get_property","mute"]}' | socat - UNIX-CONNECT:/tmp/tg-mpv-bot-run/mpv-socket`
+  — it's a separate flag from the OS mixer and stays set across launches
+  of the same instance.
+- **Keyboard shortcuts (space/m/seek) doing nothing → focus the window
+  explicitly, with the *right* mechanism.** A container-launched window
+  isn't reliably left focused by every WM the way a host-native process's
+  would be. Fix it with a `POST_PLAY_HOOK` that calls `xdotool ... windowactivate`
+  — but not `windowfocus`. `windowactivate` sends a proper EWMH
+  `_NET_ACTIVE_WINDOW` client message and lets the WM do the actual
+  focusing, keeping its internal state consistent. `windowfocus` is a raw
+  `XSetInputFocus` call that bypasses the WM; under i3 specifically this
+  desyncs the WM's focus bookkeeping from the X server's real input focus
+  (confirmed via `XGetInputFocus` reverting to `PointerRoot` — keyboard
+  input following whatever's under the mouse, not the window i3 *reports*
+  as focused — the next time i3 touches focus, e.g. on a workspace
+  switch). If you drive the box remotely over `x2x`/`x2vnc`, note those
+  tools *also* rely on `PointerRoot`-style, mouse-position-driven focus on
+  the target display — WM-level focus commands (`windowactivate`,
+  `i3-msg focus`) may not be sufficient on their own, and bouncing to
+  another workspace and back is a reliable manual fallback worth
+  automating in the hook if you hit this.
+
 ## Configuration
 
 Everything is configured via environment variables. Where they live depends
@@ -256,11 +326,11 @@ Only `BOT_TOKEN` is required.
 | `ALLOWED_USERS` | *(empty = open!)* | Comma-separated Telegram user IDs allowed to use the bot |
 | `VIDEOS_DIR` | `~/Videos` | Library root — categories are its subdirectories |
 | `PLAYLIST_DIRS` | `$VIDEOS_DIR/{cartoons,movie,shows,tutorials}/playlists` | Explicit playlist dirs (`:`-separated) if your layout differs |
-| `MPV_SOCKET` | `/tmp/mpv-socket` | mpv JSON IPC socket the bot creates/controls |
+| `MPV_SOCKET` | `/tmp/mpv-socket` | mpv JSON IPC socket the bot creates/controls — in Docker, point this inside a *mounted directory* rather than at the bare path (see [Docker gotchas](#docker-gotchas)) |
 | `DISPLAY` | `:0` | X11 display the mpv window opens on |
-| `MPV_RUNNER` | `/tmp/mpv-runner.sh` | Optional wrapper script to launch instead of `mpv` (plain `mpv` when absent) |
+| `MPV_RUNNER` | `/tmp/mpv-runner.sh` | Optional wrapper script to launch instead of `mpv` (plain `mpv` when absent) — leave empty in Docker, mpv runs from the image itself |
 | `PRE_PLAY_HOOK` | *(none)* | Shell command run before mpv starts — WM glue like `i3-msg workspace 10`; sees `$PLAYLIST`, `$PLAYLIST_NAME`, `$MPV_SOCKET`, `$DISPLAY` |
-| `POST_PLAY_HOOK` | *(none)* | Same, run right after the mpv spawn |
+| `POST_PLAY_HOOK` | *(none)* | Same, run right after the mpv spawn — useful for explicit window-focus glue in Docker (see [Docker gotchas](#docker-gotchas)) |
 | `KILL_STRAY_MPV` | `1` | Also `pkill` mpv instances the bot didn't start; `0` if you use mpv manually too |
 | `YTDL_FORMAT` | `bv*[height<=1080]+ba/b` | yt-dlp format for URL streaming (raise the cap for 4K) |
 | `YTDL_SUB_LANGS` | `en.*` | Subtitle/auto-caption languages fetched for streams (`--sub-langs` syntax; empty disables) — toggle on screen with `/mpv_sub` |
@@ -296,7 +366,7 @@ uv run ruff check .
 | `src/keyboards.py` | Inline-keyboard builders for browsing and watch history |
 | `src/state.py` | Watch history state (JSON) — record, query, delete entries |
 | `docker-compose.yml` | Docker deployment (host networking + X11 bind) |
-| `Dockerfile` | Container build (Python 3.12 + mpv) |
+| `Dockerfile` | Container build (Python 3.11 + mpv + i3-wm + xdotool) |
 
 ## Architecture
 
