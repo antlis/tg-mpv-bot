@@ -23,6 +23,7 @@ def _settings(**kw) -> Settings:
 def test_uses_runner_when_present(tmp_path):
     runner = tmp_path / "mpv-runner.sh"
     runner.write_text('#!/bin/bash\nexec mpv "$@"\n')
+    runner.chmod(0o755)
     s = _settings(mpv_runner=str(runner))
     cmd = build_launch_command(s, Path("/media/show.m3u"))
     assert cmd[0] == str(runner)  # no setsid prefix; Popen(start_new_session) detaches
