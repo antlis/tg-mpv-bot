@@ -37,8 +37,11 @@ services:
       # confirmed by XGetInputFocus reverting to PointerRoot (i.e.
       # keyboard input following whatever's under the mouse, not the
       # window i3 *reports* as active) as soon as i3 touches focus again
-      # (e.g. on the next workspace switch).
-      POST_PLAY_HOOK: "xdotool search --sync --name mpv windowactivate"
+      # (e.g. on the next workspace switch). A single windowactivate
+      # right as the window first appears can also just be too early —
+      # re-assert for a few seconds after launch to cover it regardless
+      # of the exact cause.
+      POST_PLAY_HOOK: "for i in 1 2 3 4 5 6; do xdotool search --name mpv windowactivate 2>/dev/null; sleep 0.5; done"
       # If mpv plays video but no sound: the container runs as root while
       # the host's PulseAudio/PipeWire socket is owned by your desktop
       # user, and libpulse's default runtime-dir discovery flat-out
