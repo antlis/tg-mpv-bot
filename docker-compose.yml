@@ -24,6 +24,13 @@ services:
       # Optional WM glue (runs inside the container — add the tool to the
       # image first, e.g. i3 for i3-msg):
       # PRE_PLAY_HOOK: i3-msg workspace 10
+      # A container-launched window isn't reliably left focused/raised by
+      # every WM the way a host-native mpv process's would be — without
+      # this, keyboard shortcuts (space/m/seek/etc.) silently go nowhere
+      # even though the window is visible. windowactivate uses plain
+      # EWMH, so this isn't i3-specific and is safe to leave on for any
+      # X11 WM.
+      POST_PLAY_HOOK: "xdotool search --sync --name mpv windowfocus windowactivate"
     devices:
       # GPU render node — without this the container has no /dev/dri at
       # all, so mpv's default vo=gpu falls through vulkan/opengl to a
