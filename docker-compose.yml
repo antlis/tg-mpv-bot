@@ -31,6 +31,16 @@ services:
       # EWMH, so this isn't i3-specific and is safe to leave on for any
       # X11 WM.
       POST_PLAY_HOOK: "xdotool search --sync --name mpv windowfocus windowactivate"
+      # If mpv plays video but no sound: the container runs as root while
+      # the host's PulseAudio/PipeWire socket is owned by your desktop
+      # user, and libpulse's default runtime-dir discovery flat-out
+      # refuses that combination ("not owned by us ... don't do that").
+      # Point PULSE_SERVER at the socket directly to skip that discovery
+      # path — put this in docker-compose.override.yml, since the uid is
+      # host-specific:
+      #   PULSE_SERVER: "unix:/run/user/<your-uid>/pulse/native"
+      # and bind-mount /run/user/<your-uid> (rw) so the path exists
+      # inside the container at all.
     devices:
       # GPU render node — without this the container has no /dev/dri at
       # all, so mpv's default vo=gpu falls through vulkan/opengl to a
