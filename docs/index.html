@@ -85,7 +85,10 @@
 
   /* ─── Nav ─── */
   header {
-    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(10, 16, 25, .8);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
 
   nav {
