@@ -34,7 +34,7 @@ clashes (≤64 bytes):
     ch:<n> / chs:<pg>    → jump to chapter <n> of the current file / picker page
     cats / noop          → back to categories / inert (page counter)
 
-``/mpv_search`` results reuse the same ``pl:<global_index>`` buttons, so a
+``/search`` results reuse the same ``pl:<global_index>`` buttons, so a
 search hit plays through the exact same callback path as a browse tap.
 
 ``ci`` / ``si`` index the case-insensitively sorted category / subcategory
@@ -109,7 +109,10 @@ def now_playing_keyboard(
 
     The middle button is the play/pause toggle; its label reflects state —
     ``▶ Play`` when paused, ``⏸ Pause`` when playing, ``⏯`` when unknown. The
-    record button toggles between ``⏺ Rec`` and ``⏺ Stop``.
+    record button toggles between ``⏺ Rec`` and ``⏺ Stop``. Mute is two
+    buttons (🔇 mute / 🔈 unmute) rather than a toggle, so it never goes
+    blind — same shape as WarMusicBot's panel. The last row also carries
+    📸 (screenshot the current frame) and 🗑 (delete this panel).
     """
     def b(text: str, action: str) -> InlineKeyboardButton:
         return InlineKeyboardButton(text=text, callback_data=f"ctl:{action}")
@@ -120,8 +123,9 @@ def now_playing_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=[
         [b("⏮", "prev"), b("⏪", "back"), b(toggle, "toggle"), b("⏩", "fwd"), b("⏭", "next")],
         [b("0%", "p0"), b("25%", "p25"), b("50%", "p50"), b("75%", "p75")],
-        [b("🔉", "voldown"), b("🔇", "mute"), b("🔊", "volup"), b("💬", "sub"), b("🎧", "audio")],
-        [b("🔀", "shuffle"), b("🔁", "loop"), b("⏹", "stop"), b(rec, "record"), b("🔄", "refresh")],
+        [b("🔉", "voldown"), b("🔇", "mute"), b("🔈", "unmute"), b("🔊", "volup")],
+        [b("💬", "sub"), b("🎧", "audio"), b("🔀", "shuffle"), b("🔁", "loop"), b("🔄", "refresh")],
+        [b("📸", "snap"), b(rec, "record"), b("⏹", "stop"), b("🗑", "close")],
     ])
 
 
@@ -353,7 +357,7 @@ def categories_keyboard(
 ) -> InlineKeyboardMarkup:
     rows = []
     if continue_label:
-        # h:0 = newest history entry — same replay path as /mpv_history
+        # h:0 = newest history entry — same replay path as /history
         rows.append(
             [InlineKeyboardButton(text=f"▶ Continue: {continue_label[:42]}", callback_data="h:0")]
         )

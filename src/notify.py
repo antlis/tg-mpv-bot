@@ -62,14 +62,24 @@ class PlaybackMonitor:
         return None
 
 
-async def _send(bot: Bot, settings: Settings, text: str) -> None:
+async def _send(
+    bot: Bot, settings: Settings, text: str, *, panel: bool = False
+) -> None:
     if not state.notify_enabled(settings.state_file):
         return
     chat = state.notify_chat(settings.state_file)
     if chat is None:
         return
+    markup = None
+    if panel:
+        try:
+            from .commands import panel_markup  # local: keeps the module graph lazy
+
+            markup = await panel_markup()  # _ipc reports a dead mpv instead of raising
+        except Exception:  # noqa: BLE001 — the panel is decoration, never drop the notice
+            markup = None
     try:
-        await bot.send_message(chat, text)
+        await bot.send_message(chat, text, reply_markup=markup)
     except Exception:  # noqa: BLE001 — notifications must never kill the listener
         logger.exception("Failed to send playback notification")
 
@@ -145,7 +155,9 @@ async def run(bot: Bot, settings: Settings) -> None:
                     label = await _now_playing(settings)
                     if label:
                         last_title = label.rsplit("— ", 1)[-1]
-                        await _send(bot, settings, f"⏭ Now playing: {label}")
+                        await _send(
+                            bot, settings, f"⏭ Now playing: {label}", panel=True
+                        )
                 elif action == "error":
                     await _send(
                         bot, settings,

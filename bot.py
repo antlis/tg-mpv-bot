@@ -15,7 +15,6 @@ from typing import Any
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
-from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.client.telegram import SimpleFilesPathWrapper, TelegramAPIServer
 from aiogram.types import (
     BotCommand,
@@ -29,53 +28,54 @@ from src import lock
 from src.commands import router
 from src.config import get_settings
 from src.iptv import iptv_router
+from src.session import ResilientSession
 
 logger = logging.getLogger("tg-mpv-bot")
 
 
 def _build_menu() -> list[BotCommand]:
     return [
-        BotCommand(command="mpv_list", description="Browse playlists with buttons"),
-        BotCommand(command="mpv_play", description="Play a playlist by name or number"),
-        BotCommand(command="mpv_search", description="Search playlists (optionally by category)"),
-        BotCommand(command="mpv_last", description="Resume the last-played playlist/stream"),
-        BotCommand(command="mpv_history", description="Recently played — tap to replay"),
-        BotCommand(command="mpv_notify", description="Toggle end-of-playback notifications"),
-        BotCommand(command="mpv_url", description="Stream a link (YouTube/SoundCloud/…)"),
-        BotCommand(command="mpv_yt", description="Search YouTube, tap to play"),
-        BotCommand(command="mpv_radio", description="Internet radio — presets or search 50k stations"),
-        BotCommand(command="mpv_iptv", description="Live TV — search iptv-org (50k+ channels)"),
-        BotCommand(command="mpv_info", description="Show current status"),
-        BotCommand(command="mpv_shot", description="Screenshot the current frame"),
-        BotCommand(command="mpv_record", description="Record video/radio; /mpv_record 01:30 02:00 to clip a range"),
-        BotCommand(command="mpv_toggle", description="Play/pause toggle"),
-        BotCommand(command="mpv_pause", description="Pause playback"),
-        BotCommand(command="mpv_unpause", description="Resume playback"),
-        BotCommand(command="mpv_quit", description="Stop mpv and quit"),
-        BotCommand(command="mpv_fwd", description="Seek +30s"),
-        BotCommand(command="mpv_back", description="Seek -10s"),
-        BotCommand(command="mpv_goto", description="Seek to time (1:23:45) or percent (75%)"),
-        BotCommand(command="mpv_next", description="Next in playlist"),
-        BotCommand(command="mpv_prev", description="Previous in playlist"),
-        BotCommand(command="mpv_ep", description="Episode picker (or jump to item N)"),
-        BotCommand(command="mpv_chapters", description="Chapter picker for the current file"),
-        BotCommand(command="mpv_speed", description="Playback speed (buttons or value)"),
-        BotCommand(command="mpv_shuffle", description="Shuffle the playlist"),
-        BotCommand(command="mpv_loop", description="Toggle playlist loop"),
-        BotCommand(command="mpv_sleep", description="Stop playback after N minutes"),
-        BotCommand(command="mpv_random", description="Play a random playlist"),
-        BotCommand(command="mpv_night", description="Toggle loudness normalization"),
-        BotCommand(command="mpv_audio", description="Switch audio track"),
-        BotCommand(command="mpv_sub", description="Switch subtitle track"),
-        BotCommand(command="mpv_sub_toggle", description="Show/hide subtitles"),
-        BotCommand(command="mpv_volup", description="Volume +10"),
-        BotCommand(command="mpv_voldown", description="Volume -10"),
-        BotCommand(command="mpv_mute", description="Toggle mute"),
-        BotCommand(command="mpv_doctor", description="Check for broken playlists"),
-        BotCommand(command="mpv_health", description="System health: player, tools, disks"),
-        BotCommand(command="mpv_fix", description="Repair broken playlists"),
-        BotCommand(command="mpv_scan", description="Create playlists for new media"),
-        BotCommand(command="mpv_update_ytdlp", description="Update yt-dlp (when YouTube breaks)"),
+        BotCommand(command="library", description="Browse playlists with buttons"),
+        BotCommand(command="play", description="Play a playlist by name or number"),
+        BotCommand(command="search", description="Search playlists (optionally by category)"),
+        BotCommand(command="last", description="Resume the last-played playlist/stream"),
+        BotCommand(command="history", description="Recently played — tap to replay"),
+        BotCommand(command="notify", description="Toggle end-of-playback notifications"),
+        BotCommand(command="url", description="Stream a link (YouTube/SoundCloud/…)"),
+        BotCommand(command="yt", description="Search YouTube, tap to play"),
+        BotCommand(command="radio", description="Internet radio — presets or search 50k stations"),
+        BotCommand(command="iptv", description="Live TV — search iptv-org (50k+ channels)"),
+        BotCommand(command="info", description="Show current status"),
+        BotCommand(command="shot", description="Screenshot the current frame"),
+        BotCommand(command="record", description="Record video/radio; /record 01:30 02:00 to clip a range"),
+        BotCommand(command="toggle", description="Play/pause toggle"),
+        BotCommand(command="pause", description="Pause playback"),
+        BotCommand(command="unpause", description="Resume playback"),
+        BotCommand(command="quit", description="Stop mpv and quit"),
+        BotCommand(command="fwd", description="Seek +30s"),
+        BotCommand(command="back", description="Seek -10s"),
+        BotCommand(command="goto", description="Seek to time (1:23:45) or percent (75%)"),
+        BotCommand(command="next", description="Next in playlist"),
+        BotCommand(command="prev", description="Previous in playlist"),
+        BotCommand(command="ep", description="Episode picker (or jump to item N)"),
+        BotCommand(command="chapters", description="Chapter picker for the current file"),
+        BotCommand(command="speed", description="Playback speed (buttons or value)"),
+        BotCommand(command="shuffle", description="Shuffle the playlist"),
+        BotCommand(command="loop", description="Toggle playlist loop"),
+        BotCommand(command="sleep", description="Stop playback after N minutes"),
+        BotCommand(command="random", description="Play a random playlist"),
+        BotCommand(command="night", description="Toggle loudness normalization"),
+        BotCommand(command="audio", description="Switch audio track"),
+        BotCommand(command="sub", description="Switch subtitle track"),
+        BotCommand(command="sub_toggle", description="Show/hide subtitles"),
+        BotCommand(command="volup", description="Volume +10"),
+        BotCommand(command="voldown", description="Volume -10"),
+        BotCommand(command="mute", description="Toggle mute"),
+        BotCommand(command="doctor", description="Check for broken playlists"),
+        BotCommand(command="health", description="System health: player, tools, disks"),
+        BotCommand(command="fix", description="Repair broken playlists"),
+        BotCommand(command="scan", description="Create playlists for new media"),
+        BotCommand(command="update_ytdlp", description="Update yt-dlp (when YouTube breaks)"),
         BotCommand(command="help", description="Show help"),
     ]
 
@@ -113,13 +113,16 @@ async def main() -> None:
                     Path(settings.api_local_files_dir).expanduser(),
                 ),
             )
-        session = AiohttpSession(
+        # ResilientSession retries connect-phase failures: a single dropped
+        # request = a command that silently produced nothing (the old
+        # "have to run /library twice" symptom).
+        session = ResilientSession(
             api=TelegramAPIServer.from_base(settings.api_server_url, **server_kwargs),
         )
         bot = Bot(token=settings.bot_token, session=session, default=default)
         logger.info("Using local API server at %s", settings.api_server_url)
     else:
-        bot = Bot(token=settings.bot_token, default=default)
+        bot = Bot(token=settings.bot_token, session=ResilientSession(), default=default)
 
     dp = Dispatcher()
     dp.include_router(router)

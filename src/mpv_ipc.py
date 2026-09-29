@@ -134,6 +134,10 @@ class MpvClient:
         self.command("cycle", "mute")
         self.show_text("Muted" if self.get_property("mute") else "Unmuted")
 
+    def set_mute(self, muted: bool) -> None:
+        self.set_property("mute", muted)
+        self.show_text("Muted" if muted else "Unmuted")
+
     def seek(self, seconds: float) -> None:
         self.command("seek", seconds)
         self.show_progress()

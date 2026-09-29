@@ -19,4 +19,4 @@ Users then install with `yay -S tg-mpv-bot-git`, configure
 `~/.config/tg-mpv-bot.env`, and `systemctl --user enable --now tg-mpv-bot`.
 
 Note: on a system install the bot uses the pacman-managed `yt-dlp`;
-`/mpv_update_ytdlp` is a no-op there by design (it only manages venvs).
+`/update_ytdlp` is a no-op there by design (it only manages venvs).

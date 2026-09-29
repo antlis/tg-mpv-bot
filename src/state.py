@@ -1,8 +1,8 @@
 """Tiny JSON state file — watch history across restarts.
 
 Written by :func:`src.player.play` / :func:`src.player.play_url` (the only
-launch paths, so button taps, ``/mpv_play``, bare-URL messages and
-``/mpv_last`` itself all count) and read by ``/mpv_last`` / ``/mpv_history``.
+launch paths, so button taps, ``/play``, bare-URL messages and
+``/last`` itself all count) and read by ``/last`` / ``/history``.
 mpv's ``--save-position-on-quit`` already restores the position within the
 file or stream; this restores *what was playing*.
 """

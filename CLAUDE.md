@@ -14,7 +14,7 @@ bot to run independently.
 ```bash
 # uv manages everything (pyproject.toml + uv.lock → ./.venv, which the
 # systemd unit runs directly). NOTE: uv sync/uv run revert yt-dlp to the
-# locked stable — re-bump via /mpv_update_ytdlp (the bot prefers the venv
+# locked stable — re-bump via /update_ytdlp (the bot prefers the venv
 # copy; nightly needed because YouTube outpaces stable releases).
 uv sync
 uv run bot.py                              # standard Telegram API
@@ -47,7 +47,7 @@ logged-in YouTube cookies make yt-dlp extraction hang, so never make cookies glo
 ## Architecture
 
 ```
-                            ┌─ src/mpv_ipc  ─▶ mpv JSON IPC (/tmp/mpv-socket)  pause/seek/vol/info
+                            ┌─ src/ipc  ─▶ mpv JSON IPC (/tmp/mpv-socket)  pause/seek/vol/info
 Telegram ─▶ bot.py ─▶ src/commands ─┤
             (polling)  (+ auth mw)  ├─ src/playlists ─▶ scan ~/Videos/*/playlists/*.m3u
                                     └─ src/player  ─▶ pkill -x mpv · pre-hook · spawn mpv · post-hook ─▶ X11
@@ -61,20 +61,20 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   `SCAN_INTERVAL_MIN>0`. Switches to a local Bot API server when `API_SERVER_URL` is set.
 - `src/config.py` — frozen `Settings` dataclass loaded once via `@lru_cache get_settings()`. **Single
   source of truth for all host paths.** Tests that exercise env must call `get_settings.cache_clear()`.
-- `src/mpv_ipc.py` — `MpvClient(socket_path)`: opens a short-lived Unix-socket connection per command,
+- `src/ipc.py` — `MpvClient(socket_path)`: opens a short-lived Unix-socket connection per command,
   writes one JSON line, and reads newline-delimited replies **skipping async `event` lines** until the
   one matching `request_id`. Raises `MpvNotRunning` (socket dead) / `MpvError` (mpv said not-success).
   `adjust_volume` clamps to 0–130. Pure I/O with an injectable path → testable against a fake server.
 - `src/playlists.py` — `discover()` (case-insensitive **stable** sort so global indices stay valid
-  between a `/mpv_list` render and a later `/mpv_play <n>`; scans `*.m3u` directly in a playlists dir
+  between a `/library` render and a later `/play <n>`; scans `*.m3u` directly in a playlists dir
   **and one level of nested folders**, whose name becomes the playlist's `subcategory`), `find()`
   (numeric index OR case-insensitive substring), `validate()`/`missing_entries()` (the on-disk
-  checker behind `/mpv_doctor`; resolves relative entries against the playlist's own dir, treats URLs
+  checker behind `/doctor`; resolves relative entries against the playlist's own dir, treats URLs
   as always-present), and `prettify()` (strips release/quality/source junk for **display only** —
   `Playlist.display` / button text; the raw `name` is what matching, callbacks and files use).
 - `src/player.py` — the only part that spawns a process. `build_launch_command()` /
   `build_pipe_commands()` are pure helpers (use `MPV_RUNNER` if it exists, else plain `mpv`);
-  `play_url()` streams a URL as `yt-dlp -o - | mpv -` (bare-URL messages and `/mpv_url` route here,
+  `play_url()` streams a URL as `yt-dlp -o - | mpv -` (bare-URL messages and `/url` route here,
   gated by the anchored `_URL_RE`). **yt-dlp must do the fetching itself** — handing mpv resolved
   stream URLs or using mpv's ytdl hook breaks on IP-locked/client-bound CDN URLs (googlevideo) and
   on split-brain proxy egress; the pipe is the one shape that matches a plain download. The venv's
@@ -87,22 +87,22 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   `PLAYLIST_NAME` / `MPV_SOCKET` / `DISPLAY` in their env; failures are logged, never fatal (15s
   timeout). **Never hardcode `I3SOCK`** — the i3 socket path embeds i3's PID and goes stale on every
   reboot (the old built-in switch broke exactly this way); `i3-msg` in a hook finds the socket via X11.
-- `src/keyboards.py` — inline-keyboard builders for `/mpv_list`: **category → (subcategory) →
+- `src/keyboards.py` — inline-keyboard builders for `/library`: **category → (subcategory) →
   paginated playlist buttons** (`PER_PAGE=8`). Flat categories (no subcategories) jump straight to the
   playlist list; categories with subcategories (tutorials → provider) show a subcategory menu first.
   Pure helpers (`categories`/`subcategories`/`indices_for`/`page_*`) are unit-tested. **Index-based**
   callback grammar (stable for a fixed library): `cats`, `c:<ci>[:<page>]`, `s:<ci>:<si>[:<page>]`,
   `pl:<global_index>`, `noop`.
 - `src/commands.py` — handlers push blocking IPC/subprocess work to `asyncio.to_thread`. `_ipc()`
-  centralizes error→message translation. Play buttons carry the **global** playlist index. `/mpv_info`
+  centralizes error→message translation. Play buttons carry the **global** playlist index. `/info`
   posts the **now-playing panel** (`now_playing_keyboard` + `_status_text`); the `ctl:<action>`
   callbacks (`cb_ctl`, dispatched via `_CTL_ACTIONS`) run an IPC op then edit the panel in place.
-  `/mpv_fix` calls `generate.repair_playlists`. The playlist scan is cached (`_all_playlists`,
+  `/fix` calls `generate.repair_playlists`. The playlist scan is cached (`_all_playlists`,
   `refresh_cache`).
 - `src/generate.py` — idempotent playlist creation (`generate_missing` → `generate_flat`/
-  `generate_nested`, never overwrites, skips items already covered) behind `/mpv_scan`; plus
+  `generate_nested`, never overwrites, skips items already covered) behind `/scan`; plus
   `repair_playlists` (re-point missing entries by unique basename, prune the rest, `.m3u.bak` backup)
-  behind `/mpv_fix`.
+  behind `/fix`.
 - `src/lock.py` — `acquire(path)` exclusive `flock`; raises `AlreadyRunning` if a second instance starts.
 
 ## Running it (operational)
@@ -115,7 +115,7 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 - **Reading logs:** `journalctl --user -u tg-mpv-bot` shows nothing on this host; use
   `journalctl --user-unit tg-mpv-bot` (or `journalctl _PID=$(systemctl --user show tg-mpv-bot -p MainPID --value)`).
 - The media library is on a spinning external disk (`/mnt/EHDDSG-4`); `commands._all_playlists()` caches
-  `discover()` and only re-scans on `/mpv_list` `/mpv_play` `/mpv_doctor` (not per button tap).
+  `discover()` and only re-scans on `/library` `/play` `/doctor` (not per button tap).
 
 ## Things to know before editing
 

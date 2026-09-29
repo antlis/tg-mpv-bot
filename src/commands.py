@@ -26,7 +26,7 @@ from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, FSInputFile, Message
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardMarkup, Message
 
 from . import generate, keyboards, player, playlists, recorder, state
 from .config import get_settings
@@ -73,7 +73,7 @@ async def _ipc(fn: Callable[[MpvClient], T]) -> tuple[T | None, str | None]:
     try:
         return await asyncio.to_thread(run), None
     except MpvNotRunning:
-        return None, "❌ mpv is not running — use /mpv_list to start something."
+        return None, "❌ mpv is not running — use /library to start something."
     except MpvError as exc:
         return None, f"❌ mpv error: {exc}"
     except Exception as exc:  # noqa: BLE001 — surface anything else to the user
@@ -90,48 +90,48 @@ async def _do(message: Message, fn: Callable[[MpvClient], Any], ok: str) -> None
 # ── Playback control ────────────────────────────────────────────────
 
 
-@router.message(Command("mpv_pause"))
+@router.message(Command("pause"))
 async def cmd_pause(message: Message) -> None:
     await _do(message, lambda c: c.set_pause(True), "⏸ Paused")
 
 
-@router.message(Command("mpv_unpause", "mpv_resume"))
+@router.message(Command("unpause", "resume"))
 async def cmd_unpause(message: Message) -> None:
     await _do(message, lambda c: c.set_pause(False), "▶ Resumed")
 
 
-@router.message(Command("mpv_toggle", "mpv_playpause"))
+@router.message(Command("toggle", "playpause"))
 async def cmd_toggle(message: Message) -> None:
     paused, err = await _ipc(lambda c: c.toggle_pause())
     await message.reply(err or ("⏸ Paused" if paused else "▶ Resumed"))
 
 
-@router.message(Command("mpv_quit", "mpv_stop"))
+@router.message(Command("quit", "stop"))
 async def cmd_quit(message: Message) -> None:
     await _do(message, lambda c: c.quit(), "⏹ Stopped")
 
 
-@router.message(Command("mpv_mute"))
+@router.message(Command("mute"))
 async def cmd_mute(message: Message) -> None:
     await _do(message, lambda c: c.cycle_mute(), "🔇 Mute toggled")
 
 
-@router.message(Command("mpv_fwd", "mpv_forward"))
+@router.message(Command("fwd", "forward"))
 async def cmd_fwd(message: Message) -> None:
     await _do(message, lambda c: c.seek(30), "⏩ +30s")
 
 
-@router.message(Command("mpv_back", "mpv_rewind"))
+@router.message(Command("back", "rewind"))
 async def cmd_back(message: Message) -> None:
     await _do(message, lambda c: c.seek(-10), "⏪ -10s")
 
 
-@router.message(Command("mpv_next"))
+@router.message(Command("next"))
 async def cmd_next(message: Message) -> None:
     await _do(message, lambda c: c.playlist_next(), "⏭ Next")
 
 
-@router.message(Command("mpv_prev", "mpv_previous"))
+@router.message(Command("prev", "previous"))
 async def cmd_prev(message: Message) -> None:
     await _do(message, lambda c: c.playlist_prev(), "⏮ Previous")
 
@@ -153,13 +153,13 @@ def _cycle_sub_text(client: MpvClient) -> str:
     return f"💬 Subtitles: {label}"
 
 
-@router.message(Command("mpv_sub", "mpv_subtitles"))
+@router.message(Command("sub", "subtitles"))
 async def cmd_sub(message: Message) -> None:
     text, err = await _ipc(_cycle_sub_text)
     await message.reply(err or text)
 
 
-@router.message(Command("mpv_sub_toggle"))
+@router.message(Command("sub_toggle"))
 async def cmd_sub_toggle(message: Message) -> None:
     await _do(message, lambda c: c.toggle_sub_visibility(), "💬 Subtitles toggled")
 
@@ -183,30 +183,30 @@ def _cycle_audio_text(client: MpvClient) -> str:
     return f"🎧 Audio: {label}"
 
 
-@router.message(Command("mpv_audio", "mpv_atrack"))
+@router.message(Command("audio", "atrack"))
 async def cmd_audio(message: Message) -> None:
     text, err = await _ipc(_cycle_audio_text)
     await message.reply(err or text)
 
 
-@router.message(Command("mpv_volup"))
+@router.message(Command("volup"))
 async def cmd_volup(message: Message) -> None:
     vol, err = await _ipc(lambda c: c.adjust_volume(10))
     await message.reply(err or f"🔊 Volume: {vol:.0f}")
 
 
-@router.message(Command("mpv_voldown"))
+@router.message(Command("voldown"))
 async def cmd_voldown(message: Message) -> None:
     vol, err = await _ipc(lambda c: c.adjust_volume(-10))
     await message.reply(err or f"🔉 Volume: {vol:.0f}")
 
 
-@router.message(Command("mpv_shuffle"))
+@router.message(Command("shuffle"))
 async def cmd_shuffle(message: Message) -> None:
     await _do(message, lambda c: c.shuffle(), "🔀 Shuffled")
 
 
-@router.message(Command("mpv_loop"))
+@router.message(Command("loop"))
 async def cmd_loop(message: Message) -> None:
     looping, err = await _ipc(lambda c: c.toggle_loop())
     await message.reply(err or ("🔁 Loop on" if looping else "➡ Loop off"))
@@ -229,7 +229,7 @@ def _episodes_text(names: list[str], current: int | None) -> str:
     return f"📜 {len(names)} items{where} — tap to jump:"
 
 
-@router.message(Command("mpv_ep", "mpv_episode"))
+@router.message(Command("ep", "episode"))
 async def cmd_ep(message: Message, command: CommandObject) -> None:
     arg = (command.args or "").strip()
     if arg.isdigit() and int(arg) >= 1:
@@ -238,8 +238,8 @@ async def cmd_ep(message: Message, command: CommandObject) -> None:
     if arg:
         await message.reply(
             "Usage:\n"
-            "  /mpv_ep           — pick an episode with buttons\n"
-            "  /mpv_ep <number>  — jump straight to that item"
+            "  /ep           — pick an episode with buttons\n"
+            "  /ep <number>  — jump straight to that item"
         )
         return
     res, err = await _ipc(_episode_list)
@@ -313,16 +313,16 @@ def _parse_goto(arg: str) -> tuple[str, float] | None:
     return ("time", seconds)
 
 
-@router.message(Command("mpv_goto", "mpv_seek"))
+@router.message(Command("goto", "seek"))
 async def cmd_goto(message: Message, command: CommandObject) -> None:
     parsed = _parse_goto(command.args or "")
     if parsed is None:
         await message.reply(
-            "Usage: /mpv_goto <position>\n"
-            "  /mpv_goto 1:23:45   — h:mm:ss\n"
-            "  /mpv_goto 23:45     — mm:ss\n"
-            "  /mpv_goto 90        — seconds\n"
-            "  /mpv_goto 75%       — percent of the file"
+            "Usage: /goto <position>\n"
+            "  /goto 1:23:45   — h:mm:ss\n"
+            "  /goto 23:45     — mm:ss\n"
+            "  /goto 90        — seconds\n"
+            "  /goto 75%       — percent of the file"
         )
         return
     kind, value = parsed
@@ -342,7 +342,7 @@ def _chapters_text(n: int, current: int | None) -> str:
     return f"📖 {n} chapters{where} — tap to jump:"
 
 
-@router.message(Command("mpv_chapters", "mpv_ch"))
+@router.message(Command("chapters", "ch"))
 async def cmd_chapters(message: Message) -> None:
     """Browse the current file's chapters as jump buttons."""
     res, err = await _ipc(lambda c: c.get_chapters())
@@ -393,13 +393,13 @@ async def cb_chapter(query: CallbackQuery) -> None:
 _radio_search_cache: list[dict] = []
 
 
-@router.message(Command("mpv_radio", "mpv_fm"))
+@router.message(Command("radio", "fm"))
 async def cmd_radio(message: Message, command: CommandObject) -> None:
     """Preset stations as buttons — or search ~50k stations with an argument."""
     query = (command.args or "").strip()
     if not query:
         await message.reply(
-            "📻 Pick a station (or search: /mpv_radio jazz tokyo):",
+            "📻 Pick a station (or search: /radio jazz tokyo):",
             reply_markup=radio_keyboard(get_settings().radio_stations),
         )
         return
@@ -420,7 +420,7 @@ async def cmd_radio(message: Message, command: CommandObject) -> None:
 async def cb_radio_search(query: CallbackQuery) -> None:
     i = int(query.data[len("rdq:") :])
     if not (0 <= i < len(_radio_search_cache)):
-        await query.answer("Search expired — run /mpv_radio <query> again", show_alert=True)
+        await query.answer("Search expired — run /radio <query> again", show_alert=True)
         return
     s = _radio_search_cache[i]
     _remember_chat(query.message)
@@ -428,7 +428,7 @@ async def cb_radio_search(query: CallbackQuery) -> None:
         player.play_radio, get_settings(), s["url"], s["name"], s.get("favicon")
     )
     await query.answer(f"📻 {s['name'][:60]}")
-    await query.message.reply(f"📻 Tuned to {s['name']}")
+    await _reply_playing(query.message, f"📻 Tuned to {s['name']}")
 
 
 @router.callback_query(F.data.startswith("rds:"))
@@ -448,16 +448,16 @@ async def cb_radio(query: CallbackQuery) -> None:
     i = int(query.data[len("rd:") :])
     stations = get_settings().radio_stations
     if not (0 <= i < len(stations)):
-        await query.answer("Station list changed — run /mpv_radio again", show_alert=True)
+        await query.answer("Station list changed — run /radio again", show_alert=True)
         return
     name, url = stations[i]
     _remember_chat(query.message)
     await asyncio.to_thread(player.play_radio, get_settings(), url, name)
     await query.answer(f"📻 {name[:60]}")
-    await query.message.reply(f"📻 Tuned to {name} — /mpv_info shows the current track")
+    await _reply_playing(query.message, f"📻 Tuned to {name}")
 
 
-@router.message(Command("mpv_random", "mpv_surprise"))
+@router.message(Command("random", "surprise"))
 async def cmd_random(message: Message, command: CommandObject) -> None:
     """Play a random playlist — optionally from one category."""
     arg = (command.args or "").strip()
@@ -476,10 +476,10 @@ async def cmd_random(message: Message, command: CommandObject) -> None:
     pl = random.choice(pool)
     _remember_chat(message)
     await asyncio.to_thread(player.play, get_settings(), pl.path)
-    await message.reply(f"🎲 Random pick: {pl.display}  ({pl.category})")
+    await _reply_playing(message, f"🎲 Random pick: {pl.display}  ({pl.category})")
 
 
-@router.message(Command("mpv_night"))
+@router.message(Command("night"))
 async def cmd_night(message: Message) -> None:
     """Toggle loudness normalization for late-night viewing."""
     on, err = await _ipc(lambda c: c.toggle_night())
@@ -519,7 +519,7 @@ async def _sleep_fire(message: Message, minutes: int) -> None:
         _sleep_task = None
 
 
-@router.message(Command("mpv_sleep"))
+@router.message(Command("sleep"))
 async def cmd_sleep(message: Message, command: CommandObject) -> None:
     """Stop playback after N minutes (fall-asleep mode)."""
     global _sleep_task, _sleep_until
@@ -529,12 +529,12 @@ async def cmd_sleep(message: Message, command: CommandObject) -> None:
             left = max(0, _sleep_until - asyncio.get_running_loop().time())
             await message.reply(
                 f"😴 Sleep timer active — stopping in {left / 60:.0f} min. "
-                "/mpv_sleep off to cancel."
+                "/sleep off to cancel."
             )
         else:
             await message.reply(
-                "Usage: /mpv_sleep <time>  — stop playback after e.g. 45m, 1.5h\n"
-                "  /mpv_sleep off — cancel"
+                "Usage: /sleep <time>  — stop playback after e.g. 45m, 1.5h\n"
+                "  /sleep off — cancel"
             )
         return
     if arg in ("off", "cancel", "stop"):
@@ -553,14 +553,14 @@ async def cmd_sleep(message: Message, command: CommandObject) -> None:
         _sleep_task.cancel()
     _sleep_until = asyncio.get_running_loop().time() + minutes * 60
     _sleep_task = asyncio.create_task(_sleep_fire(message, minutes))
-    await message.reply(f"😴 Will stop playback in {minutes} min (/mpv_sleep off to cancel)")
+    await message.reply(f"😴 Will stop playback in {minutes} min (/sleep off to cancel)")
 
 
 def _speed_text(speed: float) -> str:
     return f"⏩ Speed: {speed:g}× — pick:"
 
 
-@router.message(Command("mpv_speed"))
+@router.message(Command("speed"))
 async def cmd_speed(message: Message, command: CommandObject) -> None:
     arg = (command.args or "").strip().rstrip("x×")
     if arg:
@@ -568,7 +568,7 @@ async def cmd_speed(message: Message, command: CommandObject) -> None:
             val = float(arg)
         except ValueError:
             await message.reply(
-                "Usage: /mpv_speed [value]  — e.g. /mpv_speed 1.5, or no arg for buttons"
+                "Usage: /speed [value]  — e.g. /speed 1.5, or no arg for buttons"
             )
             return
         speed, err = await _ipc(lambda c: c.set_speed(val))
@@ -614,22 +614,31 @@ def _take_screenshot(client: MpvClient) -> tuple[str, str]:
     return str(path), f"📸 {title} — {pos} / {dur}"
 
 
-@router.message(Command("mpv_shot", "mpv_screenshot"))
-async def cmd_shot(message: Message) -> None:
+async def _capture_and_send(target: Message) -> None:
+    """Screenshot the current frame and reply with it to ``target``.
+
+    Shared by ``/shot`` and the panel's 📸 button; failures reply in chat
+    with the same wording the command has always used.
+    """
     res, err = await _ipc(_take_screenshot)
     if err:
-        await message.reply(err)
+        await target.reply(err)
         return
     path, caption = res
     shot = Path(path)
     if not shot.is_file() or shot.stat().st_size == 0:
         shot.unlink(missing_ok=True)
-        await message.reply("❌ mpv produced no screenshot (is video playing?)")
+        await target.reply("❌ mpv produced no screenshot (is video playing?)")
         return
     try:
-        await message.reply_photo(FSInputFile(path), caption=caption)
+        await target.reply_photo(FSInputFile(path), caption=caption)
     finally:
         shot.unlink(missing_ok=True)
+
+
+@router.message(Command("shot", "screenshot"))
+async def cmd_shot(message: Message) -> None:
+    await _capture_and_send(message)
 
 
 # ── Record ──────────────────────────────────────────────────────────
@@ -703,7 +712,7 @@ async def _toggle_record(
         range_note = ""
     status = await message.reply(
         f"🔴 Recording {kind}: {html.escape(str(info['name'])[:60])}…{range_note}\n"
-        "Send /mpv_record again (or tap ⏺ Stop) to finish."
+        "Send /record again (or tap ⏺ Stop) to finish."
     )
     _recording = {
         "proc": proc,
@@ -780,7 +789,7 @@ async def _record_watch() -> None:
         Path(out).unlink(missing_ok=True)
 
 
-@router.message(Command("mpv_record", "mpv_rec"))
+@router.message(Command("record", "rec"))
 async def cmd_record(message: Message, command: CommandObject) -> None:
     start_secs = None
     secs = recorder.RECORD_MAX
@@ -792,9 +801,9 @@ async def cmd_record(message: Message, command: CommandObject) -> None:
         if t0 is None or t1 is None or t1 <= t0:
             await message.reply(
                 "❌ Invalid times. Examples:\n"
-                "• /mpv_record — record now\n"
-                "• /mpv_record 30m — record for 30 minutes\n"
-                "• /mpv_record 01:30:00 02:00:00 — clip from 1h30m to 2h"
+                "• /record — record now\n"
+                "• /record 30m — record for 30 minutes\n"
+                "• /record 01:30:00 02:00:00 — clip from 1h30m to 2h"
             )
             return
         start_secs = t0
@@ -883,9 +892,36 @@ async def _send_panel(message: Message, *, edit: bool = False) -> None:
         await message.reply(body, reply_markup=kb)
 
 
-@router.message(Command("mpv_info", "mpv_status", "mpv_panel"))
+@router.message(Command("info", "status", "panel"))
 async def cmd_info(message: Message) -> None:
     await _send_panel(message)
+
+
+async def panel_markup() -> InlineKeyboardMarkup:
+    """Current transport keyboard — pause state fetched best-effort.
+
+    Used by the short "▶ Playing: …" confirmations so every playback-started
+    message carries the controls (WarMusicBot's control_panel behaviour); an
+    unreachable mpv just renders the neutral ``⏯`` toggle. Shared with the
+    IPTV card and the notification listener.
+    """
+    paused, _ = await _ipc(lambda c: c._safe_get("pause"))
+    return now_playing_keyboard(
+        paused if isinstance(paused, bool) else None, recording=_is_recording()
+    )
+
+
+async def _reply_playing(message: Message, text: str) -> None:
+    """Reply with ``text`` plus the transport panel."""
+    await message.reply(text, reply_markup=await panel_markup())
+
+
+async def _edit_playing(message: Message, text: str) -> None:
+    """Edit ``message`` into ``text`` plus the transport panel."""
+    try:
+        await message.edit_text(text, reply_markup=await panel_markup())
+    except TelegramBadRequest:
+        pass  # "message is not modified" when nothing changed — ignore
 
 
 _CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
@@ -897,6 +933,7 @@ _CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
     "volup": lambda c: c.adjust_volume(10),
     "voldown": lambda c: c.adjust_volume(-10),
     "mute": lambda c: c.cycle_mute(),
+    "unmute": lambda c: c.set_mute(False),
     "sub": lambda c: c.cycle_sub(),
     "audio": lambda c: c.cycle_audio(),
     "p0": lambda c: c.seek_percent(0),
@@ -913,6 +950,17 @@ _CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
 @router.callback_query(F.data.startswith("ctl:"))
 async def cb_ctl(query: CallbackQuery) -> None:
     action = query.data[len("ctl:") :]
+    if action == "close":  # drop this panel — no IPC involved
+        await query.answer()
+        try:
+            await query.message.delete()
+        except TelegramBadRequest:
+            pass  # already deleted
+        return
+    if action == "snap":  # screenshot the current frame into the chat
+        await query.answer("📸 capturing…")
+        await _capture_and_send(query.message)
+        return
     if action == "record":  # start/stop is async + stateful, not a simple IPC call
         await query.answer("⏹ stopping…" if _is_recording() else "⏺ recording…")
         await _toggle_record(query.message)
@@ -938,7 +986,7 @@ def _all_playlists(*, refresh: bool = False) -> list[playlists.Playlist]:
 
     The media library lives on a spinning external disk, so re-scanning on
     every button tap can stall (drive spin-up). We scan on the explicit
-    entry points (``/mpv_list``, ``/mpv_play``, ``/mpv_doctor``) and reuse the
+    entry points (``/library``, ``/play``, ``/doctor``) and reuse the
     cached list for callback navigation — which also keeps the global indices
     encoded in button callbacks stable for the duration of a browse session.
     """
@@ -961,7 +1009,7 @@ def _continue_label() -> str | None:
     return e.name if e.is_url else playlists.prettify(e.name)
 
 
-@router.message(Command("mpv_list", "mpv_browse"))
+@router.message(Command("library", "browse"))
 async def cmd_list(message: Message) -> None:
     pls = await asyncio.to_thread(_all_playlists, refresh=True)
     if not pls:
@@ -1049,31 +1097,31 @@ async def cb_play(query: CallbackQuery) -> None:
     _remember_chat(query.message)
     await asyncio.to_thread(player.play, get_settings(), pl.path)
     await query.answer(f"▶ {pl.display}")
-    await query.message.reply(f"▶ Playing: {pl.display}")
+    await _reply_playing(query.message, f"▶ Playing: {pl.display}")
 
 
-@router.message(Command("mpv_play", "mpv"))
+@router.message(Command("play", "mpv"))
 async def cmd_play(message: Message, command: CommandObject) -> None:
     query = (command.args or "").strip()
     if not query:
         await message.reply(
             "Usage:\n"
-            "  /mpv_play <number>  — play by number\n"
-            "  /mpv_play <name>    — search and play\n"
-            "  /mpv_list           — browse with buttons"
+            "  /play <number>  — play by number\n"
+            "  /play <name>    — search and play\n"
+            "  /library           — browse with buttons"
         )
         return
     pls = await asyncio.to_thread(_all_playlists, refresh=True)
     pl = playlists.find(pls, query)
     if pl is None:
-        await message.reply(f"❌ No playlist matching '{query}'. Try /mpv_list")
+        await message.reply(f"❌ No playlist matching '{query}'. Try /library")
         return
     _remember_chat(message)
     await asyncio.to_thread(player.play, get_settings(), pl.path)
-    await message.reply(f"▶ Playing: {pl.display}")
+    await _reply_playing(message, f"▶ Playing: {pl.display}")
 
 
-@router.message(Command("mpv_last", "mpv_continue"))
+@router.message(Command("last", "continue"))
 async def cmd_last(message: Message) -> None:
     """Relaunch the last-played playlist or URL (mpv restores the position)."""
     last = state.last_played(get_settings().state_file)
@@ -1101,7 +1149,7 @@ async def _replay(message: Message, target: str) -> None:
         name, url = station
         _remember_chat(message)
         await asyncio.to_thread(player.play_radio, get_settings(), url, name)
-        await message.reply(f"📻 Tuned to {name}")
+        await _reply_playing(message, f"📻 Tuned to {name}")
         return
     if target.startswith(("http://", "https://")):
         entry = next(
@@ -1118,10 +1166,10 @@ async def _replay(message: Message, target: str) -> None:
         await asyncio.to_thread(player.play, get_settings(), path)
     else:
         await asyncio.to_thread(player.play_file, get_settings(), path, path.stem)
-    await message.reply(f"▶ Playing: {title}")
+    await _reply_playing(message, f"▶ Playing: {title}")
 
 
-@router.message(Command("mpv_notify"))
+@router.message(Command("notify"))
 async def cmd_notify(message: Message) -> None:
     """Toggle the episode-finished / playlist-done notifications."""
     sf = get_settings().state_file
@@ -1134,7 +1182,7 @@ async def cmd_notify(message: Message) -> None:
     )
 
 
-@router.message(Command("mpv_history", "mpv_recent", "history"))
+@router.message(Command("history", "recent"))
 async def cmd_history(message: Message) -> None:
     entries = state.history(get_settings().state_file)
     if not entries:
@@ -1151,7 +1199,7 @@ async def cb_history(query: CallbackQuery) -> None:
     i = int(query.data[len("h:") :])
     entries = state.history(get_settings().state_file)
     if not (0 <= i < len(entries)):
-        await query.answer("History changed — run /mpv_history again", show_alert=True)
+        await query.answer("History changed — run /history again", show_alert=True)
         return
     target = entries[i].target
     await query.answer(f"▶ {entries[i].name[:60]}")
@@ -1207,21 +1255,21 @@ async def cb_history_page(query: CallbackQuery) -> None:
     await query.message.edit_reply_markup(reply_markup=history_keyboard(entries, pg))
     await query.answer()
 
-@router.message(Command("mpv_search", "mpv_find"))
+@router.message(Command("search", "find"))
 async def cmd_search(message: Message, command: CommandObject) -> None:
     """Search playlists and show every hit as a play button.
 
-    Unlike ``/mpv_play <name>`` (plays the *first* match), this lists all
+    Unlike ``/play <name>`` (plays the *first* match), this lists all
     matches. A leading category name scopes the search:
-    ``/mpv_search tutorials docker``.
+    ``/search tutorials docker``.
     """
     raw = (command.args or "").strip()
     if not raw:
         await message.reply(
             "Usage:\n"
-            "  /mpv_search <text>             — search all playlists\n"
-            "  /mpv_search <category> <text>  — search one category\n"
-            "                e.g. /mpv_search tutorials docker"
+            "  /search <text>             — search all playlists\n"
+            "  /search <category> <text>  — search one category\n"
+            "                e.g. /search tutorials docker"
         )
         return
     pls = await asyncio.to_thread(_all_playlists, refresh=True)
@@ -1237,7 +1285,7 @@ async def cmd_search(message: Message, command: CommandObject) -> None:
     indices = playlists.search(pls, text, category=category)
     scope = f" in {category}" if category else ""
     if not indices:
-        await message.reply(f"❌ Nothing matching '{text}'{scope}. Try /mpv_list")
+        await message.reply(f"❌ Nothing matching '{text}'{scope}. Try /library")
         return
     title = f"🔍 {len(indices)} match(es) for '{text}'{scope} — tap to play:"
     if len(indices) > keyboards.MAX_SEARCH_RESULTS:
@@ -1245,12 +1293,12 @@ async def cmd_search(message: Message, command: CommandObject) -> None:
     await message.reply(title, reply_markup=search_results_keyboard(pls, indices))
 
 
-@router.message(Command("mpv_yt", "mpv_youtube"))
+@router.message(Command("yt", "youtube"))
 async def cmd_yt(message: Message, command: CommandObject) -> None:
     """Search YouTube and offer the top hits as tap-to-play buttons."""
     query = (command.args or "").strip()
     if not query:
-        await message.reply("Usage: /mpv_yt <search terms>  — top results, tap to play")
+        await message.reply("Usage: /yt <search terms>  — top results, tap to play")
         return
     note = await message.reply(f"🔎 Searching YouTube for '{query}'…")
     try:
@@ -1384,7 +1432,7 @@ async def msg_media_file(message: Message) -> None:
     _remember_chat(message)
     title = Path(name).stem
     await asyncio.to_thread(player.play_file, get_settings(), path, title)
-    await note.edit_text(f"▶ Playing: {title}")
+    await _edit_playing(note, f"▶ Playing: {title}")
     await asyncio.to_thread(_prune_api_files, path)  # old media = disk leak
 
 
@@ -1454,11 +1502,13 @@ async def _play_url(message: Message, url: str, start: float | None = None) -> N
             await note.edit_text(status)
         except TelegramBadRequest:
             pass  # unchanged text / message gone — keep waiting either way
+    playing = True
     try:
         text = f"▶ Streaming: {task.result()}"
         if start:
             text += f" (resuming at {_fmt_time(start)})"
     except player.UrlPlaybackError as exc:
+        playing = False
         reason = str(exc)
         if reason == player.PLAYLIST_URL or "Unsupported URL" in reason:
             # Maybe it's a playlist/channel page — offer its entries instead.
@@ -1471,6 +1521,9 @@ async def _play_url(message: Message, url: str, start: float | None = None) -> N
             )
         else:
             text = f"❌ Can't play that link: {exc}"
+    if playing:  # transport panel rides on the success message only
+        await _edit_playing(note, text)
+        return
     try:
         await note.edit_text(text)
     except TelegramBadRequest:
@@ -1488,12 +1541,12 @@ async def cb_listing_entry(query: CallbackQuery) -> None:
     await _play_url(query.message, entry["url"])
 
 
-@router.message(Command("mpv_url", "mpv_stream"))
+@router.message(Command("url", "stream"))
 async def cmd_url(message: Message, command: CommandObject) -> None:
     url = (command.args or "").strip()
     if not _URL_RE.match(url):
         await message.reply(
-            "Usage: /mpv_url <link>\n"
+            "Usage: /url <link>\n"
             "Plays YouTube / SoundCloud / Twitter / Instagram / … via yt-dlp.\n"
             "Tip: just sending a link as a message works too."
         )
@@ -1558,13 +1611,13 @@ def _health_report() -> str:
     return "\n".join(lines)
 
 
-@router.message(Command("mpv_health", "mpv_status_full"))
+@router.message(Command("health", "status_full"))
 async def cmd_health(message: Message) -> None:
     report = await asyncio.to_thread(_health_report)
     await message.reply(f"<pre>{html.escape(report)}</pre>", parse_mode=ParseMode.HTML)
 
 
-@router.message(Command("mpv_update_ytdlp"))
+@router.message(Command("update_ytdlp"))
 async def cmd_update_ytdlp(message: Message) -> None:
     """Update the venv's yt-dlp nightly (the fix when YouTube breaks)."""
     note = await message.reply("⏳ Updating yt-dlp to the latest nightly…")
@@ -1575,7 +1628,7 @@ async def cmd_update_ytdlp(message: Message) -> None:
         pass
 
 
-@router.message(Command("mpv_doctor", "mpv_validate"))
+@router.message(Command("doctor", "validate"))
 async def cmd_doctor(message: Message) -> None:
     pls = await asyncio.to_thread(_all_playlists, refresh=True)
     results = await asyncio.to_thread(playlists.validate, pls)
@@ -1588,12 +1641,12 @@ async def cmd_doctor(message: Message) -> None:
         lines.append(f"• {r.playlist.name} — {len(r.missing)}/{r.total} missing")
     if len(broken) > 30:
         lines.append(f"…and {len(broken) - 30} more")
-    lines.append("\nRun /mpv_fix to re-point moved files and prune dead entries.")
+    lines.append("\nRun /fix to re-point moved files and prune dead entries.")
     text = html.escape("\n".join(lines))
     await message.reply(f"<pre>{text}</pre>", parse_mode=ParseMode.HTML)
 
 
-@router.message(Command("mpv_fix", "mpv_repair"))
+@router.message(Command("fix", "repair"))
 async def cmd_fix(message: Message) -> None:
     fixed = await asyncio.to_thread(generate.repair_playlists, get_settings())
     await asyncio.to_thread(_all_playlists, refresh=True)
@@ -1608,7 +1661,7 @@ async def cmd_fix(message: Message) -> None:
     await message.reply(f"<pre>{text}</pre>", parse_mode=ParseMode.HTML)
 
 
-@router.message(Command("mpv_scan", "mpv_refresh"))
+@router.message(Command("scan", "refresh"))
 async def cmd_scan(message: Message) -> None:
     created = await asyncio.to_thread(generate.generate_missing, get_settings())
     await asyncio.to_thread(_all_playlists, refresh=True)  # pick the new ones up now
@@ -1627,36 +1680,36 @@ async def cmd_scan(message: Message) -> None:
 async def cmd_help(message: Message) -> None:
     text = (
         "🎬 <b>tg-mpv-bot</b> — mpv remote control\n\n"
-        "<b>/mpv_list</b> — browse playlists with buttons\n"
-        "<b>/mpv_play</b> &lt;query&gt; — play by number or name\n"
-        "<b>/mpv_search</b> [category] &lt;text&gt; — find playlists, tap to play\n"
-        "<b>/mpv_last</b> — resume the last-played playlist/stream\n"
-        "<b>/mpv_history</b> — recently played, tap to replay\n"
-        "<b>/mpv_notify</b> — toggle episode-finished notifications\n"
-        "<b>/mpv_url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
-        "<b>/mpv_yt</b> &lt;search&gt; — search YouTube, tap a result to play\n"
-        "<b>/mpv_radio</b> [search] — internet radio: presets, or search 50k stations\n"
+        "<b>/library</b> — browse playlists with buttons\n"
+        "<b>/play</b> &lt;query&gt; — play by number or name\n"
+        "<b>/search</b> [category] &lt;text&gt; — find playlists, tap to play\n"
+        "<b>/last</b> — resume the last-played playlist/stream\n"
+        "<b>/history</b> — recently played, tap to replay\n"
+        "<b>/notify</b> — toggle episode-finished notifications\n"
+        "<b>/url</b> &lt;link&gt; — stream YouTube/SoundCloud/… (or just send a link)\n"
+        "<b>/yt</b> &lt;search&gt; — search YouTube, tap a result to play\n"
+        "<b>/radio</b> [search] — internet radio: presets, or search 50k stations\n"
         "…or just <b>send a video/audio file</b> — it plays on the TV\n"
-        "<b>/mpv_info</b> — now-playing panel with controls\n"
-        "<b>/mpv_shot</b> — screenshot the current frame to chat\n"
-        "<b>/mpv_record</b> [duration | START END] — record video/radio and send it; clip a range with two times e.g. <code>01:30:00 02:00:00</code> (tap again to stop)\n"
-        "<b>/mpv_toggle</b> — play/pause (one tap)\n"
-        "<b>/mpv_pause</b> · <b>/mpv_unpause</b> · <b>/mpv_quit</b>\n"
-        "<b>/mpv_fwd</b> +30s · <b>/mpv_back</b> -10s · <b>/mpv_goto</b> &lt;pos&gt;\n"
-        "<b>/mpv_next</b> · <b>/mpv_prev</b> · <b>/mpv_ep</b> [n] episode picker/jump\n"
-        "<b>/mpv_chapters</b> — chapter picker for the current file\n"
-        "<b>/mpv_speed</b> [x] — playback speed (buttons or value)\n"
-        "<b>/mpv_sleep</b> &lt;time&gt; — stop playback after e.g. 45m / 1.5h\n"
-        "<b>/mpv_random</b> [category] — play a random playlist\n"
-        "<b>/mpv_night</b> — loudness normalization for late-night viewing\n"
-        "<b>/mpv_shuffle</b> · <b>/mpv_loop</b>\n"
-        "<b>/mpv_audio</b> switch audio track\n"
-        "<b>/mpv_sub</b> switch subtitle · <b>/mpv_sub_toggle</b> show/hide\n"
-        "<b>/mpv_volup</b> · <b>/mpv_voldown</b> · <b>/mpv_mute</b>\n"
-        "<b>/mpv_doctor</b> — check for broken playlists\n"
-        "<b>/mpv_health</b> — system health: player, tools, disks\n"
-        "<b>/mpv_fix</b> — repair broken playlists\n"
-        "<b>/mpv_scan</b> — create playlists for newly-added media\n"
-        "<b>/mpv_update_ytdlp</b> — update yt-dlp (when YouTube breaks)\n"
+        "<b>/info</b> — now-playing panel (the same buttons ride on every ▶ Playing message)\n"
+        "<b>/shot</b> — screenshot the current frame to chat\n"
+        "<b>/record</b> [duration | START END] — record video/radio and send it; clip a range with two times e.g. <code>01:30:00 02:00:00</code> (tap again to stop)\n"
+        "<b>/toggle</b> — play/pause (one tap)\n"
+        "<b>/pause</b> · <b>/unpause</b> · <b>/quit</b>\n"
+        "<b>/fwd</b> +30s · <b>/back</b> -10s · <b>/goto</b> &lt;pos&gt;\n"
+        "<b>/next</b> · <b>/prev</b> · <b>/ep</b> [n] episode picker/jump\n"
+        "<b>/chapters</b> — chapter picker for the current file\n"
+        "<b>/speed</b> [x] — playback speed (buttons or value)\n"
+        "<b>/sleep</b> &lt;time&gt; — stop playback after e.g. 45m / 1.5h\n"
+        "<b>/random</b> [category] — play a random playlist\n"
+        "<b>/night</b> — loudness normalization for late-night viewing\n"
+        "<b>/shuffle</b> · <b>/loop</b>\n"
+        "<b>/audio</b> switch audio track\n"
+        "<b>/sub</b> switch subtitle · <b>/sub_toggle</b> show/hide\n"
+        "<b>/volup</b> · <b>/voldown</b> · <b>/mute</b>\n"
+        "<b>/doctor</b> — check for broken playlists\n"
+        "<b>/health</b> — system health: player, tools, disks\n"
+        "<b>/fix</b> — repair broken playlists\n"
+        "<b>/scan</b> — create playlists for newly-added media\n"
+        "<b>/update_ytdlp</b> — update yt-dlp (when YouTube breaks)\n"
     )
     await message.reply(text, parse_mode=ParseMode.HTML)

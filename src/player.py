@@ -227,7 +227,7 @@ def _installer_command() -> list[str] | None:
 def update_ytdlp(timeout: float = 300) -> str:
     """Update the venv's yt-dlp to the latest nightly; returns a status line.
 
-    Behind ``/mpv_update_ytdlp`` so the fix for the next YouTube breakage is
+    Behind ``/update_ytdlp`` so the fix for the next YouTube breakage is
     one Telegram tap instead of a shell session. Installs into the bot's own
     venv (which :func:`_ytdlp_bin` prefers) — never touches the system one.
     Note: a later ``uv sync``/``uv run`` reverts to the locked stable
@@ -975,7 +975,7 @@ def play(settings: Settings, playlist: Path) -> None:
     """Stop any current mpv, run hooks around a detached launch of ``playlist``."""
     env = _hook_env(settings, str(playlist), playlist.stem)
     _kill_and_launch(settings, build_launch_command(settings, playlist), env)
-    state.record_last_played(settings.state_file, playlist)  # for /mpv_last
+    state.record_last_played(settings.state_file, playlist)  # for /last
 
 
 def _log_file(name: str):
@@ -1125,5 +1125,5 @@ def play_url(
             f.close()  # children hold their own duplicates
 
     _run_hook("post-play", settings.post_play_hook, env)
-    state.record_last_played(settings.state_file, url, name=title)  # /mpv_last|history
+    state.record_last_played(settings.state_file, url, name=title)  # /last|history
     return title
