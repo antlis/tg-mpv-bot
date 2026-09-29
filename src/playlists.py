@@ -92,8 +92,8 @@ def discover(dirs: list[Path]) -> list[Playlist]:
     ``*.m3u`` directly in a playlists dir have no subcategory. One level of
     nesting is supported: ``<playlists>/<sub>/*.m3u`` gets ``subcategory=<sub>``
     (used to group e.g. tutorials by provider). Sort is case-insensitive and
-    stable, so global indices stay consistent between a ``/mpv_list`` render and
-    a later ``/mpv_play <n>``.
+    stable, so global indices stay consistent between a ``/library`` render and
+    a later ``/play <n>``.
     """
     found: list[Playlist] = []
     for d in dirs:

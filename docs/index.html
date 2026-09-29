@@ -806,14 +806,14 @@
     <div class="grid">
       <div class="card"><span class="tile">📋</span><b>Browse your library</b><p>Categories → playlists as inline buttons, full-text search, an episode picker and chapter jumps.</p></div>
       <div class="card"><span class="tile">🔗</span><b>Stream any link</b><p>Send a YouTube / SoundCloud / any yt-dlp URL — it plays on the TV, subtitles fetched automatically.</p></div>
-      <div class="card"><span class="tile">🔎</span><b>Search YouTube from chat</b><p><code>/mpv_yt lofi beats</code> — top results with thumbnails, tap one to play.</p></div>
+      <div class="card"><span class="tile">🔎</span><b>Search YouTube from chat</b><p><code>/yt lofi beats</code> — top results with thumbnails, tap one to play.</p></div>
       <div class="card"><span class="tile">📨</span><b>Forward video files</b><p>Any Telegram video plays on the TV — up to 2 GB with a local Bot API server.</p></div>
-      <div class="card"><span class="tile">🎛</span><b>Full transport control</b><p>One now-playing panel: pause, seek, %-jump, volume, speed, audio &amp; subtitle tracks.</p></div>
+      <div class="card"><span class="tile">🎛</span><b>Full transport control</b><p>The now-playing panel rides on every "▶ Playing" message: pause, seek, %-jump, volume, mute, speed, tracks, 📸 shot, ⏺ clip, 🗑 close.</p></div>
       <div class="card"><span class="tile">⏺</span><b>Record &amp; clip</b><p>Capture what's playing to an H.264 mp4, or the radio to a voice message, and get it right in the chat — tap once to start, again to stop.</p></div>
       <div class="card"><span class="tile">🕘</span><b>Watch history</b><p>Last 20 played, paginated. Tap the title to replay (streams resume from the saved position), tap the icon to copy the URL/path, tap 🗑 to remove the entry.</p></div>
-      <div class="card"><span class="tile">🔔</span><b>Knows when you're done</b><p>"⏭ Now playing: 6/12" on episode change, "✅ Finished" at the end. <code>/mpv_sleep 45m</code> for bedtime.</p></div>
+      <div class="card"><span class="tile">🔔</span><b>Knows when you're done</b><p>"⏭ Now playing: 6/12" on episode change, "✅ Finished" at the end. <code>/sleep 45m</code> for bedtime.</p></div>
       <div class="card"><span class="tile">📻</span><b>Internet radio</b><p>The full SomaFM catalog and friends as presets, plus search across ~50k stations — tuned in about a second.</p></div>
-      <div class="card"><span class="tile">📺</span><b>Live TV (IPTV)</b><p><code>/mpv_iptv BBC</code> searches 50 000+ channels from the <a href="https://github.com/iptv-org/iptv" style="color: var(--accent);">iptv-org</a> catalogue — tap a result to stream live on the TV.</p></div>
+      <div class="card"><span class="tile">📺</span><b>Live TV (IPTV)</b><p><code>/iptv BBC</code> searches 50 000+ channels from the <a href="https://github.com/iptv-org/iptv" style="color: var(--accent);">iptv-org</a> catalogue — tap a result to stream live on the TV.</p></div>
       <div class="card"><span class="tile">🩺</span><b>Runs itself</b><p>Auto-updating yt-dlp, playlist doctor &amp; repair, disk GC, one-screen health check.</p></div>
     </div>
 
@@ -881,11 +881,11 @@ systemctl --user enable --now tg-mpv-bot</code></pre>
       <div class="group">
         <h3>Browse &amp; play</h3>
         <div class="cmds">
-          <div class="row"><div class="cmd-name"><code>/mpv_list</code></div><span>browse by category — opens with "▶ Continue: last watched"</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_play &lt;query&gt;</code></div><span>play by name or number (<code>/mpv</code> works too)</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_search [cat] &lt;text&gt;</code></div><span>every match as a play button</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_random [category]</code></div><span>"just put something on"</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_last</code></div><span>resume the last playlist or stream where you left off</span></div>
+          <div class="row"><div class="cmd-name"><code>/library</code></div><span>browse by category — opens with "▶ Continue: last watched"</span></div>
+          <div class="row"><div class="cmd-name"><code>/play &lt;query&gt;</code></div><span>play by name or number (<code>/mpv</code> works too)</span></div>
+          <div class="row"><div class="cmd-name"><code>/search [cat] &lt;text&gt;</code></div><span>every match as a play button</span></div>
+          <div class="row"><div class="cmd-name"><code>/random [category]</code></div><span>"just put something on"</span></div>
+          <div class="row"><div class="cmd-name"><code>/last</code></div><span>resume the last playlist or stream where you left off</span></div>
           <div class="row"><div class="cmd-name"><code>/history</code></div><span>last 20 played, paginated — tap to replay, copy URL, or delete</span></div>
         </div>
       </div>
@@ -895,64 +895,64 @@ systemctl --user enable --now tg-mpv-bot</code></pre>
         <div class="cmds">
           <div class="row"><div class="cmd-name"><code>(send a link)</code></div><span>any YouTube / SoundCloud / yt-dlp URL just plays</span></div>
           <div class="row"><div class="cmd-name"><code>(send a video file)</code></div><span>plays on the TV — up to 2 GB with a local Bot API server</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_url &lt;link&gt;</code></div><span>the explicit version of sending a link</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_yt &lt;search&gt;</code></div><span>search YouTube — top results as buttons with thumbnails</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_radio [search]</code></div><span>internet radio: 50+ presets incl. the full SomaFM catalog</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_iptv [search]</code></div><span>live TV — search 50 000+ channels from the iptv-org catalogue</span></div>
+          <div class="row"><div class="cmd-name"><code>/url &lt;link&gt;</code></div><span>the explicit version of sending a link</span></div>
+          <div class="row"><div class="cmd-name"><code>/yt &lt;search&gt;</code></div><span>search YouTube — top results as buttons with thumbnails</span></div>
+          <div class="row"><div class="cmd-name"><code>/radio [search]</code></div><span>internet radio: 50+ presets incl. the full SomaFM catalog</span></div>
+          <div class="row"><div class="cmd-name"><code>/iptv [search]</code></div><span>live TV — search 50 000+ channels from the iptv-org catalogue</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Transport</h3>
         <div class="cmds">
-          <div class="row"><div class="cmd-name"><code>/mpv_info</code></div><span>now-playing panel with all controls as buttons</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_toggle</code></div><span>play / pause (also <code>/mpv_pause</code>, <code>/mpv_unpause</code>)</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_fwd</code> · <code>/mpv_back</code></div><span>seek +30s / −10s</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_goto &lt;pos&gt;</code></div><span>jump to <code>1:23:45</code>, <code>90</code> (s) or <code>75%</code></span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_speed [x]</code></div><span>0.75–2× buttons, or any value like <code>1.5</code></span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_quit</code></div><span>stop playback entirely</span></div>
+          <div class="row"><div class="cmd-name"><code>/info</code></div><span>now-playing panel — it also rides on every "▶ Playing" message</span></div>
+          <div class="row"><div class="cmd-name"><code>/toggle</code></div><span>play / pause (also <code>/pause</code>, <code>/unpause</code>)</span></div>
+          <div class="row"><div class="cmd-name"><code>/fwd</code> · <code>/back</code></div><span>seek +30s / −10s</span></div>
+          <div class="row"><div class="cmd-name"><code>/goto &lt;pos&gt;</code></div><span>jump to <code>1:23:45</code>, <code>90</code> (s) or <code>75%</code></span></div>
+          <div class="row"><div class="cmd-name"><code>/speed [x]</code></div><span>0.75–2× buttons, or any value like <code>1.5</code></span></div>
+          <div class="row"><div class="cmd-name"><code>/quit</code></div><span>stop playback entirely</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Playlist navigation</h3>
         <div class="cmds">
-          <div class="row"><div class="cmd-name"><code>/mpv_next</code> · <code>/mpv_prev</code></div><span>next / previous item</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_ep [n]</code></div><span>episode picker buttons, or jump straight to item n</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_chapters</code></div><span>movie / YouTube chapters as jump buttons</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_shuffle</code></div><span>shuffle the current playlist</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_loop</code></div><span>toggle playlist looping</span></div>
+          <div class="row"><div class="cmd-name"><code>/next</code> · <code>/prev</code></div><span>next / previous item</span></div>
+          <div class="row"><div class="cmd-name"><code>/ep [n]</code></div><span>episode picker buttons, or jump straight to item n</span></div>
+          <div class="row"><div class="cmd-name"><code>/chapters</code></div><span>movie / YouTube chapters as jump buttons</span></div>
+          <div class="row"><div class="cmd-name"><code>/shuffle</code></div><span>shuffle the current playlist</span></div>
+          <div class="row"><div class="cmd-name"><code>/loop</code></div><span>toggle playlist looping</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Sound &amp; subtitles</h3>
         <div class="cmds">
-          <div class="row"><div class="cmd-name"><code>/mpv_volup</code> · <code>/mpv_voldown</code></div><span>volume ±10 (<code>/mpv_mute</code> to silence)</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_audio</code></div><span>switch audio track (e.g. Spanish → English)</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_sub</code></div><span>switch subtitle track (<code>/mpv_sub_toggle</code> to hide)</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_night</code></div><span>loudness normalization: explosions ↓, dialogue ↑</span></div>
+          <div class="row"><div class="cmd-name"><code>/volup</code> · <code>/voldown</code></div><span>volume ±10 (<code>/mute</code> to silence)</span></div>
+          <div class="row"><div class="cmd-name"><code>/audio</code></div><span>switch audio track (e.g. Spanish → English)</span></div>
+          <div class="row"><div class="cmd-name"><code>/sub</code></div><span>switch subtitle track (<code>/sub_toggle</code> to hide)</span></div>
+          <div class="row"><div class="cmd-name"><code>/night</code></div><span>loudness normalization: explosions ↓, dialogue ↑</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Comfort</h3>
         <div class="cmds">
-          <div class="row"><div class="cmd-name"><code>/mpv_sleep &lt;time&gt;</code></div><span>stop after <code>45m</code> / <code>1.5h</code> (<code>off</code> cancels)</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_notify</code></div><span>toggle "⏭ now playing" / "✅ finished" messages</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_shot</code></div><span>screenshot of the current frame, sent to the chat</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_record</code></div><span>record the video (→ mp4) or radio (→ voice) and send it</span></div>
+          <div class="row"><div class="cmd-name"><code>/sleep &lt;time&gt;</code></div><span>stop after <code>45m</code> / <code>1.5h</code> (<code>off</code> cancels)</span></div>
+          <div class="row"><div class="cmd-name"><code>/notify</code></div><span>toggle "⏭ now playing" / "✅ finished" messages</span></div>
+          <div class="row"><div class="cmd-name"><code>/shot</code></div><span>screenshot of the current frame, sent to the chat</span></div>
+          <div class="row"><div class="cmd-name"><code>/record</code></div><span>record the video (→ mp4) or radio (→ voice) and send it</span></div>
         </div>
       </div>
 
       <div class="group">
         <h3>Library &amp; maintenance</h3>
         <div class="cmds">
-          <div class="row"><div class="cmd-name"><code>/mpv_scan</code></div><span>create playlists for newly-added media</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_doctor</code></div><span>report playlists with missing files</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_fix</code></div><span>repair broken playlists (re-point moved files)</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_health</code></div><span>one screen: mpv, yt-dlp, API server, disks</span></div>
-          <div class="row"><div class="cmd-name"><code>/mpv_update_ytdlp</code></div><span>bump yt-dlp — the fix when YouTube breaks</span></div>
+          <div class="row"><div class="cmd-name"><code>/scan</code></div><span>create playlists for newly-added media</span></div>
+          <div class="row"><div class="cmd-name"><code>/doctor</code></div><span>report playlists with missing files</span></div>
+          <div class="row"><div class="cmd-name"><code>/fix</code></div><span>repair broken playlists (re-point moved files)</span></div>
+          <div class="row"><div class="cmd-name"><code>/health</code></div><span>one screen: mpv, yt-dlp, API server, disks</span></div>
+          <div class="row"><div class="cmd-name"><code>/update_ytdlp</code></div><span>bump yt-dlp — the fix when YouTube breaks</span></div>
           <div class="row"><div class="cmd-name"><code>/help</code></div><span>all of this, inside Telegram</span></div>
         </div>
       </div>

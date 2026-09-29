@@ -21,7 +21,7 @@ def test_finish_on_disconnect_after_eof():
 
 
 def test_manual_skip_is_silent():
-    # /mpv_next, /mpv_ep etc. end the file with reason "stop"
+    # /next, /ep etc. end the file with reason "stop"
     m = PlaybackMonitor()
     assert m.on_event({"event": "end-file", "reason": "stop"}) is None
     assert m.on_event({"event": "start-file"}) is None

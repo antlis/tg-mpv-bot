@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-# Internet-radio presets for /mpv_radio (overridable via RADIO_STATIONS).
+# Internet-radio presets for /radio (overridable via RADIO_STATIONS).
 # All free, no auth. The SomaFM block is the full channel catalog from
 # https://somafm.com/channels.json (popularity-sorted at generation time).
 DEFAULT_RADIO_STATIONS: list[tuple[str, str]] = [
@@ -134,7 +134,7 @@ class Settings:
     # from the same egress. For hosts whose direct line can't reach some
     # media CDNs (broken/blocked IPv6 etc.), e.g. "http://127.0.0.1:2080".
     media_proxy: str = ""
-    # /mpv_radio presets: (display name, stream URL) pairs.
+    # /radio presets: (display name, stream URL) pairs.
     radio_stations: list[tuple[str, str]] = field(
         default_factory=lambda: DEFAULT_RADIO_STATIONS
     )
@@ -146,7 +146,7 @@ class Settings:
     lock_file: str = "/tmp/tg-mpv-bot.lock"
     scan_interval_min: int = 0   # >0 → auto-scan for new media every N minutes
     ytdlp_update_days: int = 0   # >0 → auto-update yt-dlp nightly every N days
-    state_file: Path = field(  # remembers the last-played playlist (/mpv_last)
+    state_file: Path = field(  # remembers the last-played playlist (/last)
         default_factory=lambda: Path.home() / ".local/state/tg-mpv-bot/state.json"
     )
 

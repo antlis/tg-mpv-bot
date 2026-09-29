@@ -67,7 +67,7 @@ def test_parse_goto_invalid(raw):
     ("watch this https://youtu.be/xyz", False),   # URL must be the whole message
     ("https://a.com/x and more", False),
     ("ftp://a.com/x", False),
-    ("/mpv_play deadwood", False),
+    ("/play deadwood", False),
     ("-not-a-url", False),
 ])
 def test_url_re(text, matches):
@@ -174,3 +174,44 @@ def test_status_text_icy_equal_to_title_not_duplicated():
         "pause": False,
     })
     assert _status_text(client).count("SAMDMA - Drip Trip") == 1
+
+
+# ── command registration ────────────────────────────────────────────
+
+
+def _registered_commands() -> dict[str, set[str]]:
+    """{command name: handler function names} across both routers."""
+    from aiogram.filters import Command
+
+    from src.commands import router
+    from src.iptv import iptv_router
+
+    seen: dict[str, set[str]] = {}
+    for rt in (router, iptv_router):
+        for handler in rt.message.handlers:
+            for fo in handler.filters or []:
+                cmd = fo.callback
+                if isinstance(cmd, Command):
+                    for name in cmd.commands:
+                        seen.setdefault(name, set()).add(handler.callback.__name__)
+    return seen
+
+
+def test_commands_dropped_the_mpv_prefix():
+    seen = _registered_commands()
+    assert not [n for n in seen if n.startswith("mpv_")]
+    assert "library" in seen  # /list was renamed
+    assert "play" in seen and "mpv" in seen  # bare /mpv still aliases /play
+
+
+def test_no_command_is_shadowed_by_another_handler():
+    for name, handlers in _registered_commands().items():
+        assert len(handlers) == 1, f"/{name} is handled by {sorted(handlers)}"
+
+
+def test_menu_lists_only_registered_commands():
+    import bot
+
+    registered = set(_registered_commands())
+    menu = {c.command for c in bot._build_menu()}
+    assert menu <= registered, f"menu lists unregistered: {sorted(menu - registered)}"

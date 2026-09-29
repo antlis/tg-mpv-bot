@@ -1,6 +1,6 @@
 [project]
 name = "tg-mpv-bot"
-version = "1.7.0"
+version = "1.9.0"
 description = "Telegram remote control for mpv — browse your library, stream links, control playback from your phone"
 readme = "README.md"
 license = "MIT"
@@ -10,7 +10,7 @@ dependencies = [
     "aiohttp>=3.14.3",
     "curl_cffi==0.16.3",
     # Stable baseline so URL playback works after a plain `uv sync`;
-    # /mpv_update_ytdlp (and YTDL_UPDATE_DAYS) bump it to the nightly in
+    # /update_ytdlp (and YTDL_UPDATE_DAYS) bump it to the nightly in
     # the place, since YouTube breaks extraction faster than stable releases.
     "yt-dlp",
 ]

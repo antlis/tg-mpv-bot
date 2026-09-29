@@ -876,7 +876,7 @@ wheels = [
 
 [[package]]
 name = "tg-mpv-bot"
-version = "1.7.0"
+version = "1.9.0"
 source = { virtual = "." }
 dependencies = [
     { name = "aiogram" },

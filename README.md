@@ -14,11 +14,12 @@ socket](https://mpv.io/manual/stable/#json-ipc) directly from Python.
 - 📋 **Browse** playlists by category with inline keyboards, or search
 - 🔗 **Stream URLs** — send a link, mpv plays it via yt-dlp (1000+ sites)
 - 📨 **Send a file** — forward any video/audio from Telegram, it plays on the TV
-- 🎛 **Now-playing panel** — transport, seek-to-%, volume, tracks, one message
+- 🎛 **Now-playing panel** — rides on every "▶ Playing" message: transport,
+  seek-to-%, volume, mute, tracks, 📸 shot, ⏺ clip, 🗑 close
 - 📜 **Episode picker**, ▶ **continue watching**, 📸 **frame screenshots**
 - 🕘 **Watch history** (`/history`) — last 20 items, paginated; tap to replay, copy URL, or delete
 - ⏺ **Record** the current video (→ H.264 mp4) or radio (→ voice message) and get it in chat
-- 📺 **Live TV (IPTV)** — `/mpv_iptv <name>` searches 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and streams them live via mpv; channel logo sent as a photo card
+- 📺 **Live TV (IPTV)** — `/iptv <name>` searches 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and streams them live via mpv; channel logo sent as a photo card
 - 🪝 **Hooks** instead of WM assumptions — `i3-msg`/`swaymsg`/`notify-send`, your call
 
 ![tg-mpv-bot demo](docs/demo.svg)
@@ -33,15 +34,15 @@ remote.**
    phone / laptop                home server ──HDMI──▶ TV
   ┌──────────────┐   Telegram   ┌─────────────────────────┐
   │  @your_bot   │ ───────────▶ │  tg-mpv-bot ──▶ mpv ────┼──▶ 📺
-  │  /mpv_list   │              │  (X11/Wayland session)  │
+  │  /library   │              │  (X11/Wayland session)  │
   └──────────────┘              └─────────────────────────┘
 ```
 
-From the couch: open Telegram, `/mpv_list`, tap a show — mpv opens fullscreen
+From the couch: open Telegram, `/library`, tap a show — mpv opens fullscreen
 on the TV. Send a YouTube link from your phone's share sheet — it streams on
 the TV. Pause from the now-playing panel when the doorbell rings, drag the
 volume, switch the audio track or subtitles, jump to episode 7 — all without
-a keyboard, mouse, or smart-TV apps. `/mpv_last` resumes yesterday's episode
+a keyboard, mouse, or smart-TV apps. `/last` resumes yesterday's episode
 where you left off.
 
 Because it's Telegram, the "remote" works from anywhere — same couch or other
@@ -52,49 +53,49 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 
 | Command | Description |
 |---------|-------------|
-| `/mpv_list` | Browse playlists with inline buttons (by category) |
-| `/mpv_play <query>` | Search & play by name or number |
-| `/mpv <query>` | Alias for `/mpv_play` |
-| `/mpv_search [category] <text>` | List all matching playlists as play buttons (e.g. `/mpv_search tutorials docker`) |
-| `/mpv_last` | Resume the last-played playlist or stream — playlist positions via mpv, stream positions via the bot's own 15s checkpoints |
-| `/mpv_history`, `/history`, `/mpv_recent` | Last 20 played — paginated (8/page), tap title to replay, icon to copy URL/path, 🗑 to delete |
-| `/mpv_notify` | Toggle notifications: "⏭ Now playing: 5/12 — …" on episode change, "✅ Finished" at the end |
-| `/mpv_url <link>` | Stream a URL via yt-dlp — or just **send a link** as a message |
-| `/mpv_yt <search>` | Search YouTube from chat — top results as tap-to-play buttons |
-| `/mpv_radio [search]` | Internet radio — presets (full SomaFM catalog, Radio Record, FIP, KEXP, …; yours via `RADIO_STATIONS`) or search ~50k stations on [radio-browser.info](https://www.radio-browser.info) |
-| `/mpv_iptv [search]` | Live TV — search 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and stream live; `/mpv_iptv` with no args shows links to browse channels by country/category |
+| `/library` | Browse playlists with inline buttons (by category) |
+| `/play <query>` | Search & play by name or number |
+| `/mpv <query>` | Alias for `/play` |
+| `/search [category] <text>` | List all matching playlists as play buttons (e.g. `/search tutorials docker`) |
+| `/last` | Resume the last-played playlist or stream — playlist positions via mpv, stream positions via the bot's own 15s checkpoints |
+| `/history`, `/recent` | Last 20 played — paginated (8/page), tap title to replay, icon to copy URL/path, 🗑 to delete |
+| `/notify` | Toggle notifications: "⏭ Now playing: 5/12 — …" on episode change, "✅ Finished" at the end |
+| `/url <link>` | Stream a URL via yt-dlp — or just **send a link** as a message |
+| `/yt <search>` | Search YouTube from chat — top results as tap-to-play buttons |
+| `/radio [search]` | Internet radio — presets (full SomaFM catalog, Radio Record, FIP, KEXP, …; yours via `RADIO_STATIONS`) or search ~50k stations on [radio-browser.info](https://www.radio-browser.info) |
+| `/iptv [search]` | Live TV — search 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and stream live; `/iptv` with no args shows links to browse channels by country/category |
 | *(send a video/audio file)* | Downloads and plays it — >20 MB needs `API_SERVER_URL` (local Bot API server) |
-| `/mpv_info` | Now-playing panel with inline transport buttons |
-| `/mpv_shot` | Send a screenshot of the current frame to the chat |
-| `/mpv_record [duration]` · `/mpv_record START END` | Record what's playing — video → H.264 mp4, radio/audio → voice message — and send it to the chat. Run again (or tap ⏺ Stop) to finish; auto-stops at 1 h. `duration` accepts `30m`, `1h`, `HH:MM:SS`; `START END` (e.g. `01:30:00 02:00:00`) clips a specific range for local files — live streams use the duration and ignore the start |
-| `/mpv_toggle` | Play/pause toggle (one command) |
-| `/mpv_pause` | Pause playback |
-| `/mpv_unpause` | Resume playback |
-| `/mpv_quit` | Stop mpv and quit |
-| `/mpv_fwd` | Seek forward 30s |
-| `/mpv_back` | Seek backward 10s |
-| `/mpv_goto <pos>` | Seek to `1:23:45`, `23:45`, `90` (seconds) or `75%` |
-| `/mpv_next` | Next item in playlist |
-| `/mpv_prev` | Previous item in playlist |
-| `/mpv_ep [n]` | Episode picker with buttons (no arg) or jump to item N |
-| `/mpv_chapters` | Chapter picker — movie/YouTube chapters as jump buttons |
-| `/mpv_speed [x]` | Playback speed — buttons (no arg) or a value like `1.5` |
-| `/mpv_shuffle` | Shuffle the current playlist |
-| `/mpv_loop` | Toggle looping the playlist |
-| `/mpv_sleep <time>` | Sleep timer — stop playback after `45m` / `1.5h` (`off` to cancel) |
-| `/mpv_random [category]` | Play a random playlist — "just put something on" |
-| `/mpv_night` | Toggle loudness normalization (quiet dialogue ↑, explosions ↓) |
-| `/mpv_audio` | Switch to the next audio track (e.g. Spanish → English) |
-| `/mpv_sub` | Switch to the next subtitle track |
-| `/mpv_sub_toggle` | Show / hide subtitles |
-| `/mpv_volup` | Volume +10 |
-| `/mpv_voldown` | Volume -10 |
-| `/mpv_mute` | Toggle mute |
-| `/mpv_doctor` | Report playlists with missing files on disk |
-| `/mpv_health` | One-screen health check: mpv, yt-dlp, Bot API server, library, disk space |
-| `/mpv_fix` | Repair broken playlists (re-point moved files, prune dead) |
-| `/mpv_scan` | Create playlists for newly-added media (idempotent) |
-| `/mpv_update_ytdlp` | Update the bot's yt-dlp to the latest nightly — the usual fix when YouTube playback breaks |
+| `/info` | Now-playing panel with inline transport buttons — the same panel is attached to every "▶ Playing" / "📻 Tuned to" / "📺 Now streaming" message and to "⏭ Now playing" notifications (📸 frame shot, 🔈 unmute, 🗑 close included) |
+| `/shot` | Send a screenshot of the current frame to the chat |
+| `/record [duration]` · `/record START END` | Record what's playing — video → H.264 mp4, radio/audio → voice message — and send it to the chat. Run again (or tap ⏺ Stop) to finish; auto-stops at 1 h. `duration` accepts `30m`, `1h`, `HH:MM:SS`; `START END` (e.g. `01:30:00 02:00:00`) clips a specific range for local files — live streams use the duration and ignore the start |
+| `/toggle` | Play/pause toggle (one command) |
+| `/pause` | Pause playback |
+| `/unpause` | Resume playback |
+| `/quit` | Stop mpv and quit |
+| `/fwd` | Seek forward 30s |
+| `/back` | Seek backward 10s |
+| `/goto <pos>` | Seek to `1:23:45`, `23:45`, `90` (seconds) or `75%` |
+| `/next` | Next item in playlist |
+| `/prev` | Previous item in playlist |
+| `/ep [n]` | Episode picker with buttons (no arg) or jump to item N |
+| `/chapters` | Chapter picker — movie/YouTube chapters as jump buttons |
+| `/speed [x]` | Playback speed — buttons (no arg) or a value like `1.5` |
+| `/shuffle` | Shuffle the current playlist |
+| `/loop` | Toggle looping the playlist |
+| `/sleep <time>` | Sleep timer — stop playback after `45m` / `1.5h` (`off` to cancel) |
+| `/random [category]` | Play a random playlist — "just put something on" |
+| `/night` | Toggle loudness normalization (quiet dialogue ↑, explosions ↓) |
+| `/audio` | Switch to the next audio track (e.g. Spanish → English) |
+| `/sub` | Switch to the next subtitle track |
+| `/sub_toggle` | Show / hide subtitles |
+| `/volup` | Volume +10 |
+| `/voldown` | Volume -10 |
+| `/mute` | Toggle mute |
+| `/doctor` | Report playlists with missing files on disk |
+| `/health` | One-screen health check: mpv, yt-dlp, Bot API server, library, disk space |
+| `/fix` | Repair broken playlists (re-point moved files, prune dead) |
+| `/scan` | Create playlists for newly-added media (idempotent) |
+| `/update_ytdlp` | Update the bot's yt-dlp to the latest nightly — the usual fix when YouTube playback breaks |
 | `/help` | Show this help |
 
 ## Setup
@@ -129,7 +130,7 @@ uv run bot.py
 
 > **yt-dlp freshness:** `uv sync` installs the locked stable yt-dlp. YouTube
 > breaks extraction faster than stable releases, so once the bot is running,
-> send it `/mpv_update_ytdlp` (or set `YTDL_UPDATE_DAYS=7`) to bump the venv
+> send it `/update_ytdlp` (or set `YTDL_UPDATE_DAYS=7`) to bump the venv
 > copy to the nightly — repeat after any future `uv sync`.
 
 **B. Arch Linux ([AUR](https://aur.archlinux.org/packages/tg-mpv-bot-git))**
@@ -146,7 +147,7 @@ tg-mpv-bot                  # foreground test run (the launcher sources that
 ```
 
 On AUR installs `yt-dlp` is pacman's — keep it fresh with normal system
-updates; `/mpv_update_ytdlp` only manages venv installs and will tell you so.
+updates; `/update_ytdlp` only manages venv installs and will tell you so.
 In the env file, **quote values containing spaces**
 (`PRE_PLAY_HOOK="i3-msg workspace 10"`) — both the shell launcher and
 systemd accept that form.
@@ -156,7 +157,7 @@ systemd accept that form.
 
 
 Message your bot `/help` — if it answers, the Telegram side works. Then
-`/mpv_list` to browse, or send any YouTube link.
+`/library` to browse, or send any YouTube link.
 
 > **Access control:** leave `ALLOWED_USERS` empty and *anyone* who finds the
 > bot can control your TV. Set it.
@@ -186,9 +187,9 @@ nesting level for subcategories):
 - `.m3u` files are plain lists of media paths (absolute, or relative to the
   playlist's own directory).
 - **Don't want to write playlists by hand?** Drop media files/folders under a
-  category and run `/mpv_scan` — it generates one playlist per folder (or per
-  loose file), idempotently. `/mpv_doctor` reports broken entries after you
-  move things; `/mpv_fix` repairs them.
+  category and run `/scan` — it generates one playlist per folder (or per
+  loose file), idempotently. `/doctor` reports broken entries after you
+  move things; `/fix` repairs them.
 - No library at all is fine too — URL streaming, YouTube search and Telegram
   file playback work without one.
 
@@ -250,7 +251,7 @@ one-line comment:
   Point `MPV_SOCKET` at a path inside a directory you mount (e.g.
   `/tmp/tg-mpv-bot-run/mpv-socket` with `/tmp/tg-mpv-bot-run` as the
   volume), not at the exact socket path. Get this wrong and mpv's IPC
-  bind fails silently — playback looks like it works but every `/mpv_*`
+  bind fails silently — playback looks like it works but every `/*`
   control command times out. This also means the fix survives `/tmp`
   being cleared on reboot, unlike mounting the file path directly.
 - **`MPV_RUNNER` should be empty in Docker.** It exists to point at a
@@ -333,9 +334,9 @@ Only `BOT_TOKEN` is required.
 | `POST_PLAY_HOOK` | *(none)* | Same, run right after the mpv spawn — useful for explicit window-focus glue in Docker (see [Docker gotchas](#docker-gotchas)) |
 | `KILL_STRAY_MPV` | `1` | Also `pkill` mpv instances the bot didn't start; `0` if you use mpv manually too |
 | `YTDL_FORMAT` | `bv*[height<=1080]+ba/b` | yt-dlp format for URL streaming (raise the cap for 4K) |
-| `YTDL_SUB_LANGS` | `en.*` | Subtitle/auto-caption languages fetched for streams (`--sub-langs` syntax; empty disables) — toggle on screen with `/mpv_sub` |
+| `YTDL_SUB_LANGS` | `en.*` | Subtitle/auto-caption languages fetched for streams (`--sub-langs` syntax; empty disables) — toggle on screen with `/sub` |
 | `MEDIA_PROXY` | *(none)* | Proxy for non-YouTube playback — the yt-dlp probe and mpv's fetch both use it, so IP-locked CDN URLs stay coherent; for hosts whose direct line can't reach some media CDNs |
-| `RADIO_STATIONS` | *(curated dozen)* | `/mpv_radio` presets as `Name=URL,Name=URL` (first `=` splits, so `?listen_key=` URLs work) — replaces the built-in list |
+| `RADIO_STATIONS` | *(curated dozen)* | `/radio` presets as `Name=URL,Name=URL` (first `=` splits, so `?listen_key=` URLs work) — replaces the built-in list |
 | `YTDL_OPTIONS` | *(none)* | Extra yt-dlp options, comma-separated `key=value` / bare flags — e.g. `force-ipv4` or the lean-YouTube `extractor-args=…` (see `.env.example`). Network-pinning keys (`force-ipv4/6`, `proxy`, …) apply to **YouTube URLs only** — other sites' IP-locked CDNs need the probe and mpv on the same default network path |
 | `YTDL_COOKIES_BROWSER` | *(none)* | Browser whose cookies unlock Instagram/Facebook and YouTube bot-checks (e.g. `firefox`); applied only to gated hosts / as an escalation, never globally |
 | `API_SERVER_URL` | *(none)* | Local [Bot API server](https://github.com/tdlib/telegram-bot-api) — lifts the 20 MB download cap to 2 GB for sent files (one-time `…/logOut` from the cloud API required when switching) |
@@ -360,7 +361,7 @@ uv run ruff check .
 | `src/config.py` | Settings from env (single source of host paths) |
 | `src/commands.py` | Telegram command + callback handlers |
 | `src/iptv.py` | IPTV command + callbacks — M3U fetch/cache, channel search, streaming via `player.play_radio` |
-| `src/mpv_ipc.py` | Direct JSON-IPC client for mpv (pause/seek/volume/info) |
+| `src/ipc.py` | Direct JSON-IPC client for mpv (pause/seek/volume/info) |
 | `src/playlists.py` | Playlist discovery, query matching, on-disk validation |
 | `src/player.py` | Launch mpv (pkill + pre/post-play hooks + detached spawn) |
 | `src/keyboards.py` | Inline-keyboard builders for browsing and watch history |
@@ -371,14 +372,14 @@ uv run ruff check .
 ## Architecture
 
 ```
-                          ┌─ src/mpv_ipc  ──▶ mpv JSON IPC (/tmp/mpv-socket)   pause/seek/vol/info
+                          ┌─ src/ipc  ──▶ mpv JSON IPC (/tmp/mpv-socket)   pause/seek/vol/info
 Telegram ─▶ bot.py ─▶ src/commands ─┤
             (polling)   (+ auth mw)  ├─ src/playlists ──▶ scan ~/Videos/*/playlists/*.m3u
                                      └─ src/player   ──▶ pkill mpv · pre-hook · spawn mpv · post-hook ─▶ X11
 ```
 
 Playback/volume/info commands write straight to mpv's IPC socket from Python.
-Only launching a playlist (`/mpv_play`, tapping a button) spawns a process.
+Only launching a playlist (`/play`, tapping a button) spawns a process.
 
 Window-manager glue is **not** built in — set the optional hooks instead
 (shell commands; they see `$PLAYLIST`, `$PLAYLIST_NAME`, `$MPV_SOCKET`,
@@ -392,7 +393,7 @@ POST_PLAY_HOOK='notify-send "Now playing" "$PLAYLIST_NAME"'
 ```
 
 Hook failures are logged and never block playback (15s timeout).
-`src/keyboards` renders the browse UI for `/mpv_list`: **category → (subcategory)
+`src/keyboards` renders the browse UI for `/library`: **category → (subcategory)
 → playlist**. Categories come from the top-level media dirs (cartoons / movie /
 shows / tutorials); a playlists dir may nest one level of folders, which become
 subcategories (tutorials are grouped by provider, e.g. `frontend-masters`).

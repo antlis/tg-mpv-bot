@@ -141,9 +141,34 @@ def test_now_playing_keyboard():
     kb = now_playing_keyboard()
     datas = {b.callback_data for row in kb.inline_keyboard for b in row}
     assert {"ctl:toggle", "ctl:fwd", "ctl:back", "ctl:next", "ctl:prev",
-            "ctl:volup", "ctl:voldown", "ctl:mute", "ctl:sub", "ctl:audio",
+            "ctl:volup", "ctl:voldown", "ctl:mute", "ctl:unmute",
+            "ctl:sub", "ctl:audio",
             "ctl:p0", "ctl:p25", "ctl:p50", "ctl:p75",
-            "ctl:shuffle", "ctl:loop", "ctl:stop", "ctl:refresh"} <= datas
+            "ctl:shuffle", "ctl:loop", "ctl:stop", "ctl:refresh",
+            "ctl:snap", "ctl:record", "ctl:close"} <= datas
+
+
+def test_every_panel_button_has_a_handler():
+    """A button without a branch in cb_ctl silently does nothing."""
+    from src.commands import _CTL_ACTIONS
+    from src.keyboards import now_playing_keyboard
+
+    handled = set(_CTL_ACTIONS) | {"record", "snap", "close"}
+    kb = now_playing_keyboard()
+    actions = {
+        b.callback_data[len("ctl:"):]
+        for row in kb.inline_keyboard
+        for b in row
+        if b.callback_data.startswith("ctl:")
+    }
+    assert actions <= handled, f"unhandled panel buttons: {actions - handled}"
+
+
+def test_mute_and_unmute_are_separate_buttons():
+    from src.keyboards import now_playing_keyboard
+
+    datas = [b.callback_data for row in now_playing_keyboard().inline_keyboard for b in row]
+    assert "ctl:mute" in datas and "ctl:unmute" in datas
 
 
 def test_play_pause_toggle_label_reflects_state():

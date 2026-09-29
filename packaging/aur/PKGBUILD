@@ -1,13 +1,13 @@
 # Maintainer: antlis
 pkgname=tg-mpv-bot-git
-pkgver=1.1.0.r0.g0000000
+pkgver=1.9.0.r0.g0000000
 pkgrel=1
 pkgdesc="Telegram remote control for mpv — browse your library, stream links, control playback from your phone"
 arch=(any)
 url="https://github.com/antlis/tg-mpv-bot"
 license=(MIT)
 # python-aiogram lives in the AUR; the rest are official repos.
-# yt-dlp updates come from pacman here — /mpv_update_ytdlp only manages
+# yt-dlp updates come from pacman here — /update_ytdlp only manages
 # venv installs and politely refuses on a system install.
 depends=(mpv python python-aiogram python-aiohttp yt-dlp)
 makedepends=(git)

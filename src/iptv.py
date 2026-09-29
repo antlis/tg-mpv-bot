@@ -1,7 +1,7 @@
 """IPTV channel search and streaming via the iptv-org public catalogue.
 
-/mpv_iptv <name>   — search and pick a channel to stream live
-/mpv_iptv          — show links to browse the catalogue
+/iptv <name>   — search and pick a channel to stream live
+/iptv          — show links to browse the catalogue
 """
 
 from __future__ import annotations
@@ -143,7 +143,7 @@ def _help_keyboard() -> InlineKeyboardMarkup:
 # ── Command ───────────────────────────────────────────────────────────────────
 
 
-@iptv_router.message(Command("mpv_iptv"))
+@iptv_router.message(Command("iptv"))
 async def cmd_iptv(message: Message, command: CommandObject) -> None:
     query = (command.args or "").strip()
 
@@ -151,9 +151,9 @@ async def cmd_iptv(message: Message, command: CommandObject) -> None:
         await message.reply(
             "📺 <b>IPTV — live TV from the iptv-org catalogue</b>\n\n"
             "Search by channel name:\n"
-            "» <code>/mpv_iptv BBC</code>\n"
-            "» <code>/mpv_iptv CNN</code>\n"
-            "» <code>/mpv_iptv euronews</code>\n\n"
+            "» <code>/iptv BBC</code>\n"
+            "» <code>/iptv CNN</code>\n"
+            "» <code>/iptv euronews</code>\n\n"
             "Browse the full catalogue on GitHub — channels are organised by "
             "country, language, and category. The direct M3U link works in VLC "
             "or any IPTV player.",
@@ -215,9 +215,9 @@ async def cb_iptv_pick(query: CallbackQuery) -> None:
     if idx >= len(cached):
         logger.info("IPTV: results expired chat=%s idx=%s", chat_id, idx)
         try:
-            await query.message.edit_text("⚠️ Search session expired — run /mpv_iptv again.")
+            await query.message.edit_text("⚠️ Search session expired — run /iptv again.")
         except Exception:
-            await query.answer("⚠️ Session expired — run /mpv_iptv again.", show_alert=True)
+            await query.answer("⚠️ Session expired — run /iptv again.", show_alert=True)
         return
 
     ch = cached[idx]
@@ -248,20 +248,27 @@ async def cb_iptv_pick(query: CallbackQuery) -> None:
         pass
 
     caption = f"📺 <b>Now streaming:</b> {label}\n🔴 <i>Live IPTV</i>\n\n🔗 <code>{url}</code>"
+    # local import: commands never imports iptv, but keeping it here means the
+    # module graph doesn't depend on that staying true
+    from .commands import panel_markup
+
+    kb = await panel_markup()
     if logo:
         try:
-            await query.message.answer_photo(logo, caption=caption, parse_mode="HTML")
+            await query.message.answer_photo(
+                logo, caption=caption, parse_mode="HTML", reply_markup=kb
+            )
             return
         except Exception as photo_err:
             logger.warning("IPTV: send_photo failed (%s), falling back to text", photo_err)
-    await query.message.answer(caption, parse_mode="HTML")
+    await query.message.answer(caption, parse_mode="HTML", reply_markup=kb)
 
 
 @iptv_router.callback_query(F.data == "iptv_help")
 async def cb_iptv_help(query: CallbackQuery) -> None:
     await query.answer()
     await query.message.edit_text(
-        "📺 <b>IPTV search</b>\n\nType <code>/mpv_iptv &lt;channel name&gt;</code> to search.\n\n"
+        "📺 <b>IPTV search</b>\n\nType <code>/iptv &lt;channel name&gt;</code> to search.\n\n"
         "Browse the full catalogue on GitHub:",
         reply_markup=_help_keyboard(),
         parse_mode="HTML",

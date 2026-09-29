@@ -3,6 +3,23 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.0] — 2026-09-30
+### Changed
+- **Commands lost the `mpv_` prefix** (breaking — old names are gone): `/mpv_list` → **`/library`**, `/mpv_play` → `/play`, `/mpv_info` → `/info`, `/mpv_doctor` → `/doctor`, and so on for every command. `/list` specifically became `/library`. Secondary aliases kept their short forms (`/goto`+`/seek`, `/rec`, `/ep`, `/recent`, …) and the bare `/mpv <query>` still works as a `/play` alias. Telegram menu, `/help`, README, docs and CLAUDE.md were updated in the same pass.
+
+### Fixed
+- **Commands periodically did nothing — you had to run them twice** (the `/library` symptom). A transient `TelegramNetworkError: Cannot connect to host api.telegram.org:443` killed the outgoing reply while the handler itself succeeded, and the global error handler only logged it. The bot now uses `ResilientSession`, which retries connect-phase failures 3× with backoff — safe to retry because those fail before a single byte reaches Telegram, so no message can be duplicated. Timeouts and mid-request disconnects are still re-raised untouched.
+
+## [1.8.0] — 2026-09-30
+### Added
+- **The transport panel now rides on every "playback started" message**, not just `/mpv_info` — playlist plays, random pick, history replay, URL/stream start, radio tuning, uploaded Telegram media, the IPTV "Now streaming" card and the "⏭ Now playing" notification all carry the buttons, so playback is one tap away from wherever you started it (same behaviour as WarMusicBot's `control_panel`).
+- **📸 button on the panel** — screenshot the current frame into the chat (the `/mpv_shot` command still works as before).
+- **🗑 button on the panel** — delete the now-playing message, for chats where the buttons pile up.
+- **🔈 unmute button** — mute is now 🔇 mute / 🔈 unmute instead of a single blind toggle, so the two states are always separately reachable. `MpvClient.set_mute()` backs it.
+
+### Changed
+- **Panel layout** — volume moved to its own row (🔉 🔇 🔈 🔊), track/shuffle/loop/refresh share another (💬 🎧 🔀 🔁 🔄), and 📸 ⏺ ⏹ 🗑 form the last row. All previous buttons are still there.
+
 ## [1.7.0] — 2026-06-25
 ### Added
 - **`/mpv_record START END`** — clip a specific time range from what's playing. Accepts `HH:MM:SS`, `MM:SS`, `Nh`/`Nm`/`Ns`, or plain seconds for both arguments (e.g. `/mpv_record 01:30:00 02:00:00` records 30 minutes starting at 1 h 30 m). Works for local files; for live HTTP streams (radio, IPTV) the start offset is ignored and only the duration (`END − START`) is used, with a note in the status message.
@@ -58,5 +75,6 @@ now-playing transport panel (seek-to-%, volume, speed, tracks), watch history /
 continue, screenshots, sleep timer, loudness normalization, and the
 health/doctor/scan tooling.
 
+[1.9.0]: https://github.com/antlis/tg-mpv-bot/releases/tag/v1.9.0
 [1.3.1]: https://github.com/antlis/tg-mpv-bot/releases/tag/v1.3.1
 [1.3.0]: https://github.com/antlis/tg-mpv-bot/releases/tag/v1.3.0

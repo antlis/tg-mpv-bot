@@ -37,7 +37,7 @@ Environment=YTDL_SUB_LANGS=en.*,ru.*
 # egress anyway (IP-locked CDN URLs).
 Environment=MEDIA_PROXY=http://127.0.0.1:2080
 # The user manager's inherited PATH can be minimal; ensure the std bin dirs
-# are present, plus ~/.local/bin so /mpv_update_ytdlp finds uv.
+# are present, plus ~/.local/bin so /update_ytdlp finds uv.
 Environment=PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
