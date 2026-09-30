@@ -134,6 +134,14 @@ class Settings:
     # from the same egress. For hosts whose direct line can't reach some
     # media CDNs (broken/blocked IPv6 etc.), e.g. "http://127.0.0.1:2080".
     media_proxy: str = ""
+    # Directory of custom extractor plugins (.py files exposing match() +
+    # resolve(); see examples/plugin_example.py). Empty = none loaded.
+    plugin_dir: str = ""
+    enable_plugins: bool = True
+    # Headless-Chromium fallback for pages yt-dlp can't extract (JS-built
+    # players). Needs Playwright's Chromium — Docker: INSTALL_BROWSER=true.
+    enable_browser_fallback: bool = True
+    browser_fallback_timeout: int = 45  # seconds for the page to load + play
     # /radio presets: (display name, stream URL) pairs.
     radio_stations: list[tuple[str, str]] = field(
         default_factory=lambda: DEFAULT_RADIO_STATIONS
@@ -194,6 +202,12 @@ def get_settings() -> Settings:
         ytdl_format=os.environ.get("YTDL_FORMAT", "bv*[height<=1080]+ba/b"),
         ytdl_sub_langs=os.environ.get("YTDL_SUB_LANGS", "en.*"),
         media_proxy=os.environ.get("MEDIA_PROXY", ""),
+        plugin_dir=os.environ.get("PLUGIN_DIR", ""),
+        enable_plugins=os.environ.get("ENABLE_PLUGINS", "true").lower()
+        in ("1", "true", "yes"),
+        enable_browser_fallback=os.environ.get("ENABLE_BROWSER_FALLBACK", "true").lower()
+        in ("1", "true", "yes"),
+        browser_fallback_timeout=int(os.environ.get("BROWSER_FALLBACK_TIMEOUT", "45") or "45"),
         radio_stations=_parse_radio_stations(os.environ.get("RADIO_STATIONS")),
         kill_stray_mpv=os.environ.get("KILL_STRAY_MPV", "1").lower()
         in ("1", "true", "yes"),

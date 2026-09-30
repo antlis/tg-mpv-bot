@@ -8,3 +8,7 @@ __pycache__/
 venv/
 .venv/
 *.part
+
+# Custom extractor plugins (user-supplied; may be site-specific — keep private)
+/plugins/*
+!/plugins/.gitkeep
