@@ -29,6 +29,18 @@ RUN uv sync --no-dev --no-install-project \
     && uv pip install -U \
        "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.tar.gz"
 
+# Chromium + its system libs for the headless-browser fallback (Playwright).
+# Opt-in — it adds ~450 MB — via `--build-arg INSTALL_BROWSER=true` (or the
+# INSTALL_BROWSER var in .env when building through docker compose). When off,
+# the fallback no-ops and the bot reports the original failure. The browser
+# path is fixed so it survives the runtime HOME override in docker-compose.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ARG INSTALL_BROWSER=false
+RUN if [ "$INSTALL_BROWSER" = "true" ]; then \
+        /app/.venv/bin/playwright install --with-deps chromium \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 COPY . .
 
 CMD ["uv", "run", "bot.py"]

@@ -87,6 +87,13 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   `PLAYLIST_NAME` / `MPV_SOCKET` / `DISPLAY` in their env; failures are logged, never fatal (15s
   timeout). **Never hardcode `I3SOCK`** — the i3 socket path embeds i3's PID and goes stale on every
   reboot (the old built-in switch broke exactly this way); `i3-msg` in a hook finds the socket via X11.
+- `src/plugins.py` / `src/browser.py` — ported from tg-media-bot. For non-YouTube URLs `player._launch_non_youtube`
+  runs **plugins** (`PLUGIN_DIR`, `.py` with `match()`/`resolve()`; private ones are git-ignored under
+  `./plugins`, mounted at `/plugins` in Docker) first → mpv plays the resolved URL with referer/headers
+  (`build_resolved_command`). Otherwise the mpv ytdl-hook launches and is watched ~12s; if mpv exits non-zero
+  the **headless-Chromium fallback** (`browser.resolve_media_url`, Playwright) sniffs the media request and
+  mpv plays that. Chromium is opt-in in the image (`INSTALL_BROWSER=true` build arg; `PLAYWRIGHT_BROWSERS_PATH`
+  is fixed at `/ms-playwright` because compose overrides `HOME`). If both fail → `UrlPlaybackError`.
 - `src/keyboards.py` — inline-keyboard builders for `/library`: **category → (subcategory) →
   paginated playlist buttons** (`PER_PAGE=8`). Flat categories (no subcategories) jump straight to the
   playlist list; categories with subcategories (tutorials → provider) show a subcategory menu first.

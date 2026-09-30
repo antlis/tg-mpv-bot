@@ -10,7 +10,12 @@
 
 services:
   bot:
-    build: .
+    build:
+      context: .
+      args:
+        # Set INSTALL_BROWSER=true in .env to bake in Chromium for the
+        # headless-browser fallback (JS-only players). Off by default.
+        INSTALL_BROWSER: ${INSTALL_BROWSER:-false}
     env_file: .env
     environment:
       DISPLAY: ":0"
@@ -21,6 +26,8 @@ services:
       # at — falls back to the container's own `mpv` binary. See
       # _mpv_base() in src/player.py.
       MPV_RUNNER: ""
+      # Custom extractor plugins (mounted below). Empty dir = none.
+      PLUGIN_DIR: /plugins
       # Optional WM glue (runs inside the container — add the tool to the
       # image first, e.g. i3 for i3-msg):
       # PRE_PLAY_HOOK: i3-msg workspace 10
@@ -70,6 +77,8 @@ services:
       # actual socket file inside it at runtime, and the mount point
       # recreates cleanly even after /tmp is cleared on reboot.
       - /tmp/tg-mpv-bot-run:/tmp/tg-mpv-bot-run:rw
+      # Custom extractor plugins — see examples/plugin_example.py
+      - ./plugins:/plugins:ro
       # watch history / notification target — survives container recreation
       - ~/.local/state/tg-mpv-bot:${HOME}/.local/state/tg-mpv-bot:rw
       # Video directories with playlists — the container path mirrors the host

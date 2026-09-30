@@ -506,3 +506,23 @@ def test_run_hook_failure_never_raises(caplog):
     _run_hook("pre-play", "exit 3", env)  # non-zero exit
     _run_hook("pre-play", "/nonexistent-cmd-xyz", env)  # command not found
     assert any("hook" in r.message for r in caplog.records)
+
+
+def test_build_resolved_command_carries_referer_and_headers(tmp_path):
+    from src import player
+    from src.config import Settings
+
+    s = Settings(bot_token="t", mpv_socket=str(tmp_path / "sock"), mpv_runner="")
+    cmd = player.build_resolved_command(
+        s, "https://cdn/x.m3u8", "https://embed/", "Page",
+        {"User-Agent": "UA", "Origin": "https://embed"},
+    )
+    assert "https://cdn/x.m3u8" in cmd
+    assert "--referrer=https://embed/" in cmd
+    assert "--user-agent=UA" in cmd
+    assert "--http-header-fields=Origin: https://embed" in cmd
+    assert not any("protocol_whitelist" in a for a in cmd)
+
+    local = player.build_resolved_command(s, "file:///tmp/a.m3u8", None, "Page")
+    assert any("protocol_whitelist" in a for a in local)
+    assert not any(a.startswith("--referrer") for a in local)

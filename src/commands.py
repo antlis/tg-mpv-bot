@@ -1446,6 +1446,7 @@ _STAGE_TEXT = {
     "retrying": "⏳ Retrying…",
     "escalating": "🍪 Site wants sign-in — retrying with browser cookies…",
     "subs": "💬 Fetching subtitles…",
+    "browser": "🌐 No extractor matched — sniffing the page in a headless browser…",
     "starting": "▶ Starting playback…",
 }
 _SPINNER = "◔◑◕●"

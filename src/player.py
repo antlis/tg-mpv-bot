@@ -27,7 +27,7 @@ from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlparse
 
-from . import state
+from . import browser, plugins, state
 from .config import Settings
 from .mpv_ipc import MpvClient
 
@@ -1008,7 +1008,7 @@ def _build_mpv_ytdl_command(settings: Settings, url: str) -> list[str]:
     return cmd
 
 
-def _launch_mpv_ytdl(settings: Settings, url: str) -> None:
+def _launch_mpv_ytdl(settings: Settings, url: str) -> subprocess.Popen:
     """Launch mpv with its built-in ytdl hook for a URL."""
     env = _hook_env(settings, url, url)
     _stop_current(settings)
@@ -1016,7 +1016,7 @@ def _launch_mpv_ytdl(settings: Settings, url: str) -> None:
     mpv_log = _log_file("tg-mpv-bot-mpv.log")
     mpv_cmd = _build_mpv_ytdl_command(settings, url)
     logger.info("Launching ytdl-hook: %s", " ".join(mpv_cmd))
-    subprocess.Popen(
+    proc = subprocess.Popen(
         mpv_cmd,
         env=env,
         stdin=subprocess.DEVNULL,
@@ -1028,6 +1028,114 @@ def _launch_mpv_ytdl(settings: Settings, url: str) -> None:
         mpv_log.close()
     _run_hook("post-play", settings.post_play_hook, env)
     state.record_last_played(settings.state_file, url, name=url)
+    return proc
+
+
+def build_resolved_command(
+    settings: Settings,
+    media_url: str,
+    referer: str | None,
+    title: str,
+    headers: dict | None = None,
+) -> list[str]:
+    """argv for mpv playing a URL a plugin / the browser fallback resolved.
+
+    The referer (and any extra headers) ride along — CDNs behind these
+    resolvers usually reject the stream without them. ``file://`` results
+    (plugins that synthesise a local media playlist) need ffmpeg's protocol
+    whitelist widened so the playlist may reference remote segments.
+    """
+    cmd = [
+        _mpv_base(settings),
+        media_url,
+        f"--input-ipc-server={settings.mpv_socket}",
+        "--force-window",
+        f"--force-media-title={title}",
+    ]
+    headers = dict(headers or {})
+    ua = headers.pop("User-Agent", None)
+    if ua:
+        cmd.append(f"--user-agent={ua}")
+    if referer:
+        cmd.append(f"--referrer={referer}")
+    if headers:
+        cmd.append("--http-header-fields=" + ",".join(f"{k}: {v}" for k, v in headers.items()))
+    if media_url.startswith("file://"):
+        cmd.append(
+            "--demuxer-lavf-o=protocol_whitelist=[file,http,https,tcp,tls,crypto,data]"
+        )
+    if settings.media_proxy and _proxy_reachable(settings.media_proxy):
+        cmd.append(f"--http-proxy={settings.media_proxy}")
+    return cmd
+
+
+def _launch_resolved(
+    settings: Settings,
+    page_url: str,
+    media_url: str,
+    referer: str | None,
+    headers: dict | None = None,
+) -> None:
+    env = _hook_env(settings, page_url, page_url)
+    _stop_current(settings)
+    _run_hook("pre-play", settings.pre_play_hook, env)
+    mpv_log = _log_file("tg-mpv-bot-mpv.log")
+    cmd = build_resolved_command(settings, media_url, referer, page_url, headers)
+    logger.info("Launching resolved: %s", " ".join(cmd))
+    subprocess.Popen(
+        cmd,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=mpv_log,
+        stderr=mpv_log,
+        start_new_session=True,
+    )
+    if mpv_log is not subprocess.DEVNULL:
+        mpv_log.close()
+    _run_hook("post-play", settings.post_play_hook, env)
+    state.record_last_played(settings.state_file, page_url, name=page_url)
+
+
+# How long to watch the ytdl-hook mpv for an early load failure before
+# assuming it is playing. It delays the "Streaming" reply by up to this long
+# for slow-but-working sites, so keep it short; "Unsupported URL" failures
+# surface well inside it.
+_HOOK_WATCH_SECS = 12
+
+
+def _launch_non_youtube(
+    settings: Settings, url: str, progress: Callable[[str], None] | None
+) -> None:
+    """Plugins → yt-dlp (via mpv's hook) → headless-browser fallback."""
+    if settings.enable_plugins and settings.plugin_dir:
+        found = plugins.resolve_with_plugins(url, plugins.load_plugins(settings.plugin_dir))
+        if found:
+            if progress:
+                progress("starting")
+            _launch_resolved(settings, url, found.media_url, found.referer, found.headers)
+            return
+
+    if progress:
+        progress("starting")
+    proc = _launch_mpv_ytdl(settings, url)
+    if not settings.enable_browser_fallback:
+        return
+    try:
+        rc = proc.wait(timeout=_HOOK_WATCH_SECS)
+    except subprocess.TimeoutExpired:
+        return  # still running → it loaded fine
+    if rc == 0:
+        return  # played to the end already (a short clip)
+    logger.info("mpv/yt-dlp could not load %s (rc=%s) — trying headless browser", url, rc)
+    if progress:
+        progress("browser")
+    sniffed = browser.resolve_media_url(url, settings.browser_fallback_timeout)
+    if not sniffed:
+        raise UrlPlaybackError(
+            "no extractor could play that page (headless-browser fallback found no stream)"
+        )
+    media_url, referer = sniffed
+    _launch_resolved(settings, url, media_url, referer)
 
 
 def play_url(
@@ -1050,9 +1158,7 @@ def play_url(
     # probe triggers (Qrator, Cloudflare, etc.).
     if not _is_youtube_url(url) and _ytdlp_bin() is not None:
         logger.info("Skipping probe for non-YouTube URL: %s", url)
-        if progress:
-            progress("starting")
-        _launch_mpv_ytdl(settings, url)
+        _launch_non_youtube(settings, url, progress)
         return url  # title unknown — mpv will figure it out
 
     try:
