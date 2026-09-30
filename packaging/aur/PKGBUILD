@@ -10,6 +10,10 @@ license=(MIT)
 # yt-dlp updates come from pacman here — /update_ytdlp only manages
 # venv installs and politely refuses on a system install.
 depends=(mpv python python-aiogram python-aiohttp yt-dlp)
+# Optional: ffmpeg (recording, 📥 upload merging), headless-browser fallback, AES plugins.
+optdepends=('ffmpeg: ⏺ record/clip and merging streams for the 📥 upload button (already present as an mpv dependency)'
+            'python-playwright: headless-Chromium fallback for JS-only players (run `playwright install chromium`)'
+            'python-pycryptodomex: needed by plugins that decrypt player payloads')
 makedepends=(git)
 provides=(tg-mpv-bot)
 conflicts=(tg-mpv-bot)
