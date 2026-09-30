@@ -3,6 +3,18 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.10.0] — 2026-09-30
+### Added
+- **Extractor plugins** (`PLUGIN_DIR`, `ENABLE_PLUGINS`): drop `.py` files exposing `match()` + `resolve()` into a directory and they resolve pages yt-dlp can't handle, before yt-dlp runs. mpv plays the resolved URL with the plugin's referer/headers. Same contract as tg-media-bot's plugins; see `examples/plugin_example.py`. Docker mounts `./plugins` at `/plugins`.
+- **Headless-Chromium fallback** (`ENABLE_BROWSER_FALLBACK`, `BROWSER_FALLBACK_TIMEOUT`): when mpv's yt-dlp hook can't load a non-YouTube page, the page is opened in headless Chromium (Playwright), the player's media request is captured, and mpv plays that. Opt-in in the Docker image via the `INSTALL_BROWSER=true` build arg (~450 MB).
+- New dependencies: `playwright` (Chromium itself stays opt-in) and `pycryptodomex` (plugins that decrypt player payloads).
+
+### Fixed
+- **Non-YouTube links silently did nothing in Docker.** The `yt-dlp-impersonate.sh` wrapper hard-coded the host's venv path, so inside the container mpv got `yt-dlp: not found`, treated the URL as a file and failed while the bot still said "Streaming". The wrapper now resolves the venv relative to itself. When neither yt-dlp nor the browser fallback can play a URL the bot now reports an error instead.
+
+### Docs
+- Landing page: hero without top border, left-aligned diagram, navbar matching tg-media-bot, plugins/browser-fallback card.
+
 ## [1.9.0] — 2026-09-30
 ### Changed
 - **Commands lost the `mpv_` prefix** (breaking — old names are gone): `/mpv_list` → **`/library`**, `/mpv_play` → `/play`, `/mpv_info` → `/info`, `/mpv_doctor` → `/doctor`, and so on for every command. `/list` specifically became `/library`. Secondary aliases kept their short forms (`/goto`+`/seek`, `/rec`, `/ep`, `/recent`, …) and the bare `/mpv <query>` still works as a `/play` alias. Telegram menu, `/help`, README, docs and CLAUDE.md were updated in the same pass.
