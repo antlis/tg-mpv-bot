@@ -85,10 +85,7 @@
 
   /* ─── Nav ─── */
   header {
-    position: sticky; top: 0; z-index: 10;
-    background: rgba(10, 16, 25, .8);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
   }
 
   nav {
@@ -118,6 +115,7 @@
     display: grid;
     place-items: center;
     font-size: 16px;
+    font-weight: 700;
   }
 
   .nav-links {
@@ -313,6 +311,7 @@
   /* ─── Hero ─── */
   .hero {
     padding: 3rem 0 2.75rem;
+    border-top: none;
   }
 
   .hero h1 {
@@ -349,7 +348,7 @@
   .diagram {
     display: flex;
     align-items: stretch;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 0.75rem;
     flex-wrap: wrap;
     margin-top: 2.5rem;
@@ -388,7 +387,7 @@
   }
 
   @media (max-width: 700px) {
-    .diagram { flex-direction: column; align-items: center; gap: 0.5rem; }
+    .diagram { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
     .node { width: min(100%, 320px); }
     .link-arrow { transform: rotate(90deg); margin: 0.25rem 0; }
   }
@@ -742,7 +741,7 @@
 <header>
   <nav>
     <a href="#" class="logo" aria-label="tg-mpv-bot home">
-      <span class="logo-icon">🎬</span>
+      <span class="logo-icon">mp</span>
       tg-mpv-bot
     </a>
 
@@ -806,6 +805,7 @@
     <div class="grid">
       <div class="card"><span class="tile">📋</span><b>Browse your library</b><p>Categories → playlists as inline buttons, full-text search, an episode picker and chapter jumps.</p></div>
       <div class="card"><span class="tile">🔗</span><b>Stream any link</b><p>Send a YouTube / SoundCloud / any yt-dlp URL — it plays on the TV, subtitles fetched automatically.</p></div>
+      <div class="card"><span class="tile">🧩</span><b>Even pages yt-dlp can't read</b><p>Drop-in site plugins, plus an optional headless-Chromium fallback that sniffs the stream from JavaScript-only players.</p></div>
       <div class="card"><span class="tile">🔎</span><b>Search YouTube from chat</b><p><code>/yt lofi beats</code> — top results with thumbnails, tap one to play.</p></div>
       <div class="card"><span class="tile">📨</span><b>Forward video files</b><p>Any Telegram video plays on the TV — up to 2 GB with a local Bot API server.</p></div>
       <div class="card"><span class="tile">🎛</span><b>Full transport control</b><p>The now-playing panel rides on every "▶ Playing" message: pause, seek, %-jump, volume, mute, speed, tracks, 📸 shot, ⏺ clip, 🗑 close.</p></div>

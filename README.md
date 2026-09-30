@@ -12,7 +12,7 @@ phone. No AI, no cloud — the bot talks to mpv's [JSON IPC
 socket](https://mpv.io/manual/stable/#json-ipc) directly from Python.
 
 - 📋 **Browse** playlists by category with inline keyboards, or search
-- 🔗 **Stream URLs** — send a link, mpv plays it via yt-dlp (1000+ sites)
+- 🔗 **Stream URLs** — send a link, mpv plays it via yt-dlp (1000+ sites); custom site plugins and an optional headless-Chromium fallback cover pages yt-dlp can't read
 - 📨 **Send a file** — forward any video/audio from Telegram, it plays on the TV
 - 🎛 **Now-playing panel** — rides on every "▶ Playing" message: transport,
   seek-to-%, volume, mute, tracks, 📸 shot, ⏺ clip, 🗑 close
