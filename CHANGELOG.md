@@ -3,6 +3,10 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+### Fixed
+- **A link that couldn't load still replied "▶ Streaming".** Every non-YouTube launch (plugin-resolved, mpv's yt-dlp hook, and the headless-browser fallback's stream) is now watched for an early mpv exit; a failure is reported as an error with mpv's own reason (e.g. `HTTP error 403`) instead. Previously only the hook path was watched, and only when the browser fallback was enabled.
+
 ## [1.11.0] — 2026-09-30
 ### Added
 - **📥 Upload button on the now-playing panel.** Sends what's playing to the chat: a library file as-is, or a stream downloaded with yt-dlp first with a live `█░` progress bar (then a heartbeat while Telegram receives it — the Bot API has no upload-progress callback). If mpv already exited (movie watched to the end) it falls back to the last-played link or a one-file playlist. Friendly errors when the file was removed/moved, the media disk isn't mounted, the link is gone at the source (404/410/private), the disk is full, or the file disappears mid-upload. One transfer at a time. Limit: 50 MB on the cloud Bot API, 2 GB with `API_SERVER_URL` (a local Bot API server; shared with tg-media-bot on this host).

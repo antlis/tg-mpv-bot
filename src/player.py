@@ -1075,14 +1075,14 @@ def _launch_resolved(
     media_url: str,
     referer: str | None,
     headers: dict | None = None,
-) -> None:
+) -> subprocess.Popen:
     env = _hook_env(settings, page_url, page_url)
     _stop_current(settings)
     _run_hook("pre-play", settings.pre_play_hook, env)
     mpv_log = _log_file("tg-mpv-bot-mpv.log")
     cmd = build_resolved_command(settings, media_url, referer, page_url, headers)
     logger.info("Launching resolved: %s", " ".join(cmd))
-    subprocess.Popen(
+    proc = subprocess.Popen(
         cmd,
         env=env,
         stdin=subprocess.DEVNULL,
@@ -1094,38 +1094,77 @@ def _launch_resolved(
         mpv_log.close()
     _run_hook("post-play", settings.post_play_hook, env)
     state.record_last_played(settings.state_file, page_url, name=page_url)
+    return proc
 
 
-# How long to watch the ytdl-hook mpv for an early load failure before
+# How long to watch a freshly launched mpv for an early load failure before
 # assuming it is playing. It delays the "Streaming" reply by up to this long
-# for slow-but-working sites, so keep it short; "Unsupported URL" failures
-# surface well inside it.
+# for slow-but-working sites, so keep it short; load failures surface well
+# inside it. Resolved direct URLs fail fast (HTTP errors), so they need less
+# than the ytdl hook, which has to run a whole extraction first.
 _HOOK_WATCH_SECS = 12
+_RESOLVED_WATCH_SECS = 6
+
+
+def _mpv_log_hint(name: str = "tg-mpv-bot-mpv.log") -> str:
+    """Last meaningful line of mpv's log (``''`` if unreadable) — the reason
+    mpv gave for not playing, worth showing instead of a bare exit code."""
+    try:
+        lines = (Path(tempfile.gettempdir()) / name).read_text(errors="replace").splitlines()
+    except OSError:
+        return ""
+    for line in reversed(lines):
+        line = line.strip()
+        if line and not line.startswith(("AV:", "(Paused)", "Exiting")):
+            return line[:160]
+    return ""
+
+
+def _early_exit(proc: subprocess.Popen, secs: float) -> int | None:
+    """mpv's exit code if it exited non-zero within ``secs`` (a load failure),
+    else ``None`` — still running, or it already played to the end (rc 0)."""
+    try:
+        rc = proc.wait(timeout=secs)
+    except subprocess.TimeoutExpired:
+        return None
+    return rc or None
+
+
+def _load_failure(url: str, rc: int, how: str) -> UrlPlaybackError:
+    hint = _mpv_log_hint()
+    logger.warning("%s failed for %s (rc=%s): %s", how, url, rc, hint)
+    return UrlPlaybackError(
+        f"{how} didn't start playing (mpv exit code {rc})" + (f": {hint}" if hint else "")
+    )
 
 
 def _launch_non_youtube(
     settings: Settings, url: str, progress: Callable[[str], None] | None
 ) -> None:
-    """Plugins → yt-dlp (via mpv's hook) → headless-browser fallback."""
+    """Plugins → yt-dlp (via mpv's hook) → headless-browser fallback.
+
+    Every launch is watched for an early mpv failure so a stream that can't
+    load is reported as an error instead of a cheerful "Streaming".
+    """
     if settings.enable_plugins and settings.plugin_dir:
         found = plugins.resolve_with_plugins(url, plugins.load_plugins(settings.plugin_dir))
         if found:
             if progress:
                 progress("starting")
-            _launch_resolved(settings, url, found.media_url, found.referer, found.headers)
+            proc = _launch_resolved(settings, url, found.media_url, found.referer, found.headers)
+            rc = _early_exit(proc, _RESOLVED_WATCH_SECS)
+            if rc is not None:
+                raise _load_failure(url, rc, "The plugin's stream")
             return
 
     if progress:
         progress("starting")
     proc = _launch_mpv_ytdl(settings, url)
+    rc = _early_exit(proc, _HOOK_WATCH_SECS)
+    if rc is None:
+        return  # still running (loaded fine) or played to the end
     if not settings.enable_browser_fallback:
-        return
-    try:
-        rc = proc.wait(timeout=_HOOK_WATCH_SECS)
-    except subprocess.TimeoutExpired:
-        return  # still running → it loaded fine
-    if rc == 0:
-        return  # played to the end already (a short clip)
+        raise _load_failure(url, rc, "The link")
     logger.info("mpv/yt-dlp could not load %s (rc=%s) — trying headless browser", url, rc)
     if progress:
         progress("browser")
@@ -1135,7 +1174,10 @@ def _launch_non_youtube(
             "no extractor could play that page (headless-browser fallback found no stream)"
         )
     media_url, referer = sniffed
-    _launch_resolved(settings, url, media_url, referer)
+    proc = _launch_resolved(settings, url, media_url, referer)
+    rc = _early_exit(proc, _RESOLVED_WATCH_SECS)
+    if rc is not None:
+        raise _load_failure(url, rc, "The sniffed stream")
 
 
 def play_url(

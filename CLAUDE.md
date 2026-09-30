@@ -90,8 +90,8 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 - `src/plugins.py` / `src/browser.py` — ported from tg-media-bot. For non-YouTube URLs `player._launch_non_youtube`
   runs **plugins** (`PLUGIN_DIR`, `.py` with `match()`/`resolve()`; private ones are git-ignored under
   `./plugins`, mounted at `/plugins` in Docker) first → mpv plays the resolved URL with referer/headers
-  (`build_resolved_command`). Otherwise the mpv ytdl-hook launches and is watched ~12s; if mpv exits non-zero
-  the **headless-Chromium fallback** (`browser.resolve_media_url`, Playwright) sniffs the media request and
+  (`build_resolved_command`). Otherwise the mpv ytdl-hook launches and is watched ~12s (resolved launches ~6s); a non-zero exit is a load
+  failure → `UrlPlaybackError` with mpv's log tail, or, when enabled, the **headless-Chromium fallback** (`browser.resolve_media_url`, Playwright) sniffs the media request and
   mpv plays that. Chromium is opt-in in the image (`INSTALL_BROWSER=true` build arg; `PLAYWRIGHT_BROWSERS_PATH`
   is fixed at `/ms-playwright` because compose overrides `HOME`). If both fail → `UrlPlaybackError`.
 - `src/download.py` — backs the panel's 📥 button (`ctl:upload` → `commands._upload_current`). `resolve_source`
