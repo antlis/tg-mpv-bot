@@ -526,3 +526,110 @@ def test_build_resolved_command_carries_referer_and_headers(tmp_path):
     local = player.build_resolved_command(s, "file:///tmp/a.m3u8", None, "Page")
     assert any("protocol_whitelist" in a for a in local)
     assert not any(a.startswith("--referrer") for a in local)
+
+
+class _FakeProc:
+    """Stand-in for Popen: ``rc`` is what wait() reports, None = still running."""
+
+    def __init__(self, rc):
+        self.rc = rc
+
+    def wait(self, timeout=None):
+        import subprocess
+
+        if self.rc is None:
+            raise subprocess.TimeoutExpired("mpv", timeout)
+        return self.rc
+
+
+def test_early_exit_only_reports_nonzero_exits():
+    from src import player
+
+    assert player._early_exit(_FakeProc(None), 0.01) is None  # still running
+    assert player._early_exit(_FakeProc(0), 0.01) is None  # played to the end
+    assert player._early_exit(_FakeProc(2), 0.01) == 2  # failed to load
+
+
+def _stub_launches(monkeypatch, *, plugin=False, hook_rc=None, resolved_rc=None):
+    from src import player, plugins
+
+    calls = []
+    if plugin:
+        monkeypatch.setattr(plugins, "load_plugins", lambda d: [object()])
+        monkeypatch.setattr(
+            plugins, "resolve_with_plugins",
+            lambda url, loaded: plugins.ResolveResult("https://cdn/x.m3u8", "https://ref/"),
+        )
+    monkeypatch.setattr(
+        player, "_launch_resolved",
+        lambda *a, **k: calls.append("resolved") or _FakeProc(resolved_rc),
+    )
+    monkeypatch.setattr(
+        player, "_launch_mpv_ytdl", lambda *a, **k: calls.append("hook") or _FakeProc(hook_rc)
+    )
+    return calls
+
+
+def _launch_settings(**kw):
+    from src.config import Settings
+
+    return Settings(bot_token="t", plugin_dir="/plugins" if kw.pop("plugin", False) else "", **kw)
+
+
+def test_plugin_stream_that_fails_to_load_is_reported(monkeypatch):
+    import pytest
+
+    from src import player
+
+    _stub_launches(monkeypatch, plugin=True, resolved_rc=2)
+    monkeypatch.setattr(player, "_mpv_log_hint", lambda *a: "HTTP error 403 Forbidden")
+    with pytest.raises(player.UrlPlaybackError, match="403 Forbidden"):
+        player._launch_non_youtube(_launch_settings(plugin=True), "https://site/p", None)
+
+
+def test_plugin_stream_that_plays_is_not_reported(monkeypatch):
+    from src import player
+
+    calls = _stub_launches(monkeypatch, plugin=True, resolved_rc=None)
+    player._launch_non_youtube(_launch_settings(plugin=True), "https://site/p", None)
+    assert calls == ["resolved"]  # no fallthrough to the ytdl hook
+
+
+def test_hook_failure_without_browser_fallback_is_reported(monkeypatch):
+    import pytest
+
+    from src import player
+
+    _stub_launches(monkeypatch, hook_rc=2)
+    monkeypatch.setattr(player, "_mpv_log_hint", lambda *a: "")
+    with pytest.raises(player.UrlPlaybackError, match="exit code 2"):
+        player._launch_non_youtube(_launch_settings(enable_browser_fallback=False), "https://x/y", None)
+
+
+def test_hook_failure_falls_back_to_browser_then_checks_it_too(monkeypatch):
+    import pytest
+
+    from src import browser, player
+
+    calls = _stub_launches(monkeypatch, hook_rc=2, resolved_rc=1)
+    monkeypatch.setattr(player, "_mpv_log_hint", lambda *a: "")
+    monkeypatch.setattr(browser, "resolve_media_url", lambda u, t: ("https://cdn/v.m3u8", "https://r/"))
+    with pytest.raises(player.UrlPlaybackError, match="sniffed stream"):
+        player._launch_non_youtube(_launch_settings(), "https://x/y", None)
+    assert calls == ["hook", "resolved"]
+
+    # and when the sniffed stream plays, no error
+    calls.clear()
+    _stub_launches(monkeypatch, hook_rc=2, resolved_rc=None)
+    player._launch_non_youtube(_launch_settings(), "https://x/y", None)
+
+
+def test_mpv_log_hint_skips_progress_and_exit_lines(tmp_path, monkeypatch):
+    from src import player
+
+    monkeypatch.setattr(player.tempfile, "gettempdir", lambda: str(tmp_path))
+    (tmp_path / "tg-mpv-bot-mpv.log").write_text(
+        "Failed to open https://x/y.\nAV: 00:00:01 / 00:10:00 (0%)\nExiting... (Errors when loading file)\n"
+    )
+    assert player._mpv_log_hint() == "Failed to open https://x/y."
+    assert player._mpv_log_hint("missing.log") == ""
