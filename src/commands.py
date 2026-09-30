@@ -9,6 +9,7 @@ the aiogram event loop never stalls.
 from __future__ import annotations
 
 import asyncio
+import errno
 import html
 import logging
 import random
@@ -28,7 +29,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardMarkup, Message
 
-from . import generate, keyboards, player, playlists, recorder, state
+from . import download, generate, keyboards, player, playlists, recorder, state
 from .config import get_settings
 from .keyboards import (
     PER_PAGE,
@@ -882,7 +883,9 @@ async def _send_panel(message: Message, *, edit: bool = False) -> None:
     """Render the now-playing panel (status text + transport buttons)."""
     state, err = await _ipc(_panel_state)
     body, paused = (state[0], state[1]) if state else (err, None)
-    kb = now_playing_keyboard(paused, recording=_is_recording())
+    kb = now_playing_keyboard(
+        paused, recording=_is_recording(), upload=get_settings().enable_upload
+    )
     if edit:
         try:
             await message.edit_text(body, reply_markup=kb)
@@ -907,7 +910,9 @@ async def panel_markup() -> InlineKeyboardMarkup:
     """
     paused, _ = await _ipc(lambda c: c._safe_get("pause"))
     return now_playing_keyboard(
-        paused if isinstance(paused, bool) else None, recording=_is_recording()
+        paused if isinstance(paused, bool) else None,
+        recording=_is_recording(),
+        upload=get_settings().enable_upload,
     )
 
 
@@ -947,6 +952,162 @@ _CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
 }
 
 
+# ── Upload what's playing ───────────────────────────────────────────
+# One transfer at a time: the local disk/bandwidth is shared and a second tap
+# on 📥 should not start a duplicate download of the same thing.
+_upload_lock = asyncio.Lock()
+_UPLOAD_HEARTBEAT_SECS = 4
+
+
+def _upload_probe(c: MpvClient) -> dict:
+    """mpv's view of the current item (best-effort extras for the caption)."""
+    return {
+        "path": c.get_property("path"),
+        "title": c._safe_get("media-title"),
+        "duration": c._safe_get("duration"),
+        "width": c._safe_get("width"),
+        "height": c._safe_get("height"),
+    }
+
+
+async def _edit_status(note: Message, text: str) -> None:
+    try:
+        await note.edit_text(text)
+    except TelegramBadRequest:
+        pass  # unchanged text / message gone
+
+
+async def _upload_current(target: Message) -> None:
+    """Send the playing item to the chat: library files directly, streams via
+    yt-dlp first (live progress bar), then a heartbeat while Telegram receives it."""
+    if _upload_lock.locked():
+        await target.reply("⏳ An upload is already in progress — wait for it to finish.")
+        return
+    async with _upload_lock:
+        settings = get_settings()
+        # mpv may have exited (movie watched to the end): that's fine, the
+        # last-played history still says what to send.
+        probe, _ = await _ipc(_upload_probe)
+        probe = probe or {}
+        entries = state.history(settings.state_file)
+        src = download.resolve_source(
+            probe.get("path"), entries[0].target if entries else None
+        )
+        if src is None:
+            await target.reply(
+                "❌ Nothing to upload — play a movie/link first (multi-episode playlists "
+                "need the episode playing, so mpv knows which file)."
+            )
+            return
+        if src.kind == "missing":
+            await target.reply(
+                f"❌ That file is gone from the server: {Path(src.value).name}\n"
+                "It was deleted or moved, or the media disk isn't mounted."
+            )
+            return
+        title = (probe.get("title") or (entries[0].name if entries else "") or "video")[:100]
+        note = await target.reply(
+            "📥 Preparing…"
+            if src.kind == "file"
+            else "📥 Streams aren't saved on disk, so I'm downloading the whole video first — "
+            "it will be sent here as soon as the download finishes. Playback isn't affected."
+        )
+        workdir: Path | None = None
+        try:
+            if src.kind == "file":
+                path = Path(src.value)
+            else:
+                workdir = download.make_workdir()
+
+                async def on_progress(info: dict) -> None:
+                    if info.get("stage") == "merging":
+                        await _edit_status(note, "🔧 Merging video + audio…")
+                        return
+                    bar = download.render_progress_bar(info["percent"])
+                    pct = f"{info['percent']:.0f}%" if info["percent"] is not None else "…"
+                    await _edit_status(
+                        note,
+                        f"📥 Downloading {bar} {pct}\n{info['speed']} · ETA {info['eta']}\n"
+                        "Will be sent here when the download is done.",
+                    )
+
+                path = await download.download(settings, src.value, workdir, on_progress)
+
+            size = path.stat().st_size
+            limit = download.upload_limit(settings)
+            if size > limit:
+                hint = (
+                    ""
+                    if settings.api_server_url
+                    else " Set API_SERVER_URL to a local Bot API server to raise the limit to 2 GB."
+                )
+                await _edit_status(
+                    note,
+                    f"❌ {size / 1048576:.0f} MB is over the {limit // 1048576} MB upload "
+                    f"limit.{hint}",
+                )
+                return
+
+            hb = asyncio.create_task(_upload_heartbeat(note, size))
+            try:
+                bot = target.bot
+                as_video = path.suffix.lower() in download.VIDEO_EXTS
+                caption = f"🎬 {title}"
+                if as_video:
+                    dur, w, h = probe.get("duration"), probe.get("width"), probe.get("height")
+                    await bot.send_video(
+                        target.chat.id,
+                        FSInputFile(path),
+                        caption=caption,
+                        supports_streaming=True,
+                        duration=int(dur) if dur else None,
+                        width=int(w) if w else None,
+                        height=int(h) if h else None,
+                        request_timeout=3600,
+                    )
+                else:  # mkv/avi/… don't play inline — send as a file
+                    await bot.send_document(
+                        target.chat.id, FSInputFile(path), caption=caption, request_timeout=3600
+                    )
+            finally:
+                hb.cancel()
+            try:
+                await note.delete()
+            except TelegramBadRequest:
+                pass
+        except download.DownloadError as exc:
+            await _edit_status(note, f"❌ Download failed: {exc}")
+        except FileNotFoundError:
+            await _edit_status(
+                note,
+                "❌ The file was removed from the server before it could be sent — "
+                "it may have been cleaned up. Start it again and retry.",
+            )
+        except OSError as exc:
+            if exc.errno == errno.ENOSPC:
+                await _edit_status(note, "❌ The server is out of disk space — free some and retry.")
+            else:
+                logger.exception("upload I/O error")
+                await _edit_status(note, f"❌ Upload failed: {exc}")
+        except Exception as exc:  # noqa: BLE001 — surface to the user, never hang
+            logger.exception("upload failed")
+            await _edit_status(note, f"❌ Upload failed: {exc}")
+        finally:
+            if workdir is not None:
+                shutil.rmtree(workdir, ignore_errors=True)
+
+
+async def _upload_heartbeat(note: Message, size: int) -> None:
+    """Elapsed time + size while Telegram receives the file (no real %)."""
+    start = time.monotonic()
+    while True:
+        await _edit_status(
+            note,
+            f"📤 Uploading… {int(time.monotonic() - start)}s · {size / 1048576:.0f} MB",
+        )
+        await asyncio.sleep(_UPLOAD_HEARTBEAT_SECS)
+
+
 @router.callback_query(F.data.startswith("ctl:"))
 async def cb_ctl(query: CallbackQuery) -> None:
     action = query.data[len("ctl:") :]
@@ -960,6 +1121,13 @@ async def cb_ctl(query: CallbackQuery) -> None:
     if action == "snap":  # screenshot the current frame into the chat
         await query.answer("📸 capturing…")
         await _capture_and_send(query.message)
+        return
+    if action == "upload" and not get_settings().enable_upload:
+        await query.answer("📥 upload is disabled (ENABLE_UPLOAD=false)", show_alert=True)
+        return
+    if action == "upload":  # download (if a stream) + send to the chat, with progress
+        await query.answer("📥 preparing…")
+        await _upload_current(query.message)
         return
     if action == "record":  # start/stop is async + stateful, not a simple IPC call
         await query.answer("⏹ stopping…" if _is_recording() else "⏺ recording…")

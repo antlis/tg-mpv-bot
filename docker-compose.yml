@@ -16,6 +16,9 @@ services:
         # Set INSTALL_BROWSER=true in .env to bake in Chromium for the
         # headless-browser fallback (JS-only players). Off by default.
         INSTALL_BROWSER: ${INSTALL_BROWSER:-false}
+        # Set INSTALL_FFMPEG=true in .env for ⏺ record/clip and full-quality 📥
+        # upload (merging separate video+audio). Off by default.
+        INSTALL_FFMPEG: ${INSTALL_FFMPEG:-false}
     env_file: .env
     environment:
       DISPLAY: ":0"
@@ -77,6 +80,10 @@ services:
       # actual socket file inside it at runtime, and the mount point
       # recreates cleanly even after /tmp is cleared on reboot.
       - /tmp/tg-mpv-bot-run:/tmp/tg-mpv-bot-run:rw
+      # Local Bot API server's data dir (API_LOCAL_FILES_DIR in .env) — sent
+      # files are read straight from disk. Mirrors the host path; only needed
+      # when API_SERVER_URL points at a TELEGRAM_LOCAL=true server.
+      - ~/telegram-bot-api-data:${HOME}/telegram-bot-api-data:ro
       # Custom extractor plugins — see examples/plugin_example.py
       - ./plugins:/plugins:ro
       # watch history / notification target — survives container recreation

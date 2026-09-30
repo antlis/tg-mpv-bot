@@ -145,7 +145,7 @@ def test_now_playing_keyboard():
             "ctl:sub", "ctl:audio",
             "ctl:p0", "ctl:p25", "ctl:p50", "ctl:p75",
             "ctl:shuffle", "ctl:loop", "ctl:stop", "ctl:refresh",
-            "ctl:snap", "ctl:record", "ctl:close"} <= datas
+            "ctl:snap", "ctl:record", "ctl:upload", "ctl:close"} <= datas
 
 
 def test_every_panel_button_has_a_handler():
@@ -153,7 +153,7 @@ def test_every_panel_button_has_a_handler():
     from src.commands import _CTL_ACTIONS
     from src.keyboards import now_playing_keyboard
 
-    handled = set(_CTL_ACTIONS) | {"record", "snap", "close"}
+    handled = set(_CTL_ACTIONS) | {"record", "snap", "upload", "close"}
     kb = now_playing_keyboard()
     actions = {
         b.callback_data[len("ctl:"):]
@@ -339,3 +339,13 @@ def test_subcategory_pagination_prefix():
     kb = playlists_keyboard(pls, ci=0, si=0, page=0)
     datas = [b.callback_data for row in kb.inline_keyboard for b in row]
     assert "s:0:0:1" in datas  # next page within subcategory
+
+
+def test_upload_button_can_be_hidden():
+    from src.keyboards import now_playing_keyboard
+
+    def datas(kb):
+        return {b.callback_data for row in kb.inline_keyboard for b in row}
+
+    assert "ctl:upload" in datas(now_playing_keyboard())
+    assert "ctl:upload" not in datas(now_playing_keyboard(upload=False))

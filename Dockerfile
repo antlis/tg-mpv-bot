@@ -22,6 +22,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xdotool \
     && rm -rf /var/lib/apt/lists/*
 
+# ffmpeg binary — opt-in (`--build-arg INSTALL_FFMPEG=true`, or INSTALL_FFMPEG
+# in .env via docker compose). Needed by the panel's ⏺ record/clip button and
+# for the 📥 upload button to merge separate video+audio streams; without it
+# 📥 still works for library files and single-file stream formats.
+ARG INSTALL_FFMPEG=false
+RUN if [ "$INSTALL_FFMPEG" = "true" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 ENV UV_PYTHON_PREFERENCE=only-system
 
 COPY pyproject.toml uv.lock ./
