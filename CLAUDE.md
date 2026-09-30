@@ -94,6 +94,12 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   the **headless-Chromium fallback** (`browser.resolve_media_url`, Playwright) sniffs the media request and
   mpv plays that. Chromium is opt-in in the image (`INSTALL_BROWSER=true` build arg; `PLAYWRIGHT_BROWSERS_PATH`
   is fixed at `/ms-playwright` because compose overrides `HOME`). If both fail → `UrlPlaybackError`.
+- `src/download.py` — backs the panel's 📥 button (`ctl:upload` → `commands._upload_current`). `resolve_source`
+  picks a library file (mpv `path`) or the URL the user sent (history[0]); URLs are fetched with yt-dlp
+  (`--progress-template` → throttled `PROG|` lines → `█░` bar) then sent via `send_video`/`send_document`
+  (non-mp4 containers go as documents). Bot API has no upload-progress callback → heartbeat only. Limit: 50 MB
+  cloud, 2000 MB with `API_SERVER_URL`. One transfer at a time (`_upload_lock`). `ENABLE_UPLOAD=false` hides the button. `ffmpeg` is opt-in in the image (`INSTALL_FFMPEG=true`); without it
+  `build_download_command` asks yt-dlp for a pre-merged single-file format instead.
 - `src/keyboards.py` — inline-keyboard builders for `/library`: **category → (subcategory) →
   paginated playlist buttons** (`PER_PAGE=8`). Flat categories (no subcategories) jump straight to the
   playlist list; categories with subcategories (tutorials → provider) show a subcategory menu first.

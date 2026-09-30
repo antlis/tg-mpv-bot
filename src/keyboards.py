@@ -103,7 +103,7 @@ def page_slice(items: list[int], page: int, per_page: int = PER_PAGE) -> list[in
 
 # ── keyboards ────────────────────────────────────────────────────────
 def now_playing_keyboard(
-    paused: bool | None = None, recording: bool = False
+    paused: bool | None = None, recording: bool = False, upload: bool = True
 ) -> InlineKeyboardMarkup:
     """Transport controls for the now-playing panel (callback data `ctl:<action>`).
 
@@ -112,7 +112,8 @@ def now_playing_keyboard(
     record button toggles between ``⏺ Rec`` and ``⏺ Stop``. Mute is two
     buttons (🔇 mute / 🔈 unmute) rather than a toggle, so it never goes
     blind — same shape as WarMusicBot's panel. The last row also carries
-    📸 (screenshot the current frame) and 🗑 (delete this panel).
+    📸 (screenshot the current frame), 📥 (upload what's playing to the chat)
+    and 🗑 (delete this panel). ``upload=False`` (ENABLE_UPLOAD=false) drops 📥.
     """
     def b(text: str, action: str) -> InlineKeyboardButton:
         return InlineKeyboardButton(text=text, callback_data=f"ctl:{action}")
@@ -120,12 +121,17 @@ def now_playing_keyboard(
     toggle = "▶ Play" if paused is True else "⏸ Pause" if paused is False else "⏯"
     rec = "⏺ Stop" if recording else "⏺ Rec"
 
+    last_row = [b("📸", "snap"), b(rec, "record")]
+    if upload:
+        last_row.append(b("📥", "upload"))
+    last_row += [b("⏹", "stop"), b("🗑", "close")]
+
     return InlineKeyboardMarkup(inline_keyboard=[
         [b("⏮", "prev"), b("⏪", "back"), b(toggle, "toggle"), b("⏩", "fwd"), b("⏭", "next")],
         [b("0%", "p0"), b("25%", "p25"), b("50%", "p50"), b("75%", "p75")],
         [b("🔉", "voldown"), b("🔇", "mute"), b("🔈", "unmute"), b("🔊", "volup")],
         [b("💬", "sub"), b("🎧", "audio"), b("🔀", "shuffle"), b("🔁", "loop"), b("🔄", "refresh")],
-        [b("📸", "snap"), b(rec, "record"), b("⏹", "stop"), b("🗑", "close")],
+        last_row,
     ])
 
 

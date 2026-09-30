@@ -142,6 +142,11 @@ class Settings:
     # players). Needs Playwright's Chromium — Docker: INSTALL_BROWSER=true.
     enable_browser_fallback: bool = True
     browser_fallback_timeout: int = 45  # seconds for the page to load + play
+    # Show the panel's 📥 button (upload what's playing to the chat). Streams
+    # are downloaded with yt-dlp first; merging separate video+audio needs the
+    # ffmpeg binary (Docker: INSTALL_FFMPEG=true), otherwise a pre-merged
+    # single-file format is used.
+    enable_upload: bool = True
     # /radio presets: (display name, stream URL) pairs.
     radio_stations: list[tuple[str, str]] = field(
         default_factory=lambda: DEFAULT_RADIO_STATIONS
@@ -208,6 +213,8 @@ def get_settings() -> Settings:
         enable_browser_fallback=os.environ.get("ENABLE_BROWSER_FALLBACK", "true").lower()
         in ("1", "true", "yes"),
         browser_fallback_timeout=int(os.environ.get("BROWSER_FALLBACK_TIMEOUT", "45") or "45"),
+        enable_upload=os.environ.get("ENABLE_UPLOAD", "true").lower()
+        in ("1", "true", "yes"),
         radio_stations=_parse_radio_stations(os.environ.get("RADIO_STATIONS")),
         kill_stray_mpv=os.environ.get("KILL_STRAY_MPV", "1").lower()
         in ("1", "true", "yes"),

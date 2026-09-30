@@ -14,8 +14,9 @@ socket](https://mpv.io/manual/stable/#json-ipc) directly from Python.
 - 📋 **Browse** playlists by category with inline keyboards, or search
 - 🔗 **Stream URLs** — send a link, mpv plays it via yt-dlp (1000+ sites); custom site plugins and an optional headless-Chromium fallback cover pages yt-dlp can't read
 - 📨 **Send a file** — forward any video/audio from Telegram, it plays on the TV
+- 📥 **Upload what's playing** — the panel's 📥 button sends the current library file (or downloads the stream with a live progress bar first) to the chat; needs `API_SERVER_URL` for anything over 50 MB
 - 🎛 **Now-playing panel** — rides on every "▶ Playing" message: transport,
-  seek-to-%, volume, mute, tracks, 📸 shot, ⏺ clip, 🗑 close
+  seek-to-%, volume, mute, tracks, 📸 shot, ⏺ clip, 📥 upload, 🗑 close
 - 📜 **Episode picker**, ▶ **continue watching**, 📸 **frame screenshots**
 - 🕘 **Watch history** (`/history`) — last 20 items, paginated; tap to replay, copy URL, or delete
 - ⏺ **Record** the current video (→ H.264 mp4) or radio (→ voice message) and get it in chat
@@ -65,7 +66,7 @@ the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
 | `/radio [search]` | Internet radio — presets (full SomaFM catalog, Radio Record, FIP, KEXP, …; yours via `RADIO_STATIONS`) or search ~50k stations on [radio-browser.info](https://www.radio-browser.info) |
 | `/iptv [search]` | Live TV — search 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and stream live; `/iptv` with no args shows links to browse channels by country/category |
 | *(send a video/audio file)* | Downloads and plays it — >20 MB needs `API_SERVER_URL` (local Bot API server) |
-| `/info` | Now-playing panel with inline transport buttons — the same panel is attached to every "▶ Playing" / "📻 Tuned to" / "📺 Now streaming" message and to "⏭ Now playing" notifications (📸 frame shot, 🔈 unmute, 🗑 close included) |
+| `/info` | Now-playing panel with inline transport buttons — the same panel is attached to every "▶ Playing" / "📻 Tuned to" / "📺 Now streaming" message and to "⏭ Now playing" notifications (📸 frame shot, 📥 upload to chat, 🔈 unmute, 🗑 close included) |
 | `/shot` | Send a screenshot of the current frame to the chat |
 | `/record [duration]` · `/record START END` | Record what's playing — video → H.264 mp4, radio/audio → voice message — and send it to the chat. Run again (or tap ⏺ Stop) to finish; auto-stops at 1 h. `duration` accepts `30m`, `1h`, `HH:MM:SS`; `START END` (e.g. `01:30:00 02:00:00`) clips a specific range for local files — live streams use the duration and ignore the start |
 | `/toggle` | Play/pause toggle (one command) |
@@ -338,10 +339,11 @@ Only `BOT_TOKEN` is required.
 | `MEDIA_PROXY` | *(none)* | Proxy for non-YouTube playback — the yt-dlp probe and mpv's fetch both use it, so IP-locked CDN URLs stay coherent; for hosts whose direct line can't reach some media CDNs |
 | `PLUGIN_DIR` / `ENABLE_PLUGINS` | *(none)* / `true` | Directory of custom extractor plugins (`.py` with `match()` + `resolve()`, see `examples/plugin_example.py`); run before yt-dlp. Docker mounts `./plugins` at `/plugins` |
 | `ENABLE_BROWSER_FALLBACK` / `BROWSER_FALLBACK_TIMEOUT` | `true` / `45` | When yt-dlp can't load a page, sniff its stream in headless Chromium and play that. Docker: build with `INSTALL_BROWSER=true` (~450 MB) |
+| `ENABLE_UPLOAD` | `true` | Show the panel's 📥 button (upload what's playing to the chat). Streams are downloaded first; needs `ffmpeg` to merge separate video+audio (Docker: build with `INSTALL_FFMPEG=true`; also needed by ⏺ record/clip). Over 50 MB needs `API_SERVER_URL` |
 | `RADIO_STATIONS` | *(curated dozen)* | `/radio` presets as `Name=URL,Name=URL` (first `=` splits, so `?listen_key=` URLs work) — replaces the built-in list |
 | `YTDL_OPTIONS` | *(none)* | Extra yt-dlp options, comma-separated `key=value` / bare flags — e.g. `force-ipv4` or the lean-YouTube `extractor-args=…` (see `.env.example`). Network-pinning keys (`force-ipv4/6`, `proxy`, …) apply to **YouTube URLs only** — other sites' IP-locked CDNs need the probe and mpv on the same default network path |
 | `YTDL_COOKIES_BROWSER` | *(none)* | Browser whose cookies unlock Instagram/Facebook and YouTube bot-checks (e.g. `firefox`); applied only to gated hosts / as an escalation, never globally |
-| `API_SERVER_URL` | *(none)* | Local [Bot API server](https://github.com/tdlib/telegram-bot-api) — lifts the 20 MB download cap to 2 GB for sent files (one-time `…/logOut` from the cloud API required when switching) |
+| `API_SERVER_URL` | *(none)* | Local [Bot API server](https://github.com/tdlib/telegram-bot-api) — lifts the 20 MB download cap to 2 GB for sent files, and the 50 MB cap on the panel's 📥 upload to 2 GB (one-time `…/logOut` from the cloud API required when switching) |
 | `API_LOCAL_FILES_DIR` | *(none)* | Host path of the server's `/var/lib/telegram-bot-api` when it runs with `TELEGRAM_LOCAL=true` — the bot then reads downloaded files straight from disk |
 | `SCAN_INTERVAL_MIN` | `0` | If >0, auto-run the playlist generator every N minutes |
 | `YTDL_UPDATE_DAYS` | `0` | If >0, auto-update yt-dlp every N days (recommended: `7`) and report version bumps in chat |
