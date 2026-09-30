@@ -3,7 +3,7 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.11.1] — 2026-10-01
 ### Fixed
 - **A link that couldn't load still replied "▶ Streaming".** Every non-YouTube launch (plugin-resolved, mpv's yt-dlp hook, and the headless-browser fallback's stream) is now watched for an early mpv exit; a failure is reported as an error with mpv's own reason (e.g. `HTTP error 403`) instead. Previously only the hook path was watched, and only when the browser fallback was enabled.
 
