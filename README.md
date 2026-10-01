@@ -338,6 +338,7 @@ on the install method — the variables themselves are identical:
 | Source, foreground | `.env` in the repo (`set -a; source .env; set +a`) |
 | Source, systemd | `~/.config/environment.d/99-tg-mpv-bot.conf` + `Environment=` lines in the unit |
 | AUR | `~/.config/tg-mpv-bot.env` (read by both the launcher and the unit) |
+| Nix | a file outside the store, via the module's `environmentFile` (or `EnvironmentFile=` in your own unit) + `settings` |
 | Docker | `environment:` / `env_file:` in `docker-compose.yml` |
 
 Only `BOT_TOKEN` is required.
@@ -392,6 +393,8 @@ uv run ruff check .
 | `src/state.py` | Watch history state (JSON) — record, query, delete entries |
 | `docker-compose.yml` | Docker deployment (host networking + X11 bind) |
 | `Dockerfile` | Container build (Python 3.11 + mpv + i3-wm + xdotool) |
+| `flake.nix`, `packaging/nix/` | Nix package (`.#default`, `.#with-browser`), dev shell, home-manager module |
+| `packaging/aur/` | Arch `PKGBUILD` + user unit |
 
 ## Architecture
 
