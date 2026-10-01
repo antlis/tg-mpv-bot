@@ -3,6 +3,10 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.12.0] — 2026-10-01
+### Added
+- **Nix flake.** `nix run github:antlis/tg-mpv-bot` runs the bot with `mpv`, `yt-dlp` and `ffmpeg` on its `PATH`; `.#with-browser` adds the headless-Chromium fallback; `nix develop` gives a dev shell. A home-manager module (`homeManagerModules.default`, `services.tg-mpv-bot`) runs it as a user service, with `LOCK_FILE` under `$XDG_RUNTIME_DIR`. yt-dlp comes from nixpkgs, so `/update_ytdlp` doesn't apply — bump the flake input. Nix and Docker are alternatives: run only one per token. CI now runs `nix flake check`.
+
 ## [1.11.1] — 2026-10-01
 ### Fixed
 - **A link that couldn't load still replied "▶ Streaming".** Every non-YouTube launch (plugin-resolved, mpv's yt-dlp hook, and the headless-browser fallback's stream) is now watched for an early mpv exit; a failure is reported as an error with mpv's own reason (e.g. `HTTP error 403`) instead. Previously only the hook path was watched, and only when the browser fallback was enabled.
