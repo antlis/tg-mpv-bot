@@ -308,6 +308,26 @@ one-line comment:
   another workspace and back is a reliable manual fallback worth
   automating in the hook if you hit this.
 
+### Nix
+
+The flake packages the bot with `mpv`, `yt-dlp` and `ffmpeg` on its `PATH`:
+
+```bash
+nix run github:antlis/tg-mpv-bot            # BOT_TOKEN etc. from the environment
+nix build .#with-browser                    # + headless-Chromium fallback
+nix develop                                 # dev shell (uv, ruff, mpv, yt-dlp)
+```
+
+For a home-manager setup, import `homeManagerModules.default` and enable
+`services.tg-mpv-bot` (`environmentFile` holds `BOT_TOKEN`; `settings` takes the
+env vars from `.env.example`). yt-dlp comes from nixpkgs, so
+`/update_ytdlp` is unavailable — bump the flake input instead.
+
+**Nix and Docker are alternatives — run only one.** Both poll the same token,
+and each has its own `/tmp`, so the single-instance lock can't see across them.
+The module sets `LOCK_FILE` under `$XDG_RUNTIME_DIR`; to guard both, bind-mount
+that file into the container and set the same `LOCK_FILE` there.
+
 ## Configuration
 
 Everything is configured via environment variables. Where they live depends
