@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import socket
+from collections.abc import Callable
 from typing import Any
 
 
@@ -92,6 +93,33 @@ class MpvClient:
             return self.get_property(name)
         except MpvError:
             return None
+
+    def read_status(self) -> dict[str, Any]:
+        """Now-playing as JSON-friendly data (the remote API's ``GET /status``).
+
+        Raises :class:`MpvNotRunning` when the socket is dead; every field is
+        always present, with ``None`` where mpv has no value yet. ``playing`` is
+        False when mpv is up but nothing is loaded — then the fields that only
+        exist during playback are None too.
+        """
+        title = self._safe_get("media-title") or self._safe_get("filename")
+        icy = self._safe_get("metadata/icy-title")
+        return {
+            "playing": bool(title),
+            "title": title,
+            "icy": None if not icy or icy == title else icy,
+            "path": self._safe_get("path"),
+            "position": self._safe_get("time-pos"),
+            "duration": self._safe_get("duration"),
+            "percent": self._safe_get("percent-pos"),
+            "paused": self._safe_get("pause"),
+            "volume": self._safe_get("volume"),
+            "mute": self._safe_get("mute"),
+            "speed": self._safe_get("speed"),
+            "playlist_pos": self._safe_get("playlist-pos"),
+            "playlist_count": self._safe_get("playlist-count"),
+            "loop": self._safe_get("loop-playlist") not in (False, "no", None),
+        }
 
     def _track_label(self) -> str:
         """Reliable playlist-position label (title isn't loaded yet right after a switch)."""
@@ -270,3 +298,32 @@ class MpvClient:
         self.set_property("volume", new_vol)
         self.show_text(f"Volume: {new_vol:.0f}")
         return new_vol
+
+
+# One name → client-call table, shared by the Telegram now-playing panel
+# (``ctl:<action>`` callbacks) and the remote API's ``POST /ctl``: a control
+# added here is callable from both without a second mapping to keep in sync.
+# ``refresh`` re-renders the panel and is a no-op for the API.
+CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
+    "toggle": lambda c: c.toggle_pause(),
+    "pause": lambda c: c.set_pause(True),
+    "resume": lambda c: c.set_pause(False),
+    "back": lambda c: c.seek(-10),
+    "fwd": lambda c: c.seek(30),
+    "prev": lambda c: c.playlist_prev(),
+    "next": lambda c: c.playlist_next(),
+    "volup": lambda c: c.adjust_volume(10),
+    "voldown": lambda c: c.adjust_volume(-10),
+    "mute": lambda c: c.cycle_mute(),
+    "unmute": lambda c: c.set_mute(False),
+    "sub": lambda c: c.cycle_sub(),
+    "audio": lambda c: c.cycle_audio(),
+    "p0": lambda c: c.seek_percent(0),
+    "p25": lambda c: c.seek_percent(25),
+    "p50": lambda c: c.seek_percent(50),
+    "p75": lambda c: c.seek_percent(75),
+    "shuffle": lambda c: c.shuffle(),
+    "loop": lambda c: c.toggle_loop(),
+    "stop": lambda c: c.quit(),
+    "refresh": lambda c: None,
+}

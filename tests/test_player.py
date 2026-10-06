@@ -234,11 +234,184 @@ def test_fetch_subtitles_skips_when_none_advertised(tmp_path):
     assert fetch_subtitles(s_off, {"subtitles": {"en": []}}, tmp_path / "i.json") == []
 
 
-def test_pipe_player_start_offset():
+def test_pipe_player_never_carries_start():
+    # mpv drops --start outright on a non-seekable pipe, so the argv must not
+    # pretend: the resume happens over IPC (seek_when_buffered) instead.
     s = _settings(mpv_runner="")
-    assert "--start=754" in build_pipe_player_command(s, "T", start=754.9)
     assert not any(a.startswith("--start") for a in build_pipe_player_command(s, "T"))
-    assert not any(a.startswith("--start") for a in build_pipe_player_command(s, "T", start=0))
+    assert not any(
+        a.startswith("--start") for a in build_pipe_player_command(s, "T", video_fd=7, audio_fd=9)
+    )
+
+
+class _LiveProc:
+    """Stand-in for Popen: poll() stays None until ``exits_after`` calls."""
+
+    def __init__(self, exits_after: int | None = None):
+        self.exits_after = exits_after
+        self.calls = 0
+
+    def poll(self):
+        self.calls += 1
+        if self.exits_after is not None and self.calls > self.exits_after:
+            return 0
+        return None
+
+
+def _resume_client(monkeypatch, positions):
+    """Patch src.player.MpvClient with a fake serving ``positions`` in order."""
+    from src import player
+
+    created = []
+
+    class FakeClient:
+        def __init__(self, path):
+            self.path = path
+            self.seeks = []
+            created.append(self)
+
+        def seek_absolute(self, seconds):
+            self.seeks.append(seconds)
+
+        def get_property(self, name):
+            assert name == "time-pos"
+            return positions.pop(0) if len(positions) > 1 else (positions[0] if positions else 0.0)
+
+    monkeypatch.setattr(player, "MpvClient", FakeClient)
+    return created
+
+
+def test_seek_when_buffered_retries_until_the_cache_covers_the_target(monkeypatch):
+    from src import player
+
+    # cache is still short of the target twice, then the readahead lands
+    created = _resume_client(monkeypatch, [0.0, 1.3, 11.6, 30.0])
+    assert player.seek_when_buffered(_LiveProc(), "/tmp/sock", 11.5, timeout=5, poll=0.001)
+    assert len(created[0].seeks) == 3
+    assert created[0].path == "/tmp/sock"
+
+
+def test_seek_when_buffered_gives_up_when_the_position_never_lands(monkeypatch):
+    from src import player
+
+    created = _resume_client(monkeypatch, [0.0])
+    assert not player.seek_when_buffered(_LiveProc(), "/tmp/sock", 60.0, timeout=0.05, poll=0.001)
+    assert created[0].seeks, "it should have kept trying until the deadline"
+
+
+def test_seek_when_buffered_survives_a_socket_that_is_not_ready_yet(monkeypatch):
+    from src import player
+    from src.mpv_ipc import MpvNotRunning
+
+    created = []
+
+    class FlakyClient:
+        def __init__(self, path):
+            self.seeks = 0
+            created.append(self)
+
+        def seek_absolute(self, seconds):
+            self.seeks += 1
+            if self.seeks < 3:  # socket not listening yet
+                raise MpvNotRunning("mpv is not running")
+
+        def get_property(self, name):
+            return 42.0
+
+    monkeypatch.setattr(player, "MpvClient", FlakyClient)
+    assert player.seek_when_buffered(_LiveProc(), "/tmp/sock", 42.0, timeout=5, poll=0.001)
+    assert created[0].seeks == 3
+
+
+def test_seek_when_buffered_stops_once_its_own_mpv_is_gone(monkeypatch):
+    from src import player
+
+    _resume_client(monkeypatch, [0.0])
+    # the position never lands, but the process exits after one poll
+    assert not player.seek_when_buffered(
+        _LiveProc(exits_after=1), "/tmp/sock", 60.0, timeout=5, poll=0.001
+    )
+
+
+def test_spawn_seek_retry_only_runs_when_there_is_an_offset(monkeypatch):
+    from types import SimpleNamespace
+
+    from src import player
+
+    spawned = []
+
+    class FakeThread:
+        def __init__(self, target=None, args=(), name=None, daemon=None):
+            spawned.append((target, args, name, daemon))
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(player, "threading", SimpleNamespace(Thread=FakeThread))
+    live, dead = _LiveProc(), _LiveProc(exits_after=0)
+    player._spawn_seek_retry(live, "/tmp/sock", None)
+    player._spawn_seek_retry(live, "/tmp/sock", 0)
+    player._spawn_seek_retry(dead, "/tmp/sock", 5)
+    assert spawned == []
+    player._spawn_seek_retry(live, "/tmp/sock", 5)
+    target, args, name, daemon = spawned[0]
+    assert target is player.seek_when_buffered
+    assert args == (live, "/tmp/sock", 5.0)
+    assert name == "mpv-resume" and daemon is True
+
+
+def test_spawn_seek_retry_actually_runs_the_resume(monkeypatch):
+    import threading as _threading
+
+    from src import player
+
+    done = _threading.Event()
+    calls = []
+
+    def fake_seek(proc, path, target):
+        calls.append((path, target))
+        done.set()
+        return True
+
+    monkeypatch.setattr(player, "seek_when_buffered", fake_seek)
+    player._spawn_seek_retry(_LiveProc(), "/tmp/sock", 7.5)
+    assert done.wait(2)
+    assert calls == [("/tmp/sock", 7.5)]
+
+
+def test_url_launches_carry_the_start_offset():
+    from src import player
+
+    s = _settings(mpv_runner="")
+    assert "--start=42" in player._build_mpv_ytdl_command(s, "https://x/y", start=42.9)
+    assert not any(
+        a.startswith("--start") for a in player._build_mpv_ytdl_command(s, "https://x/y")
+    )
+    assert "--start=42" in player.build_resolved_command(
+        s, "https://cdn/v.mp4", None, "T", start=42.9
+    )
+    assert not any(
+        a.startswith("--start")
+        for a in player.build_resolved_command(s, "https://cdn/v.mp4", None, "T")
+    )
+
+
+def test_launch_non_youtube_forwards_start(monkeypatch):
+    from src import player
+
+    seen = []
+    monkeypatch.setattr(
+        player,
+        "_launch_mpv_ytdl",
+        lambda settings, url, start=None: seen.append(start) or _LiveProc(),
+    )
+    monkeypatch.setattr(player, "_early_exit", lambda proc, secs: None)
+    player._launch_non_youtube(_launch_settings(), "https://x/y", None, start=12.0)
+    assert seen == [12.0]
+
+    seen.clear()
+    player._launch_non_youtube(_launch_settings(), "https://x/y", None)
+    assert seen == [None]
 
 
 def test_pipe_player_sub_files():

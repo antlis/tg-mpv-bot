@@ -1,10 +1,14 @@
-"""Remote play API: ``POST /play`` starts a link on this machine's mpv.
+"""Remote play API: ``POST /play``, ``GET /status`` and ``POST /ctl``.
 
-For apps that want to send a video to the TV box (a "cast" button) without going through
-Telegram. Off unless ``REMOTE_PLAY_TOKEN`` is set; it is the one place the bot listens for
-connections (everything else is outbound polling), so it binds to localhost by default and
-wants a token on every request. It does what a link sent in a chat does: the same
-:func:`src.player.play_url`, so hooks, history and resume are the same.
+For apps that want to send a video to the TV box (a "cast" button), or drive the
+player without going through Telegram. Off unless ``REMOTE_PLAY_TOKEN`` is set;
+it is the one place the bot listens for connections (everything else is outbound
+polling), so it binds to localhost by default and wants a token on every request.
+
+``/play`` does what a link sent in a chat does: the same :func:`src.player.play_url`,
+so hooks, history and resume are the same. ``/ctl`` and ``/status`` talk to mpv's
+IPC socket through :class:`src.mpv_ipc.MpvClient`, sharing the panel's
+:data:`~src.mpv_ipc.CTL_ACTIONS` table.
 
     curl -H "Authorization: Bearer $REMOTE_PLAY_TOKEN" \\
          -d '{"url": "https://www.youtube.com/watch?v=...", "start": 83.5}' \\
@@ -17,12 +21,14 @@ import asyncio
 import hmac
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiohttp import web
 
 from src import player
 from src.config import Settings
+from src.mpv_ipc import CTL_ACTIONS, MpvClient, MpvError, MpvNotRunning
 
 logger = logging.getLogger("tg-mpv-bot.remote")
 
@@ -46,6 +52,20 @@ def _authorized(request: web.Request, token: str) -> bool:
     return scheme.lower() == "bearer" and hmac.compare_digest(given.strip().encode(), token.encode())
 
 
+@web.middleware
+async def _require_token(
+    request: web.Request, handler: Callable[[web.Request], Awaitable[web.StreamResponse]]
+) -> web.StreamResponse:
+    """Every route is bearer-token gated; 401 without it, before anything runs."""
+    settings = request.app[SETTINGS_KEY]
+    if not _authorized(request, settings.remote_play_token):
+        logger.warning(
+            "Rejected %s %s from %s: bad or missing token", request.method, request.path, request.remote
+        )
+        return _error(401, "unauthorized")
+    return await handler(request)
+
+
 def parse_play_request(body: Any) -> tuple[str, float | None]:
     """The url and start position (seconds, or None) of a /play body; ValueError when invalid."""
     if not isinstance(body, dict):
@@ -61,11 +81,12 @@ def parse_play_request(body: Any) -> tuple[str, float | None]:
     return url, float(start) if start > 0 else None
 
 
+def _client(settings: Settings) -> MpvClient:
+    return MpvClient(settings.mpv_socket)
+
+
 async def _play(request: web.Request) -> web.Response:
     settings = request.app[SETTINGS_KEY]
-    if not _authorized(request, settings.remote_play_token):
-        logger.warning("Rejected /play from %s: bad or missing token", request.remote)
-        return _error(401, "unauthorized")
     try:
         url, start = parse_play_request(await request.json())
     except ValueError as exc:  # includes json.JSONDecodeError
@@ -82,10 +103,48 @@ async def _play(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "title": title})
 
 
+async def _status(request: web.Request) -> web.Response:
+    settings = request.app[SETTINGS_KEY]
+    try:
+        status = await asyncio.to_thread(_client(settings).read_status)
+    except MpvNotRunning:
+        return _error(503, "mpv is not running")
+    except Exception:
+        logger.exception("Remote status failed")
+        return _error(500, "status failed")
+    return web.json_response({"ok": True, **status})
+
+
+async def _ctl(request: web.Request) -> web.Response:
+    settings = request.app[SETTINGS_KEY]
+    try:
+        body = await request.json()
+    except ValueError:
+        return _error(400, "expected a JSON object")
+    if not isinstance(body, dict):
+        return _error(400, "expected a JSON object")
+    action = body.get("action")
+    if not isinstance(action, str) or action not in CTL_ACTIONS:
+        return _error(400, f"action must be one of: {', '.join(sorted(CTL_ACTIONS))}")
+    logger.info("Remote ctl from %s: %s", request.remote, action)
+    try:
+        await asyncio.to_thread(CTL_ACTIONS[action], _client(settings))
+    except MpvNotRunning:
+        return _error(503, "mpv is not running")
+    except MpvError as exc:
+        return _error(422, str(exc))
+    except Exception:
+        logger.exception("Remote ctl failed")
+        return _error(500, "control failed")
+    return web.json_response({"ok": True, "action": action})
+
+
 def make_app(settings: Settings) -> web.Application:
-    app = web.Application(client_max_size=4096)
+    app = web.Application(client_max_size=4096, middlewares=[_require_token])
     app[SETTINGS_KEY] = settings
     app.router.add_post("/play", _play)
+    app.router.add_get("/status", _status)
+    app.router.add_post("/ctl", _ctl)
     return app
 
 
@@ -97,5 +156,8 @@ async def start(settings: Settings) -> web.AppRunner | None:
     await runner.setup()
     host, _, port = settings.remote_play_bind.rpartition(":")
     await web.TCPSite(runner, host or "127.0.0.1", int(port)).start()
-    logger.info("Remote play API on %s (POST /play, bearer token)", settings.remote_play_bind)
+    logger.info(
+        "Remote play API on %s (POST /play, GET /status, POST /ctl, bearer token)",
+        settings.remote_play_bind,
+    )
     return runner

@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -29,7 +30,7 @@ from urllib.parse import urlparse
 
 from . import browser, plugins, state
 from .config import Settings
-from .mpv_ipc import MpvClient
+from .mpv_ipc import MpvClient, MpvError, MpvNotRunning
 
 logger = logging.getLogger(__name__)
 
@@ -847,7 +848,6 @@ def build_pipe_player_command(
     video_fd: int | None = None,
     audio_fd: int | None = None,
     sub_files: list[Path] | None = None,
-    start: float | None = None,
 ) -> list[str]:
     """argv for mpv reading 1–2 piped streams.
 
@@ -856,6 +856,10 @@ def build_pipe_player_command(
     each stream gets its own pipe fd (``fd://N`` + ``--audio-file=fd://M``)
     and mpv muxes them itself. Pipes aren't seekable beyond mpv's cache, so
     generous demuxer buffers keep seeking useful.
+
+    No ``--start``: a pipe is non-seekable, so mpv drops it outright
+    ("Cannot seek in this stream") — resume on this path is
+    :func:`seek_when_buffered`'s job instead.
     """
     cmd = [
         _mpv_base(settings),
@@ -871,11 +875,69 @@ def build_pipe_player_command(
         cmd.append(f"--audio-file=fd://{audio_fd}")
     for sub in sub_files or []:
         cmd.append(f"--sub-file={sub}")
-    if start and start > 0:
-        # Resume point from the listener's checkpoints. Seeking a pipe means
-        # reading up to the offset, so far-in resumes take a moment to catch up.
-        cmd.append(f"--start={int(start)}")
     return cmd
+
+
+SEEK_RETRY_TIMEOUT = 30  # seconds — cache catches up far faster than this
+SEEK_RETRY_POLL = 0.5
+
+
+def seek_when_buffered(
+    proc: subprocess.Popen,
+    socket_path: str,
+    target: float,
+    *,
+    timeout: float = SEEK_RETRY_TIMEOUT,
+    poll: float = SEEK_RETRY_POLL,
+) -> bool:
+    """Get mpv to ``target`` seconds when its own ``--start`` can't: retry.
+
+    A pipe can't seek at load (mpv ignores ``--start``), and mpv answers a
+    ``seek`` request with ``success`` even when the move never happens — so
+    the position is re-read after each attempt and only a landed one counts.
+    The demuxer cache fills faster than playback, so a far-in resume lands a
+    few seconds in rather than at 0. Gives up at ``timeout`` (playback just
+    continues from wherever it is) and stops the instant *our* mpv exits, so
+    a stale retry can never seek a later launch. Returns whether we landed.
+    """
+    client = MpvClient(socket_path)
+    deadline = time.monotonic() + timeout
+    attempts = 0
+    pos: float | None = None
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            logger.info("Giving up on the %ss resume: that mpv is gone", target)
+            return False
+        attempts += 1
+        try:
+            client.seek_absolute(target)
+            time.sleep(poll)
+            pos = client.get_property("time-pos")
+        except (MpvNotRunning, MpvError):
+            time.sleep(poll)  # not loaded yet / property missing — keep trying
+            continue
+        if isinstance(pos, (int, float)) and pos >= target - 0.5:
+            logger.info("Resumed at %ss (attempt %d)", target, attempts)
+            return True
+    logger.warning(
+        "Could not reach %ss within %ss (at %s) — leaving playback where it is",
+        target,
+        timeout,
+        pos if isinstance(pos, (int, float)) else "?",
+    )
+    return False
+
+
+def _spawn_seek_retry(proc: subprocess.Popen, socket_path: str, start: float | None) -> None:
+    """Kick :func:`seek_when_buffered` off on a daemon thread, if resuming."""
+    if not start or start <= 0 or proc.poll() is not None:
+        return
+    threading.Thread(
+        target=seek_when_buffered,
+        args=(proc, socket_path, float(start)),
+        name="mpv-resume",
+        daemon=True,
+    ).start()
 
 
 HOOK_TIMEOUT = 15  # seconds — a hung hook must not block playback for long
@@ -986,7 +1048,9 @@ def _log_file(name: str):
         return subprocess.DEVNULL
 
 
-def _build_mpv_ytdl_command(settings: Settings, url: str) -> list[str]:
+def _build_mpv_ytdl_command(
+    settings: Settings, url: str, start: float | None = None
+) -> list[str]:
     """argv for mpv with its built-in ytdl hook — fallback when our probe fails."""
     cmd = [
         _mpv_base(settings),
@@ -995,6 +1059,10 @@ def _build_mpv_ytdl_command(settings: Settings, url: str) -> list[str]:
         "--force-window",
         "--network-timeout=120",
     ]
+    if start and start > 0:
+        # mpv fetches these URLs itself (range requests), so the offset is
+        # applied at load; seek_when_buffered() backstops sources that can't.
+        cmd.append(f"--start={int(start)}")
     ytdlp = _ytdlp_bin()
     if ytdlp:
         # Use the impersonate wrapper so mpv's ytdl_hook sends a browser TLS
@@ -1008,13 +1076,15 @@ def _build_mpv_ytdl_command(settings: Settings, url: str) -> list[str]:
     return cmd
 
 
-def _launch_mpv_ytdl(settings: Settings, url: str) -> subprocess.Popen:
+def _launch_mpv_ytdl(
+    settings: Settings, url: str, start: float | None = None
+) -> subprocess.Popen:
     """Launch mpv with its built-in ytdl hook for a URL."""
     env = _hook_env(settings, url, url)
     _stop_current(settings)
     _run_hook("pre-play", settings.pre_play_hook, env)
     mpv_log = _log_file("tg-mpv-bot-mpv.log")
-    mpv_cmd = _build_mpv_ytdl_command(settings, url)
+    mpv_cmd = _build_mpv_ytdl_command(settings, url, start=start)
     logger.info("Launching ytdl-hook: %s", " ".join(mpv_cmd))
     proc = subprocess.Popen(
         mpv_cmd,
@@ -1028,6 +1098,7 @@ def _launch_mpv_ytdl(settings: Settings, url: str) -> subprocess.Popen:
         mpv_log.close()
     _run_hook("post-play", settings.post_play_hook, env)
     state.record_last_played(settings.state_file, url, name=url)
+    _spawn_seek_retry(proc, settings.mpv_socket, start)
     return proc
 
 
@@ -1037,6 +1108,7 @@ def build_resolved_command(
     referer: str | None,
     title: str,
     headers: dict | None = None,
+    start: float | None = None,
 ) -> list[str]:
     """argv for mpv playing a URL a plugin / the browser fallback resolved.
 
@@ -1066,6 +1138,8 @@ def build_resolved_command(
         )
     if settings.media_proxy and _proxy_reachable(settings.media_proxy):
         cmd.append(f"--http-proxy={settings.media_proxy}")
+    if start and start > 0:
+        cmd.append(f"--start={int(start)}")
     return cmd
 
 
@@ -1075,12 +1149,13 @@ def _launch_resolved(
     media_url: str,
     referer: str | None,
     headers: dict | None = None,
+    start: float | None = None,
 ) -> subprocess.Popen:
     env = _hook_env(settings, page_url, page_url)
     _stop_current(settings)
     _run_hook("pre-play", settings.pre_play_hook, env)
     mpv_log = _log_file("tg-mpv-bot-mpv.log")
-    cmd = build_resolved_command(settings, media_url, referer, page_url, headers)
+    cmd = build_resolved_command(settings, media_url, referer, page_url, headers, start=start)
     logger.info("Launching resolved: %s", " ".join(cmd))
     proc = subprocess.Popen(
         cmd,
@@ -1094,6 +1169,7 @@ def _launch_resolved(
         mpv_log.close()
     _run_hook("post-play", settings.post_play_hook, env)
     state.record_last_played(settings.state_file, page_url, name=page_url)
+    _spawn_seek_retry(proc, settings.mpv_socket, start)
     return proc
 
 
@@ -1139,7 +1215,10 @@ def _load_failure(url: str, rc: int, how: str) -> UrlPlaybackError:
 
 
 def _launch_non_youtube(
-    settings: Settings, url: str, progress: Callable[[str], None] | None
+    settings: Settings,
+    url: str,
+    progress: Callable[[str], None] | None,
+    start: float | None = None,
 ) -> None:
     """Plugins → yt-dlp (via mpv's hook) → headless-browser fallback.
 
@@ -1151,7 +1230,9 @@ def _launch_non_youtube(
         if found:
             if progress:
                 progress("starting")
-            proc = _launch_resolved(settings, url, found.media_url, found.referer, found.headers)
+            proc = _launch_resolved(
+                settings, url, found.media_url, found.referer, found.headers, start=start
+            )
             rc = _early_exit(proc, _RESOLVED_WATCH_SECS)
             if rc is not None:
                 raise _load_failure(url, rc, "The plugin's stream")
@@ -1159,7 +1240,7 @@ def _launch_non_youtube(
 
     if progress:
         progress("starting")
-    proc = _launch_mpv_ytdl(settings, url)
+    proc = _launch_mpv_ytdl(settings, url, start=start)
     rc = _early_exit(proc, _HOOK_WATCH_SECS)
     if rc is None:
         return  # still running (loaded fine) or played to the end
@@ -1174,7 +1255,7 @@ def _launch_non_youtube(
             "no extractor could play that page (headless-browser fallback found no stream)"
         )
     media_url, referer = sniffed
-    proc = _launch_resolved(settings, url, media_url, referer)
+    proc = _launch_resolved(settings, url, media_url, referer, start=start)
     rc = _early_exit(proc, _RESOLVED_WATCH_SECS)
     if rc is not None:
         raise _load_failure(url, rc, "The sniffed stream")
@@ -1194,13 +1275,15 @@ def play_url(
     with a user-facing reason when the URL can't be prepared. ``progress``
     (called from this worker thread) receives stage names — "escalating"
     when the cookie retry kicks in, "starting" once the probe succeeded.
+    ``start`` resumes playback: mpv applies it itself wherever the source is
+    seekable, while piped YouTube waits for :func:`seek_when_buffered`.
     """
     # Non-YouTube: skip probe entirely — one clean request from mpv's ytdl
     # hook (same as ``mpv <url>`` from CLI) avoids CDN rate-limiting that our
     # probe triggers (Qrator, Cloudflare, etc.).
     if not _is_youtube_url(url) and _ytdlp_bin() is not None:
         logger.info("Skipping probe for non-YouTube URL: %s", url)
-        _launch_non_youtube(settings, url, progress)
+        _launch_non_youtube(settings, url, progress, start=start)
         return url  # title unknown — mpv will figure it out
 
     try:
@@ -1232,7 +1315,8 @@ def play_url(
         )
         mpv_cmd = build_direct_command(settings, info, title, sub_files, start, cover)
         logger.info("Launching direct: %s", " ".join(mpv_cmd))
-        subprocess.Popen(mpv_cmd, stdout=mpv_log, stderr=mpv_log, **common)
+        proc = subprocess.Popen(mpv_cmd, stdout=mpv_log, stderr=mpv_log, **common)
+        _spawn_seek_retry(proc, settings.mpv_socket, start)
     elif len(formats) >= 2:
         video_r, video_w = os.pipe()
         audio_r, audio_w = os.pipe()
@@ -1241,11 +1325,9 @@ def play_url(
             logger.info("Launching fetcher: %s", " ".join(cmd))
             subprocess.Popen(cmd, stdout=write_end, stderr=ytdl_log, **common)
             os.close(write_end)  # fetchers must own the only write ends
-        mpv_cmd = build_pipe_player_command(
-            settings, title, video_r, audio_r, sub_files, start=start
-        )
+        mpv_cmd = build_pipe_player_command(settings, title, video_r, audio_r, sub_files)
         logger.info("Launching player: %s", " ".join(mpv_cmd))
-        subprocess.Popen(
+        proc = subprocess.Popen(
             mpv_cmd,
             pass_fds=(video_r, audio_r),
             stdout=mpv_log,
@@ -1254,12 +1336,13 @@ def play_url(
         )
         os.close(video_r)
         os.close(audio_r)
+        _spawn_seek_retry(proc, settings.mpv_socket, start)
     else:
         cmd = build_fetch_command(settings, info_path)
         logger.info("Launching pipe: %s | mpv -", " ".join(cmd))
         fetcher = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=ytdl_log, **common)
-        mpv_cmd = build_pipe_player_command(settings, title, sub_files=sub_files, start=start)
-        subprocess.Popen(
+        mpv_cmd = build_pipe_player_command(settings, title, sub_files=sub_files)
+        proc = subprocess.Popen(
             mpv_cmd,
             env=env,
             stdin=fetcher.stdout,
@@ -1268,6 +1351,7 @@ def play_url(
             start_new_session=True,
         )
         fetcher.stdout.close()  # mpv's exit must SIGPIPE yt-dlp, not us
+        _spawn_seek_retry(proc, settings.mpv_socket, start)
     for f in (ytdl_log, mpv_log):
         if f is not subprocess.DEVNULL:
             f.close()  # children hold their own duplicates
