@@ -202,7 +202,7 @@ async def test_status_reports_now_playing(client, fake_mpv):
 async def test_status_without_media(client, fake_mpv, monkeypatch):
     monkeypatch.setattr(FakeMpvClient, "status", {"playing": False, "title": None})
     body = await (await client.get("/status", headers=AUTH)).json()
-    assert body == {"ok": True, "playing": False, "title": None}
+    assert body == {"ok": True, "playing": False, "title": None, "queue": None}
 
 
 async def test_status_when_mpv_is_down(client, fake_mpv, monkeypatch):

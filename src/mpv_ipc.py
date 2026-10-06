@@ -300,6 +300,11 @@ class MpvClient:
         return new_vol
 
 
+def queue_skip(delta: int) -> bool:
+    """next / previous inside a remote queue; replaced by src/remote_queue.py (False = no queue)."""
+    return False
+
+
 # One name → client-call table, shared by the Telegram now-playing panel
 # (``ctl:<action>`` callbacks) and the remote API's ``POST /ctl``: a control
 # added here is callable from both without a second mapping to keep in sync.
@@ -310,8 +315,8 @@ CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
     "resume": lambda c: c.set_pause(False),
     "back": lambda c: c.seek(-10),
     "fwd": lambda c: c.seek(30),
-    "prev": lambda c: c.playlist_prev(),
-    "next": lambda c: c.playlist_next(),
+    "prev": lambda c: queue_skip(-1) or c.playlist_prev(),
+    "next": lambda c: queue_skip(1) or c.playlist_next(),
     "volup": lambda c: c.adjust_volume(10),
     "voldown": lambda c: c.adjust_volume(-10),
     "mute": lambda c: c.cycle_mute(),
