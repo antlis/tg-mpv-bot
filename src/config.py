@@ -159,6 +159,11 @@ class Settings:
     lock_file: str = "/tmp/tg-mpv-bot.lock"
     scan_interval_min: int = 0   # >0 → auto-scan for new media every N minutes
     ytdlp_update_days: int = 0   # >0 → auto-update yt-dlp nightly every N days
+    # Remote play API (src/remote.py): off while the token is empty. The bind address is
+    # host:port; the default keeps it on this machine (reach it through an ssh tunnel, or set
+    # a LAN / Tailscale address).
+    remote_play_token: str = ""
+    remote_play_bind: str = "127.0.0.1:8085"
     state_file: Path = field(  # remembers the last-played playlist (/last)
         default_factory=lambda: Path.home() / ".local/state/tg-mpv-bot/state.json"
     )
@@ -221,6 +226,8 @@ def get_settings() -> Settings:
         lock_file=os.environ.get("LOCK_FILE", "/tmp/tg-mpv-bot.lock"),
         scan_interval_min=int(os.environ.get("SCAN_INTERVAL_MIN", "0") or "0"),
         ytdlp_update_days=int(os.environ.get("YTDL_UPDATE_DAYS", "0") or "0"),
+        remote_play_token=os.environ.get("REMOTE_PLAY_TOKEN", "").strip(),
+        remote_play_bind=os.environ.get("REMOTE_PLAY_BIND", "127.0.0.1:8085").strip() or "127.0.0.1:8085",
         state_file=Path(os.environ["STATE_FILE"]).expanduser()
         if os.environ.get("STATE_FILE")
         else Path.home() / ".local/state/tg-mpv-bot/state.json",
