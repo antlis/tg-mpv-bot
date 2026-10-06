@@ -137,7 +137,7 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   link when mpv vanishes within `NEAR_END` seconds of the end of a video. `player._stop_current` bumps
   `playback_epoch()`, so any other launch ends the queue; `stop` and a single `/play` cancel it. `next`/`prev`
   go through `mpv_ipc.queue_skip` (set here) before falling back to mpv's playlist. `play_lock` is shared
-  with `/play`.
+  with `/play`. `POST /queue` appends links to the running queue (`PlayQueue.append`, `MAX_TOTAL`).
 
 ## Running it (operational)
 

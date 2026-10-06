@@ -426,6 +426,10 @@ gives way to anything else: a new `POST /play`, a link sent in the chat, or mpv 
 end of a video (`/quit`, `stop`). A video ending is told from one vanishing within 5 seconds of its
 end, so a live stream doesn't continue into the next item.
 
+**A longer list** goes in chunks: `POST /queue` with `{"urls": [...]}` (up to 200 per request) adds
+links to the end of the running queue, up to 2000 in all (`409` when no queue is running, `422`
+past the limit). The `count` in `GET /status`'s `queue` grows with it.
+
 `GET /status` reports the current item in one JSON object with a stable shape — `playing` is false
 while mpv is idle, and the call is `503` when mpv isn't running at all. `POST /ctl` takes
 `{"action": …}`: `400` (listing the valid actions) for an unknown one, `503` when mpv is down, `422`

@@ -1,4 +1,4 @@
-"""Remote play API: ``POST /play``, ``GET /status`` and ``POST /ctl``.
+"""Remote play API: ``POST /play``, ``POST /queue``, ``GET /status`` and ``POST /ctl``.
 
 For apps that want to send a video to the TV box (a "cast" button), or drive the
 player without going through Telegram. Off unless ``REMOTE_PLAY_TOKEN`` is set;
@@ -90,8 +90,8 @@ def _is_seconds(value: Any) -> bool:
     )
 
 
-def parse_queue_request(body: Any) -> tuple[list[str], int, float | None]:
-    """The links, the index to start at and the start position (seconds, None) of a ``urls`` body."""
+def parse_urls(body: Any) -> list[str]:
+    """The ``urls`` of a body: 1 to ``MAX_ITEMS`` http(s) links; ValueError when invalid."""
     if not isinstance(body, dict):
         raise ValueError("expected JSON object")
     urls = body.get("urls")
@@ -99,6 +99,12 @@ def parse_queue_request(body: Any) -> tuple[list[str], int, float | None]:
         raise ValueError(f"urls must be a list of 1 to {remote_queue.MAX_ITEMS} links")
     for url in urls:
         parse_play_request({"url": url})  # each one an http(s) link
+    return urls
+
+
+def parse_queue_request(body: Any) -> tuple[list[str], int, float | None]:
+    """The links, the index to start at and the start position (seconds, None) of a ``urls`` body."""
+    urls = parse_urls(body)
     index = body.get("index", 0)
     if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(urls):
         raise ValueError("index must be a position in urls")
@@ -144,6 +150,23 @@ async def _play_queue(
         logger.exception("Remote queue failed")
         return _error(500, "playback failed")
     return web.json_response({"ok": True, "title": title, "queued": len(urls) - index})
+
+
+async def _queue_add(request: web.Request) -> web.Response:
+    """Append links to the queue that is running (a long list is sent in chunks)."""
+    try:
+        urls = parse_urls(await request.json())
+    except ValueError as exc:
+        return _error(400, str(exc))
+    queue = remote_queue.current()
+    if queue is None:
+        return _error(409, "no queue is running")
+    try:
+        total = queue.append(urls)
+    except ValueError as exc:
+        return _error(422, str(exc))
+    logger.info("Remote queue from %s: +%d links (%d in all)", request.remote, len(urls), total)
+    return web.json_response({"ok": True, "count": total})
 
 
 async def _status(request: web.Request) -> web.Response:
@@ -205,6 +228,7 @@ def make_app(settings: Settings) -> web.Application:
     app.router.add_post("/play", _play)
     app.router.add_get("/status", _status)
     app.router.add_post("/ctl", _ctl)
+    app.router.add_post("/queue", _queue_add)
     return app
 
 
@@ -217,7 +241,7 @@ async def start(settings: Settings) -> web.AppRunner | None:
     host, _, port = settings.remote_play_bind.rpartition(":")
     await web.TCPSite(runner, host or "127.0.0.1", int(port)).start()
     logger.info(
-        "Remote play API on %s (POST /play, GET /status, POST /ctl, bearer token)",
+        "Remote play API on %s (POST /play, POST /queue, GET /status, POST /ctl, bearer token)",
         settings.remote_play_bind,
     )
     return runner
