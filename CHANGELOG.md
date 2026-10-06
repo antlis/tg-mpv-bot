@@ -3,7 +3,7 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.13.0] — 2026-10-06
 ### Added
 - **Exact seek over HTTP.** `POST /ctl` accepts `{"action": "seek", "position": seconds}` and jumps to that second, for apps with a progress bar; the fixed `back`/`fwd`/percent steps stay.
 - **Remote play API.** `POST /play` with `{"url": …, "start": seconds}` and a bearer token starts a link on the bot's mpv without going through Telegram — for scripts, phone shortcuts, home automation or any app that can send an HTTP request. Same playback path as a link sent in a chat (hooks, history, resume); `http(s)` links only. Off unless `REMOTE_PLAY_TOKEN` is set; `REMOTE_PLAY_BIND` (default `127.0.0.1:8085`) says where it listens. It is the bot's only listening socket, so keep it on localhost, a LAN or Tailscale address. One video per request, no playlists yet.
