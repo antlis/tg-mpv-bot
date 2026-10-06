@@ -21,7 +21,7 @@ socket](https://mpv.io/manual/stable/#json-ipc) directly from Python.
 - 🕘 **Watch history** (`/history`) — last 20 items, paginated; tap to replay, copy URL, or delete
 - ⏺ **Record** the current video (→ H.264 mp4) or radio (→ voice message) and get it in chat
 - 📺 **Live TV (IPTV)** — `/iptv <name>` searches 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and streams them live via mpv; channel logo sent as a photo card
-- 🌐 **Remote play API** (opt-in) — `POST /play` with a link and a token starts it on the TV from a script, a phone shortcut or any other app, no Telegram needed
+- 🌐 **Remote play API** (opt-in) — `POST /play` with a link, `GET /status` and `POST /ctl` to drive playback, all behind a bearer token: send a link or pause the TV from a script, a phone shortcut or any other app, no Telegram needed
 - 🪝 **Hooks** instead of WM assumptions — `i3-msg`/`swaymsg`/`notify-send`, your call
 
 ![tg-mpv-bot demo](docs/demo.svg)
@@ -377,18 +377,33 @@ Only `BOT_TOKEN` is required.
 
 ## Remote play API
 
-Play a link on the TV without opening Telegram: from a script, a phone shortcut, a home-automation
-rule, a browser bookmarklet or any app that can send an HTTP request.
+Play a link on the TV without opening Telegram — and drive the player afterwards: from a script, a
+phone shortcut, a home-automation rule, a browser bookmarklet or any app that can send an HTTP
+request.
 
 Off by default. Everything else in the bot is outbound-only (Telegram polling); this is the one
 place it listens, so it needs `REMOTE_PLAY_TOKEN` and binds to `127.0.0.1:8085` unless you set
-`REMOTE_PLAY_BIND` (use a LAN or Tailscale address, never a public one).
+`REMOTE_PLAY_BIND` (use a LAN or Tailscale address, never a public one). Every request carries
+`Authorization: Bearer $REMOTE_PLAY_TOKEN`.
 
 ```bash
-curl -H "Authorization: Bearer $REMOTE_PLAY_TOKEN" \
-     -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "start": 83.5}' \
+H="Authorization: Bearer $REMOTE_PLAY_TOKEN"
+
+# start a link — the same hooks/history/resume as one sent in a chat
+curl -H "$H" -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "start": 83.5}' \
      http://tv-box:8085/play
 # {"ok": true, "title": "..."}
+
+# what is on the TV right now
+curl -H "$H" http://tv-box:8085/status
+# {"ok": true, "playing": true, "title": "...", "position": 12.5, "duration": 240.0,
+#  "percent": 5.2, "paused": false, "volume": 100.0, "mute": false, "speed": 1.0, ...}
+
+# pause, jump, volume, stop
+curl -H "$H" -d '{"action": "pause"}'   http://tv-box:8085/ctl   # also: resume, toggle
+curl -H "$H" -d '{"action": "back"}'    http://tv-box:8085/ctl   # -10 s; fwd is +30 s
+curl -H "$H" -d '{"action": "voldown"}' http://tv-box:8085/ctl   # volup, mute, unmute
+curl -H "$H" -d '{"action": "stop"}'    http://tv-box:8085/ctl
 ```
 
 `POST /play` takes an `http(s)` link and an optional `start` position in seconds, and plays it the
@@ -396,6 +411,14 @@ way a link sent in a chat does (the same pre/post-play hooks, watch history and 
 Telegram messages. It answers once playback has started: `400` for a bad request, `401` for a
 missing or wrong token, `422` with the reason when the link can't be played. Other schemes (`file://`,
 `ytdl://`, …) are refused. One video per request; playlists aren't supported yet.
+
+`GET /status` reports the current item in one JSON object with a stable shape — `playing` is false
+while mpv is idle, and the call is `503` when mpv isn't running at all. `POST /ctl` takes
+`{"action": …}`: `400` (listing the valid actions) for an unknown one, `503` when mpv is down, `422`
+with mpv's own reason if it rejects the command. The actions are the ones the Telegram panel offers —
+`toggle`, `pause`, `resume`, `back`, `fwd`, `prev`, `next`, `volup`, `voldown`, `mute`, `unmute`,
+`sub`, `audio`, `p0`/`p25`/`p50`/`p75`, `shuffle`, `loop`, `stop` — and both sides read the same
+table, so a control added there shows up in both at once.
 
 Keep the token private (it is a password for your TV), and don't
 expose the port to the internet: bind it to a LAN or Tailscale address, or leave it on localhost and
@@ -416,10 +439,10 @@ uv run ruff check .
 | `src/config.py` | Settings from env (single source of host paths) |
 | `src/commands.py` | Telegram command + callback handlers |
 | `src/iptv.py` | IPTV command + callbacks — M3U fetch/cache, channel search, streaming via `player.play_radio` |
-| `src/ipc.py` | Direct JSON-IPC client for mpv (pause/seek/volume/info) |
+| `src/mpv_ipc.py` | Direct JSON-IPC client for mpv (pause/seek/volume/info) + the shared `CTL_ACTIONS` table |
 | `src/playlists.py` | Playlist discovery, query matching, on-disk validation |
 | `src/player.py` | Launch mpv (pkill + pre/post-play hooks + detached spawn) |
-| `src/remote.py` | Remote play API: `POST /play` with a bearer token (off unless `REMOTE_PLAY_TOKEN` is set) |
+| `src/remote.py` | Remote play API: `POST /play`, `GET /status`, `POST /ctl` behind a bearer token (off unless `REMOTE_PLAY_TOKEN` is set) |
 | `src/keyboards.py` | Inline-keyboard builders for browsing and watch history |
 | `src/state.py` | Watch history state (JSON) — record, query, delete entries |
 | `docker-compose.yml` | Docker deployment (host networking + X11 bind) |

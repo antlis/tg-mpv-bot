@@ -150,10 +150,10 @@ def test_now_playing_keyboard():
 
 def test_every_panel_button_has_a_handler():
     """A button without a branch in cb_ctl silently does nothing."""
-    from src.commands import _CTL_ACTIONS
     from src.keyboards import now_playing_keyboard
+    from src.mpv_ipc import CTL_ACTIONS
 
-    handled = set(_CTL_ACTIONS) | {"record", "snap", "upload", "close"}
+    handled = set(CTL_ACTIONS) | {"record", "snap", "upload", "close"}
     kb = now_playing_keyboard()
     actions = {
         b.callback_data[len("ctl:"):]

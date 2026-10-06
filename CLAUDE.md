@@ -61,10 +61,12 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   `SCAN_INTERVAL_MIN>0`. Switches to a local Bot API server when `API_SERVER_URL` is set.
 - `src/config.py` — frozen `Settings` dataclass loaded once via `@lru_cache get_settings()`. **Single
   source of truth for all host paths.** Tests that exercise env must call `get_settings.cache_clear()`.
-- `src/ipc.py` — `MpvClient(socket_path)`: opens a short-lived Unix-socket connection per command,
+- `src/mpv_ipc.py` — `MpvClient(socket_path)`: opens a short-lived Unix-socket connection per command,
   writes one JSON line, and reads newline-delimited replies **skipping async `event` lines** until the
   one matching `request_id`. Raises `MpvNotRunning` (socket dead) / `MpvError` (mpv said not-success).
   `adjust_volume` clamps to 0–130. Pure I/O with an injectable path → testable against a fake server.
+  Also holds `read_status()` (now-playing as JSON-friendly fields, the remote API's `GET /status`) and
+  `CTL_ACTIONS`, the name→client-call table shared by the panel's `ctl:` callbacks and `POST /ctl`.
 - `src/playlists.py` — `discover()` (case-insensitive **stable** sort so global indices stay valid
   between a `/library` render and a later `/play <n>`; scans `*.m3u` directly in a playlists dir
   **and one level of nested folders**, whose name becomes the playlist's `subcategory`), `find()`
@@ -109,7 +111,7 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 - `src/commands.py` — handlers push blocking IPC/subprocess work to `asyncio.to_thread`. `_ipc()`
   centralizes error→message translation. Play buttons carry the **global** playlist index. `/info`
   posts the **now-playing panel** (`now_playing_keyboard` + `_status_text`); the `ctl:<action>`
-  callbacks (`cb_ctl`, dispatched via `_CTL_ACTIONS`) run an IPC op then edit the panel in place.
+  callbacks (`cb_ctl`, dispatched via `CTL_ACTIONS`) run an IPC op then edit the panel in place.
   `/fix` calls `generate.repair_playlists`. The playlist scan is cached (`_all_playlists`,
   `refresh_cache`).
 - `src/generate.py` — idempotent playlist creation (`generate_missing` → `generate_flat`/
@@ -117,11 +119,14 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   `repair_playlists` (re-point missing entries by unique basename, prune the rest, `.m3u.bak` backup)
   behind `/fix`.
 - `src/lock.py` — `acquire(path)` exclusive `flock`; raises `AlreadyRunning` if a second instance starts.
-- `src/remote.py` — the **remote play API** (`POST /play`, aiohttp), started from `bot.py:main()` only when
-  `REMOTE_PLAY_TOKEN` is set. It is the one listening socket in the bot, so: bearer token compared with
-  `hmac.compare_digest`, default bind `127.0.0.1:8085` (`REMOTE_PLAY_BIND`), `http(s)` URLs only (mpv also opens
-  files, `ytdl://`, `edl://`), one launch at a time (`_play_lock`), unexpected errors never echoed. It calls
-  `player.play_url` (so hooks, history and resume match a Telegram link) and answers when playback has started.
+- `src/remote.py` — the **remote play API** (`POST /play`, `GET /status`, `POST /ctl`; aiohttp), started
+  from `bot.py:main()` only when `REMOTE_PLAY_TOKEN` is set. It is the one listening socket in the bot, so:
+  one bearer-token middleware guards every route (`hmac.compare_digest`), default bind `127.0.0.1:8085`
+  (`REMOTE_PLAY_BIND`), `http(s)` URLs only (mpv also opens files, `ytdl://`, `edl://`), one launch at a
+  time (`_play_lock`), unexpected errors never echoed. `/play` calls `player.play_url` (so hooks, history
+  and resume match a Telegram link) and answers when playback has started. `/status` answers with
+  `MpvClient.read_status()` (`503` while mpv is down); `/ctl` takes `{"action": …}` from
+  `mpv_ipc.CTL_ACTIONS` — the panel's own table — and answers `400`/`503`/`422`.
 
 ## Running it (operational)
 
@@ -140,8 +145,10 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
 - Adding a command touches **four** in-sync places: a handler in `src/commands.py`, the menu in
   `bot.py:_build_menu()`, the help text in `cmd_help`, and the README command table.
 - The now-playing panel's `ctl:<action>` callbacks are one more callback grammar alongside
-  `cats`/`c:`/`s:`/`pl:`/`noop` and the episode picker's `ep:<n>`/`eps:<page>`; `_CTL_ACTIONS` maps
-  each panel action to an `MpvClient` call. (`ep:` indexes mpv's *live* playlist, not the library.)
+  `cats`/`c:`/`s:`/`pl:`/`noop` and the episode picker's `ep:<n>`/`eps:<page>`; `CTL_ACTIONS`
+  (in `src/mpv_ipc.py`) maps each action to an `MpvClient` call and is shared with the remote API's
+  `POST /ctl`, so a control is added in exactly one place. (`ep:` indexes mpv's *live* playlist, not
+  the library.)
 - All host assumptions now flow from `src/config.py` env vars. The deploy files (`docker-compose.yml`,
   `tg-mpv-bot.service`) still set concrete values (`PRE_PLAY_HOOK=i3-msg workspace 10`, `DISPLAY=:0`,
   `%h`/`${HOME}`-relative paths)

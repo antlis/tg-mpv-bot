@@ -6,6 +6,7 @@ Notable changes to **tg-mpv-bot**. Format based on
 ## [Unreleased]
 ### Added
 - **Remote play API.** `POST /play` with `{"url": …, "start": seconds}` and a bearer token starts a link on the bot's mpv without going through Telegram — for scripts, phone shortcuts, home automation or any app that can send an HTTP request. Same playback path as a link sent in a chat (hooks, history, resume); `http(s)` links only. Off unless `REMOTE_PLAY_TOKEN` is set; `REMOTE_PLAY_BIND` (default `127.0.0.1:8085`) says where it listens. It is the bot's only listening socket, so keep it on localhost, a LAN or Tailscale address. One video per request, no playlists yet.
+- **Remote control of the player too.** The same token also gates `GET /status` (what's playing now, as one JSON object: title, position, duration, paused, volume, playlist position — `503` while mpv is down) and `POST /ctl` with `{"action": …}` — `pause`/`resume`/`toggle`, `back`/`fwd` (±10/+30 s), `prev`/`next`, `volup`/`voldown`, `mute`, subtitle and audio-track cycling, percent seeks, `shuffle`, `loop`, `stop`. `400` lists the valid actions, `422` carries mpv's own reason. The action table is the Telegram panel's own (`mpv_ipc.CTL_ACTIONS`), so a control added there is available over HTTP in the same change.
 
 ## [1.12.0] — 2026-10-01
 ### Added

@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from src.mpv_ipc import MpvClient, MpvError, MpvNotRunning
+from src.mpv_ipc import CTL_ACTIONS, MpvClient, MpvError, MpvNotRunning
 
 
 class FakeMpv:
@@ -259,3 +259,67 @@ def test_cycle_sub_text_reports_track(fake_mpv):
     fake_mpv.props["sid"] = 0
     # cycles 0 -> 1; title/lang properties are absent so it falls back to "track N"
     assert _cycle_sub_text(client) == "💬 Subtitles: track 1"
+
+
+# ── read_status (GET /status) ───────────────────────────────────
+
+
+STATUS_FIELDS = {
+    "playing", "title", "icy", "path", "position", "duration", "percent",
+    "paused", "volume", "mute", "speed", "playlist_pos", "playlist_count", "loop",
+}
+
+
+def test_read_status_reports_what_is_playing(fake_mpv):
+    fake_mpv.props["duration"] = 600.0
+    fake_mpv.props["time-pos"] = 42.0
+    status = MpvClient(fake_mpv.path).read_status()
+    assert status["playing"] is True
+    assert status["title"] == "Test Clip"
+    assert status["position"] == 42.0
+    assert status["duration"] == 600.0
+    assert status["volume"] == 50.0
+    assert status["paused"] is False
+    assert status["loop"] is False
+    assert status["icy"] is None
+
+
+def test_read_status_keeps_the_same_fields_when_idle(fake_mpv):
+    fake_mpv.props.pop("media-title")
+    status = MpvClient(fake_mpv.path).read_status()
+    assert status["playing"] is False
+    assert status["title"] is None
+    assert set(status) == STATUS_FIELDS  # a stable shape to parse against
+
+
+def test_read_status_exposes_icy_only_when_it_adds_something(fake_mpv):
+    fake_mpv.props["metadata/icy-title"] = "Now: Some Track"
+    assert MpvClient(fake_mpv.path).read_status()["icy"] == "Now: Some Track"
+    fake_mpv.props["metadata/icy-title"] = "Test Clip"  # same as the title → dropped
+    assert MpvClient(fake_mpv.path).read_status()["icy"] is None
+
+
+def test_read_status_is_none_not_an_error_for_missing_properties(fake_mpv):
+    # time-pos / duration / percent-pos aren't in the fake's store at all
+    status = MpvClient(fake_mpv.path).read_status()
+    assert status["duration"] is None
+    assert status["percent"] is None
+
+
+def test_read_status_raises_when_mpv_is_down(tmp_path):
+    with pytest.raises(MpvNotRunning):
+        MpvClient(str(tmp_path / "gone.sock")).read_status()
+
+
+# ── CTL_ACTIONS (panel buttons + remote POST /ctl) ──────────────
+
+
+@pytest.mark.parametrize("action_name", sorted(CTL_ACTIONS))
+def test_every_action_runs_against_a_client(fake_mpv, action_name):
+    """A typo'd method name in the shared table would blow up both the panel and /ctl."""
+    CTL_ACTIONS[action_name](MpvClient(fake_mpv.path))
+
+
+def test_action_table_covers_the_transport_controls():
+    assert {"toggle", "pause", "resume", "back", "fwd", "next", "prev",
+            "volup", "voldown", "mute", "unmute", "stop"} <= set(CTL_ACTIONS)

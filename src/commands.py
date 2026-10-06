@@ -49,7 +49,7 @@ from .keyboards import (
     subcategories_keyboard,
     yt_results_keyboard,
 )
-from .mpv_ipc import MpvClient, MpvError, MpvNotRunning
+from .mpv_ipc import CTL_ACTIONS, MpvClient, MpvError, MpvNotRunning
 
 logger = logging.getLogger(__name__)
 router = Router(name="mpv_commands")
@@ -929,29 +929,6 @@ async def _edit_playing(message: Message, text: str) -> None:
         pass  # "message is not modified" when nothing changed — ignore
 
 
-_CTL_ACTIONS: dict[str, Callable[[MpvClient], Any]] = {
-    "toggle": lambda c: c.toggle_pause(),
-    "back": lambda c: c.seek(-10),
-    "fwd": lambda c: c.seek(30),
-    "prev": lambda c: c.playlist_prev(),
-    "next": lambda c: c.playlist_next(),
-    "volup": lambda c: c.adjust_volume(10),
-    "voldown": lambda c: c.adjust_volume(-10),
-    "mute": lambda c: c.cycle_mute(),
-    "unmute": lambda c: c.set_mute(False),
-    "sub": lambda c: c.cycle_sub(),
-    "audio": lambda c: c.cycle_audio(),
-    "p0": lambda c: c.seek_percent(0),
-    "p25": lambda c: c.seek_percent(25),
-    "p50": lambda c: c.seek_percent(50),
-    "p75": lambda c: c.seek_percent(75),
-    "shuffle": lambda c: c.shuffle(),
-    "loop": lambda c: c.toggle_loop(),
-    "stop": lambda c: c.quit(),
-    "refresh": lambda c: None,
-}
-
-
 # ── Upload what's playing ───────────────────────────────────────────
 # One transfer at a time: the local disk/bandwidth is shared and a second tap
 # on 📥 should not start a duplicate download of the same thing.
@@ -1134,7 +1111,7 @@ async def cb_ctl(query: CallbackQuery) -> None:
         await _toggle_record(query.message)
         await _send_panel(query.message, edit=True)
         return
-    fn = _CTL_ACTIONS.get(action)
+    fn = CTL_ACTIONS.get(action)  # the table remote POST /ctl shares
     if fn is None:
         await query.answer()
         return
