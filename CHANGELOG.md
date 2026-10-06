@@ -3,6 +3,12 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+### Added
+- **Add to a running queue.** `POST /queue` with `{"urls": [...]}` appends links to the end of the
+  queue `POST /play` started (200 per request, 2000 in all; `409` without a queue), so a client with
+  a long playlist can send it in chunks as the queue runs down.
+
 ## [1.14.0] — 2026-10-07
 ### Added
 - **A queue over HTTP.** `POST /play` with `{"urls": [...], "index": n, "start": s}` plays up to 200

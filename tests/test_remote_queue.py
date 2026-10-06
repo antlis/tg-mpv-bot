@@ -229,3 +229,53 @@ async def test_a_first_link_that_fails_is_a_422(client, fake):
     assert resp.status == 422
     assert (await resp.json())["error"] == "Video unavailable"
     assert remote_queue.current() is None
+
+
+# ── appending to a running queue ───────────────────────────────
+
+
+async def test_links_are_appended_to_the_running_queue(client, fake):
+    fake.next_script = lambda url: [{"playing": True, "position": 97.0, "duration": 100.0}]
+    await client.post("/play", json={"urls": LINKS[:2]}, headers=AUTH)
+    resp = await client.post("/queue", json={"urls": LINKS[2:]}, headers=AUTH)
+    assert resp.status == 200
+    assert await resp.json() == {"ok": True, "count": 4}
+    await _until(lambda: remote_queue.current() is None)
+    assert [u for u, _ in fake.launches] == LINKS  # the added ones played after the first two
+
+
+async def test_the_queue_status_counts_the_appended_links(client, fake, monkeypatch):
+    fake.next_script = lambda url: [{"playing": True, "position": 1.0, "duration": 100.0}] * 500
+    await client.post("/play", json={"urls": LINKS[:2]}, headers=AUTH)
+    await client.post("/queue", json={"urls": LINKS[2:]}, headers=AUTH)
+    assert remote_queue.current().snapshot()["count"] == 4
+
+
+async def test_appending_without_a_queue_is_a_409(client, fake):
+    resp = await client.post("/queue", json={"urls": LINKS}, headers=AUTH)
+    assert resp.status == 409
+    assert fake.launches == []
+
+
+async def test_appending_requires_the_token(client, fake):
+    resp = await client.post("/queue", json={"urls": LINKS}, headers={})
+    assert resp.status == 401
+
+
+@pytest.mark.parametrize("body", [{"urls": []}, {"urls": ["file:///etc/passwd"]}, {"urls": "x"}, [], {}])
+async def test_bad_appends_are_a_400(client, fake, body):
+    fake.next_script = lambda url: [{"playing": True, "position": 1.0, "duration": 100.0}] * 500
+    await client.post("/play", json={"urls": LINKS[:1]}, headers=AUTH)
+    resp = await client.post("/queue", json=body, headers=AUTH)
+    assert resp.status == 400
+    assert remote_queue.current().snapshot()["count"] == 1
+
+
+async def test_a_queue_stops_growing_at_the_limit(client, fake, monkeypatch):
+    monkeypatch.setattr(remote_queue, "MAX_TOTAL", 5)
+    fake.next_script = lambda url: [{"playing": True, "position": 1.0, "duration": 100.0}] * 500
+    await client.post("/play", json={"urls": LINKS}, headers=AUTH)  # 4 links
+    resp = await client.post("/queue", json={"urls": LINKS[:2]}, headers=AUTH)  # 6 > 5
+    assert resp.status == 422
+    assert remote_queue.current().snapshot()["count"] == 4
+    assert (await client.post("/queue", json={"urls": LINKS[:1]}, headers=AUTH)).status == 200

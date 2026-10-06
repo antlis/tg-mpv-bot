@@ -22,7 +22,8 @@ from src.mpv_ipc import MpvClient, MpvError, MpvNotRunning
 
 logger = logging.getLogger("tg-mpv-bot.queue")
 
-MAX_ITEMS = 200
+MAX_ITEMS = 200  # links in one request
+MAX_TOTAL = 2000  # links one queue may hold, however many requests filled it
 POLL = 1.0  # seconds between questions to mpv
 START_GRACE = 45.0  # how long a launched video may take to show up in mpv
 NEAR_END = 5.0  # a video that vanished this close to its end finished, it was not stopped
@@ -47,6 +48,13 @@ class PlayQueue:
 
     def snapshot(self) -> dict[str, Any]:
         return {"position": self.pos, "count": len(self.urls), "error": self.error}
+
+    def append(self, urls: list[str]) -> int:
+        """Add links to the end (on the event loop); the new length. ValueError past ``MAX_TOTAL``."""
+        if len(self.urls) + len(urls) > MAX_TOTAL:
+            raise ValueError(f"a queue holds at most {MAX_TOTAL} links")
+        self.urls.extend(urls)
+        return len(self.urls)
 
     def skip(self, delta: int) -> None:
         """Move ``delta`` items along (from any thread); the end of the list is not left."""
