@@ -3,7 +3,7 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.15.0] — 2026-10-07
 ### Added
 - **Add to a running queue.** `POST /queue` with `{"urls": [...]}` appends links to the end of the
   queue `POST /play` started (200 per request, 2000 in all; `409` without a queue), so a client with
