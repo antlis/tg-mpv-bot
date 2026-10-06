@@ -3,6 +3,10 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+### Added
+- **Remote play API.** `POST /play` with `{"url": …, "start": seconds}` and a bearer token starts a link on the bot's mpv without going through Telegram — for scripts, phone shortcuts, home automation or any app that can send an HTTP request. Same playback path as a link sent in a chat (hooks, history, resume); `http(s)` links only. Off unless `REMOTE_PLAY_TOKEN` is set; `REMOTE_PLAY_BIND` (default `127.0.0.1:8085`) says where it listens. It is the bot's only listening socket, so keep it on localhost, a LAN or Tailscale address. One video per request, no playlists yet.
+
 ## [1.12.0] — 2026-10-01
 ### Added
 - **Nix flake.** `nix run github:antlis/tg-mpv-bot` runs the bot with `mpv`, `yt-dlp` and `ffmpeg` on its `PATH`; `.#with-browser` adds the headless-Chromium fallback; `nix develop` gives a dev shell. A home-manager module (`homeManagerModules.default`, `services.tg-mpv-bot`) runs it as a user service, with `LOCK_FILE` under `$XDG_RUNTIME_DIR`. yt-dlp comes from nixpkgs, so `/update_ytdlp` doesn't apply — bump the flake input. Nix and Docker are alternatives: run only one per token. CI now runs `nix flake check`.

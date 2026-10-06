@@ -21,6 +21,7 @@ socket](https://mpv.io/manual/stable/#json-ipc) directly from Python.
 - 🕘 **Watch history** (`/history`) — last 20 items, paginated; tap to replay, copy URL, or delete
 - ⏺ **Record** the current video (→ H.264 mp4) or radio (→ voice message) and get it in chat
 - 📺 **Live TV (IPTV)** — `/iptv <name>` searches 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and streams them live via mpv; channel logo sent as a photo card
+- 🌐 **Remote play API** (opt-in) — `POST /play` with a link and a token starts it on the TV from a script, a phone shortcut or any other app, no Telegram needed
 - 🪝 **Hooks** instead of WM assumptions — `i3-msg`/`swaymsg`/`notify-send`, your call
 
 ![tg-mpv-bot demo](docs/demo.svg)
@@ -48,7 +49,8 @@ where you left off.
 
 Because it's Telegram, the "remote" works from anywhere — same couch or other
 side of the world — with no ports forwarded, no VPN, no local network setup:
-the bot makes only outbound connections. `ALLOWED_USERS` keeps it yours.
+the bot makes only outbound connections (unless you opt in to the
+[remote play API](#remote-play-api)). `ALLOWED_USERS` keeps it yours.
 
 ## Commands
 
@@ -368,8 +370,36 @@ Only `BOT_TOKEN` is required.
 | `API_LOCAL_FILES_DIR` | *(none)* | Host path of the server's `/var/lib/telegram-bot-api` when it runs with `TELEGRAM_LOCAL=true` — the bot then reads downloaded files straight from disk |
 | `SCAN_INTERVAL_MIN` | `0` | If >0, auto-run the playlist generator every N minutes |
 | `YTDL_UPDATE_DAYS` | `0` | If >0, auto-update yt-dlp every N days (recommended: `7`) and report version bumps in chat |
+| `REMOTE_PLAY_TOKEN` | *(none, API off)* | Turns on the [remote play API](#remote-play-api) and is the bearer token it requires |
+| `REMOTE_PLAY_BIND` | `127.0.0.1:8085` | `host:port` the remote play API listens on (a LAN or Tailscale address to reach it from other machines) |
 | `STATE_FILE` | `~/.local/state/tg-mpv-bot/state.json` | Watch history / notification target |
 | `LOCK_FILE` | `/tmp/tg-mpv-bot.lock` | Single-instance lock |
+
+## Remote play API
+
+Play a link on the TV without opening Telegram: from a script, a phone shortcut, a home-automation
+rule, a browser bookmarklet or any app that can send an HTTP request.
+
+Off by default. Everything else in the bot is outbound-only (Telegram polling); this is the one
+place it listens, so it needs `REMOTE_PLAY_TOKEN` and binds to `127.0.0.1:8085` unless you set
+`REMOTE_PLAY_BIND` (use a LAN or Tailscale address, never a public one).
+
+```bash
+curl -H "Authorization: Bearer $REMOTE_PLAY_TOKEN" \
+     -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "start": 83.5}' \
+     http://tv-box:8085/play
+# {"ok": true, "title": "..."}
+```
+
+`POST /play` takes an `http(s)` link and an optional `start` position in seconds, and plays it the
+way a link sent in a chat does (the same pre/post-play hooks, watch history and resume), minus the
+Telegram messages. It answers once playback has started: `400` for a bad request, `401` for a
+missing or wrong token, `422` with the reason when the link can't be played. Other schemes (`file://`,
+`ytdl://`, …) are refused. One video per request; playlists aren't supported yet.
+
+Keep the token private (it is a password for your TV), and don't
+expose the port to the internet: bind it to a LAN or Tailscale address, or leave it on localhost and
+reach it through an SSH tunnel (`ssh -L 8085:127.0.0.1:8085 tv-box`).
 
 ## Tests & lint
 
@@ -389,6 +419,7 @@ uv run ruff check .
 | `src/ipc.py` | Direct JSON-IPC client for mpv (pause/seek/volume/info) |
 | `src/playlists.py` | Playlist discovery, query matching, on-disk validation |
 | `src/player.py` | Launch mpv (pkill + pre/post-play hooks + detached spawn) |
+| `src/remote.py` | Remote play API: `POST /play` with a bearer token (off unless `REMOTE_PLAY_TOKEN` is set) |
 | `src/keyboards.py` | Inline-keyboard builders for browsing and watch history |
 | `src/state.py` | Watch history state (JSON) — record, query, delete entries |
 | `docker-compose.yml` | Docker deployment (host networking + X11 bind) |

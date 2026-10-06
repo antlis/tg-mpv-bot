@@ -24,7 +24,7 @@ from aiogram.types import (
     Message,
 )
 
-from src import lock
+from src import lock, remote
 from src.commands import router
 from src.config import get_settings
 from src.iptv import iptv_router
@@ -189,8 +189,14 @@ async def main() -> None:
         asyncio.create_task(_ytdlp_update_loop(bot, settings))
         logger.info("yt-dlp auto-update every %d day(s)", settings.ytdlp_update_days)
 
+    remote_runner = await remote.start(settings)
+
     logger.info("tg-mpv-bot starting (polling)...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        if remote_runner is not None:
+            await remote_runner.cleanup()
 
 
 async def _ytdlp_update_loop(bot: Bot, settings) -> None:

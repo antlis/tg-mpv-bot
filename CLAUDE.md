@@ -117,6 +117,11 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   `repair_playlists` (re-point missing entries by unique basename, prune the rest, `.m3u.bak` backup)
   behind `/fix`.
 - `src/lock.py` — `acquire(path)` exclusive `flock`; raises `AlreadyRunning` if a second instance starts.
+- `src/remote.py` — the **remote play API** (`POST /play`, aiohttp), started from `bot.py:main()` only when
+  `REMOTE_PLAY_TOKEN` is set. It is the one listening socket in the bot, so: bearer token compared with
+  `hmac.compare_digest`, default bind `127.0.0.1:8085` (`REMOTE_PLAY_BIND`), `http(s)` URLs only (mpv also opens
+  files, `ytdl://`, `edl://`), one launch at a time (`_play_lock`), unexpected errors never echoed. It calls
+  `player.play_url` (so hooks, history and resume match a Telegram link) and answers when playback has started.
 
 ## Running it (operational)
 
