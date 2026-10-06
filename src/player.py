@@ -982,6 +982,14 @@ def _run_hook(label: str, command: str, env: dict[str, str]) -> None:
         logger.warning("%s hook failed: %s", label, exc)
 
 
+_epoch = 0
+
+
+def playback_epoch() -> int:
+    """Counts launches: it changes when anything starts playing (what a queue watches for)."""
+    return _epoch
+
+
 def _stop_current(settings: Settings) -> None:
     """Stop whatever is playing before launching the next thing.
 
@@ -990,6 +998,8 @@ def _stop_current(settings: Settings) -> None:
     instances (started by hand, no IPC socket of ours) are then pkill'ed,
     unless ``KILL_STRAY_MPV=0`` opts out of that.
     """
+    global _epoch
+    _epoch += 1
     try:
         MpvClient(settings.mpv_socket, timeout=1.0).quit()
         time.sleep(0.3)  # let it release the window/audio device

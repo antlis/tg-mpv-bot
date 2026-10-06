@@ -3,6 +3,15 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+### Added
+- **A queue over HTTP.** `POST /play` with `{"urls": [...], "index": n, "start": s}` plays up to 200
+  links one after another (from `index`); the bot starts the next one itself when a video ends, so
+  a sender that casts a playlist can close. `next`/`prev` (API and Telegram panel) move through
+  it, `GET /status` reports `queue: {position, count, error}`, a link that can't play is passed
+  over, and a new `/play`, a chat link or mpv quitting early ends it. History and resume work per
+  item like a link sent in chat.
+
 ## [1.13.0] — 2026-10-06
 ### Added
 - **Exact seek over HTTP.** `POST /ctl` accepts `{"action": "seek", "position": seconds}` and jumps to that second, for apps with a progress bar; the fixed `back`/`fwd`/percent steps stay.

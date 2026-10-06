@@ -413,8 +413,18 @@ Telegram messages. Piped streams (YouTube) can't honour `--start` at load — a 
 so the offset is reached over mpv's IPC socket as soon as the buffer has read that far: a far-in
 resume lands a second or two after the reply, not at 0. It answers once playback has started: `400`
 for a bad request, `401` for a missing or wrong token, `422` with the reason when the link can't be
-played. Other schemes (`file://`, `ytdl://`, …) are refused. One video per request; playlists aren't
-supported yet.
+played. Other schemes (`file://`, `ytdl://`, …) are refused.
+
+**A queue**: `{"urls": [...], "index": 3, "start": 83}` plays up to 200 links one after another, from
+`index` (default the first; `start` belongs to that item). The reply comes when the first one has
+started (`{"ok": true, "title": …, "queued": 5}`, or the first link's `422`); the bot then starts each
+next link itself when a video ends, so the sender can close and walk away. A link that can't play
+is passed over. `next` and `prev` (`POST /ctl`, and the Telegram panel's buttons) move through the
+queue, and `GET /status` has `"queue": {"position": 2, "count": 5, "error": null}` (`null` when there
+is none; between two items `playing` is false for a moment but the call stays `200`). The queue
+gives way to anything else: a new `POST /play`, a link sent in the chat, or mpv going away before the
+end of a video (`/quit`, `stop`). A video ending is told from one vanishing within 5 seconds of its
+end, so a live stream doesn't continue into the next item.
 
 `GET /status` reports the current item in one JSON object with a stable shape — `playing` is false
 while mpv is idle, and the call is `503` when mpv isn't running at all. `POST /ctl` takes
@@ -449,6 +459,7 @@ uv run ruff check .
 | `src/playlists.py` | Playlist discovery, query matching, on-disk validation |
 | `src/player.py` | Launch mpv (pkill + pre/post-play hooks + detached spawn) |
 | `src/remote.py` | Remote play API: `POST /play`, `GET /status`, `POST /ctl` behind a bearer token (off unless `REMOTE_PLAY_TOKEN` is set) |
+| `src/remote_queue.py` | The queue behind `POST /play` with `urls`: starts the next link when mpv ends one |
 | `src/keyboards.py` | Inline-keyboard builders for browsing and watch history |
 | `src/state.py` | Watch history state (JSON) — record, query, delete entries |
 | `docker-compose.yml` | Docker deployment (host networking + X11 bind) |

@@ -132,6 +132,12 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   and resume match a Telegram link) and answers when playback has started. `/status` answers with
   `MpvClient.read_status()` (`503` while mpv is down); `/ctl` takes `{"action": …}` from
   `mpv_ipc.CTL_ACTIONS` — the panel's own table — and answers `400`/`503`/`422`.
+- `src/remote_queue.py` — the queue behind `POST /play` with `urls`. The bot streams one link per mpv (a
+  yt-dlp pipe), so there is no mpv playlist: a task per queue polls `MpvClient.read_status` and starts the next
+  link when mpv vanishes within `NEAR_END` seconds of the end of a video. `player._stop_current` bumps
+  `playback_epoch()`, so any other launch ends the queue; `stop` and a single `/play` cancel it. `next`/`prev`
+  go through `mpv_ipc.queue_skip` (set here) before falling back to mpv's playlist. `play_lock` is shared
+  with `/play`.
 
 ## Running it (operational)
 

@@ -26,7 +26,7 @@ from typing import Any
 
 from aiohttp import web
 
-from src import player
+from src import player, remote_queue
 from src.config import Settings
 from src.mpv_ipc import CTL_ACTIONS, MpvClient, MpvError, MpvNotRunning
 
@@ -39,7 +39,7 @@ _URL_RE = re.compile(r"^https?://[^\s]+$")
 SETTINGS_KEY = web.AppKey("settings", Settings)
 
 # Casting twice at once would have two launches fighting over the single mpv.
-_play_lock = asyncio.Lock()
+_play_lock = remote_queue.play_lock
 
 
 def _error(status: int, message: str) -> web.Response:
@@ -90,6 +90,22 @@ def _is_seconds(value: Any) -> bool:
     )
 
 
+def parse_queue_request(body: Any) -> tuple[list[str], int, float | None]:
+    """The links, the index to start at and the start position (seconds, None) of a ``urls`` body."""
+    if not isinstance(body, dict):
+        raise ValueError("expected JSON object")
+    urls = body.get("urls")
+    if not isinstance(urls, list) or not 0 < len(urls) <= remote_queue.MAX_ITEMS:
+        raise ValueError(f"urls must be a list of 1 to {remote_queue.MAX_ITEMS} links")
+    for url in urls:
+        parse_play_request({"url": url})  # each one an http(s) link
+    index = body.get("index", 0)
+    if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(urls):
+        raise ValueError("index must be a position in urls")
+    start = parse_play_request({"url": urls[index], "start": body.get("start")})[1]
+    return urls, index, start
+
+
 def _client(settings: Settings) -> MpvClient:
     return MpvClient(settings.mpv_socket)
 
@@ -97,10 +113,14 @@ def _client(settings: Settings) -> MpvClient:
 async def _play(request: web.Request) -> web.Response:
     settings = request.app[SETTINGS_KEY]
     try:
-        url, start = parse_play_request(await request.json())
+        body = await request.json()
+        if isinstance(body, dict) and "urls" in body:
+            return await _play_queue(request, settings, *parse_queue_request(body))
+        url, start = parse_play_request(body)
     except ValueError as exc:  # includes json.JSONDecodeError
         return _error(400, str(exc))
     logger.info("Remote play from %s: %s (start %s)", request.remote, url, start)
+    remote_queue.cancel()  # a single link replaces a queue
     async with _play_lock:
         try:
             title = await asyncio.to_thread(player.play_url, settings, url, None, start)
@@ -112,16 +132,34 @@ async def _play(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "title": title})
 
 
+async def _play_queue(
+    request: web.Request, settings: Settings, urls: list[str], index: int, start: float | None
+) -> web.Response:
+    logger.info("Remote queue from %s: %d links from #%d (start %s)", request.remote, len(urls), index, start)
+    try:
+        title, _ = await remote_queue.start(settings, urls, index, start)
+    except player.UrlPlaybackError as exc:
+        return _error(422, str(exc))
+    except Exception:
+        logger.exception("Remote queue failed")
+        return _error(500, "playback failed")
+    return web.json_response({"ok": True, "title": title, "queued": len(urls) - index})
+
+
 async def _status(request: web.Request) -> web.Response:
     settings = request.app[SETTINGS_KEY]
+    queue = remote_queue.current()
     try:
         status = await asyncio.to_thread(_client(settings).read_status)
     except MpvNotRunning:
-        return _error(503, "mpv is not running")
+        if queue is None:
+            return _error(503, "mpv is not running")
+        # Between two items of a queue: still going, the next one is starting.
+        return web.json_response({"ok": True, "playing": False, "title": queue.title, "queue": queue.snapshot()})
     except Exception:
         logger.exception("Remote status failed")
         return _error(500, "status failed")
-    return web.json_response({"ok": True, **status})
+    return web.json_response({"ok": True, **status, "queue": queue.snapshot() if queue else None})
 
 
 async def _ctl(request: web.Request) -> web.Response:
@@ -146,6 +184,8 @@ async def _ctl(request: web.Request) -> web.Response:
     else:
         valid = ", ".join(sorted([*CTL_ACTIONS, "seek"]))
         return _error(400, f"action must be one of: {valid}")
+    if action == "stop":
+        remote_queue.cancel()  # stopping is not the end of one item
     logger.info("Remote ctl from %s: %s", request.remote, action)
     try:
         await asyncio.to_thread(run, _client(settings))
@@ -160,7 +200,7 @@ async def _ctl(request: web.Request) -> web.Response:
 
 
 def make_app(settings: Settings) -> web.Application:
-    app = web.Application(client_max_size=4096, middlewares=[_require_token])
+    app = web.Application(client_max_size=remote_queue.MAX_ITEMS * (MAX_URL_LEN + 16), middlewares=[_require_token])
     app[SETTINGS_KEY] = settings
     app.router.add_post("/play", _play)
     app.router.add_get("/status", _status)
