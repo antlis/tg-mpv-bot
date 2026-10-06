@@ -3,7 +3,7 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.14.0] — 2026-10-07
 ### Added
 - **A queue over HTTP.** `POST /play` with `{"urls": [...], "index": n, "start": s}` plays up to 200
   links one after another (from `index`); the bot starts the next one itself when a video ends, so
