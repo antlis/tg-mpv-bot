@@ -243,6 +243,26 @@ async def test_ctl_sends_seek_and_volume_to_mpv(client, fake_mpv):
     assert fake_mpv.calls == [("seek", (-10,)), ("seek", (30,)), ("adjust_volume", (10,))]
 
 
+async def test_ctl_seek_goes_to_an_exact_position(client, fake_mpv):
+    resp = await client.post("/ctl", json={"action": "seek", "position": 83.5}, headers=AUTH)
+    assert resp.status == 200
+    assert (await resp.json()) == {"ok": True, "action": "seek"}
+    assert fake_mpv.calls == [("seek_absolute", (83.5,))]
+
+
+@pytest.mark.parametrize("position", [None, "10", True, -1, 86400 * 7 + 1, [5]])
+async def test_ctl_seek_rejects_a_bad_position(client, fake_mpv, position):
+    resp = await client.post("/ctl", json={"action": "seek", "position": position}, headers=AUTH)
+    assert resp.status == 400
+    assert fake_mpv.calls == []
+
+
+async def test_ctl_seek_without_position_is_400(client, fake_mpv):
+    resp = await client.post("/ctl", json={"action": "seek"}, headers=AUTH)
+    assert resp.status == 400
+    assert fake_mpv.calls == []
+
+
 async def test_ctl_accepts_every_action_the_table_offers(client, fake_mpv):
     """Panel and API read the same table — nothing may be callable from only one."""
     for action in sorted(CTL_ACTIONS):
@@ -255,7 +275,7 @@ async def test_ctl_rejects_an_unknown_action_and_lists_the_valid_ones(client, fa
     resp = await client.post("/ctl", json={"action": "explode"}, headers=AUTH)
     assert resp.status == 400
     err = (await resp.json())["error"]
-    assert "toggle" in err and "stop" in err
+    assert "toggle" in err and "stop" in err and "seek" in err
     assert fake_mpv.calls == []
 
 

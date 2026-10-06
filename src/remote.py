@@ -81,6 +81,15 @@ def parse_play_request(body: Any) -> tuple[str, float | None]:
     return url, float(start) if start > 0 else None
 
 
+def _is_seconds(value: Any) -> bool:
+    """A number of seconds in 0..7 days (bools are not numbers here)."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and 0 <= value <= 86400 * 7
+    )
+
+
 def _client(settings: Settings) -> MpvClient:
     return MpvClient(settings.mpv_socket)
 
@@ -124,11 +133,22 @@ async def _ctl(request: web.Request) -> web.Response:
     if not isinstance(body, dict):
         return _error(400, "expected a JSON object")
     action = body.get("action")
-    if not isinstance(action, str) or action not in CTL_ACTIONS:
-        return _error(400, f"action must be one of: {', '.join(sorted(CTL_ACTIONS))}")
+    if action == "seek":  # takes an argument, so it is not in the parameterless panel table
+        position = body.get("position")
+        if not _is_seconds(position):
+            return _error(400, "position must be a number of seconds")
+
+        def run(c: MpvClient) -> None:
+            c.seek_absolute(float(position))
+
+    elif isinstance(action, str) and action in CTL_ACTIONS:
+        run = CTL_ACTIONS[action]
+    else:
+        valid = ", ".join(sorted([*CTL_ACTIONS, "seek"]))
+        return _error(400, f"action must be one of: {valid}")
     logger.info("Remote ctl from %s: %s", request.remote, action)
     try:
-        await asyncio.to_thread(CTL_ACTIONS[action], _client(settings))
+        await asyncio.to_thread(run, _client(settings))
     except MpvNotRunning:
         return _error(503, "mpv is not running")
     except MpvError as exc:

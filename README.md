@@ -402,6 +402,7 @@ curl -H "$H" http://tv-box:8085/status
 # pause, jump, volume, stop
 curl -H "$H" -d '{"action": "pause"}'   http://tv-box:8085/ctl   # also: resume, toggle
 curl -H "$H" -d '{"action": "back"}'    http://tv-box:8085/ctl   # -10 s; fwd is +30 s
+curl -H "$H" -d '{"action": "seek", "position": 754}' http://tv-box:8085/ctl   # exact, in seconds
 curl -H "$H" -d '{"action": "voldown"}' http://tv-box:8085/ctl   # volup, mute, unmute
 curl -H "$H" -d '{"action": "stop"}'    http://tv-box:8085/ctl
 ```
@@ -422,6 +423,8 @@ with mpv's own reason if it rejects the command. The actions are the ones the Te
 `toggle`, `pause`, `resume`, `back`, `fwd`, `prev`, `next`, `volup`, `voldown`, `mute`, `unmute`,
 `sub`, `audio`, `p0`/`p25`/`p50`/`p75`, `shuffle`, `loop`, `stop` — and both sides read the same
 table, so a control added there shows up in both at once.
+
+`seek` is the one extra: it takes a `position` in seconds (`400` unless it is a number in 0–7 days) and jumps there exactly.
 
 Keep the token private (it is a password for your TV), and don't
 expose the port to the internet: bind it to a LAN or Tailscale address, or leave it on localhost and
