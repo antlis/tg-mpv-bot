@@ -82,6 +82,11 @@ Telegram ─▶ bot.py ─▶ src/commands ─┤
   on split-brain proxy egress; the pipe is the one shape that matches a plain download. The venv's
   yt-dlp (pip-installed nightly) is preferred over the system one; title arrives via
   `--print-to-file` during the same invocation; yt-dlp/mpv output → `/tmp/tg-mpv-bot-{ytdl,mpv}.log`.
+  A `start` offset is never passed as `--start` to the pipe (a pipe isn't seekable, so mpv drops it
+  silently) — `seek_when_buffered()` retries an absolute IPC seek until the demuxer cache has read
+  past the target, giving up at 30 s or as soon as *our* mpv exits; the direct/ytdl-hook/resolved
+  launches do get `--start` in their argv (non-YouTube got no offset at all before) and the same
+  retry as a backstop.
   `play()` does `pkill -x mpv`,
   runs the optional `PRE_PLAY_HOOK` shell command, then a detached
   `Popen(..., start_new_session=True)` — the Python-native equivalent of the old `setsid` detachment

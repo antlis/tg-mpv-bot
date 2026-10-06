@@ -408,9 +408,12 @@ curl -H "$H" -d '{"action": "stop"}'    http://tv-box:8085/ctl
 
 `POST /play` takes an `http(s)` link and an optional `start` position in seconds, and plays it the
 way a link sent in a chat does (the same pre/post-play hooks, watch history and resume), minus the
-Telegram messages. It answers once playback has started: `400` for a bad request, `401` for a
-missing or wrong token, `422` with the reason when the link can't be played. Other schemes (`file://`,
-`ytdl://`, …) are refused. One video per request; playlists aren't supported yet.
+Telegram messages. Piped streams (YouTube) can't honour `--start` at load — a pipe isn't seekable —
+so the offset is reached over mpv's IPC socket as soon as the buffer has read that far: a far-in
+resume lands a second or two after the reply, not at 0. It answers once playback has started: `400`
+for a bad request, `401` for a missing or wrong token, `422` with the reason when the link can't be
+played. Other schemes (`file://`, `ytdl://`, …) are refused. One video per request; playlists aren't
+supported yet.
 
 `GET /status` reports the current item in one JSON object with a stable shape — `playing` is false
 while mpv is idle, and the call is `503` when mpv isn't running at all. `POST /ctl` takes
