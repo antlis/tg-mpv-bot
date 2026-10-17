@@ -3,6 +3,11 @@
 Notable changes to **tg-mpv-bot**. Format based on
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+### Added
+- **🔍 Search button in `/library`.** Tap it, reply with a title (optionally prefixed with a category,
+  like `tutorials docker`) and get every match as a play button — the same search as `/search`.
+
 ## [1.15.0] — 2026-10-07
 ### Added
 - **Add to a running queue.** `POST /queue` with `{"urls": [...]}` appends links to the end of the
