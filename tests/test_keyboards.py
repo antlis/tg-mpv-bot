@@ -80,8 +80,9 @@ def test_categories_keyboard_uses_indices():
     pls = sorted(pls, key=lambda p: p.name.lower())
     kb = categories_keyboard(pls)
     datas = [b.callback_data for row in kb.inline_keyboard for b in row]
-    # one button per category, callback c:<ci>
-    assert set(datas) == {"c:0", "c:1"}
+    # one button per category, callback c:<ci>, plus the trailing search button
+    assert set(datas) == {"c:0", "c:1", "lsearch"}
+    assert datas[-1] == "lsearch"
     texts = [b.text for row in kb.inline_keyboard for b in row]
     assert any("cartoons (3)" in t for t in texts)
     assert any("tutorials (2)" in t for t in texts)
@@ -349,3 +350,4 @@ def test_upload_button_can_be_hidden():
 
     assert "ctl:upload" in datas(now_playing_keyboard())
     assert "ctl:upload" not in datas(now_playing_keyboard(upload=False))
+

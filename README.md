@@ -56,7 +56,7 @@ the bot makes only outbound connections (unless you opt in to the
 
 | Command | Description |
 |---------|-------------|
-| `/library` | Browse playlists with inline buttons (by category) |
+| `/library` | Browse playlists with inline buttons (by category), or tap 🔍 Search and reply with a title |
 | `/play <query>` | Search & play by name or number |
 | `/mpv <query>` | Alias for `/play` |
 | `/search [category] <text>` | List all matching playlists as play buttons (e.g. `/search tutorials docker`) |
