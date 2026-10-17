@@ -32,6 +32,7 @@ clashes (≤64 bytes):
     rd:<i> / rds:<pg>    → tune to preset radio station #i / picker page <pg>
     rdq:<i>              → tune to result #i of the last radio search
     ch:<n> / chs:<pg>    → jump to chapter <n> of the current file / picker page
+    lsearch              → prompt for a library search (reply handled as /search)
     cats / noop          → back to categories / inert (page counter)
 
 ``/search`` results reuse the same ``pl:<global_index>`` buttons, so a
@@ -373,6 +374,7 @@ def categories_keyboard(
         rows.append(
             [InlineKeyboardButton(text=f"{emoji} {cat} ({count})", callback_data=f"c:{ci}")]
         )
+    rows.append([InlineKeyboardButton(text="🔍 Search", callback_data="lsearch")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

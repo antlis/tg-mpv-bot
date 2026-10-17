@@ -27,7 +27,7 @@ from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, ForceReply, FSInputFile, InlineKeyboardMarkup, Message
 
 from . import download, generate, keyboards, player, playlists, recorder, state
 from .config import get_settings
@@ -1400,6 +1400,9 @@ async def cb_history_page(query: CallbackQuery) -> None:
     await query.message.edit_reply_markup(reply_markup=history_keyboard(entries, pg))
     await query.answer()
 
+SEARCH_PROMPT = "🔍 Reply with a title to search the library (e.g. 'docker' or 'tutorials docker')"
+
+
 @router.message(Command("search", "find"))
 async def cmd_search(message: Message, command: CommandObject) -> None:
     """Search playlists and show every hit as a play button.
@@ -1417,6 +1420,26 @@ async def cmd_search(message: Message, command: CommandObject) -> None:
             "                e.g. /search tutorials docker"
         )
         return
+    await _run_search(message, raw)
+
+
+@router.callback_query(F.data == "lsearch")
+async def cb_library_search(query: CallbackQuery) -> None:
+    """🔍 button in /library: prompt for text; the reply is handled below."""
+    await query.message.answer(
+        SEARCH_PROMPT, reply_markup=ForceReply(input_field_placeholder="title…")
+    )
+    await query.answer()
+
+
+@router.message(F.text, F.reply_to_message.text == SEARCH_PROMPT)
+async def on_search_reply(message: Message) -> None:
+    text = (message.text or "").strip()
+    if text and not text.startswith("/"):
+        await _run_search(message, text)
+
+
+async def _run_search(message: Message, raw: str) -> None:
     pls = await asyncio.to_thread(_all_playlists, refresh=True)
 
     # A first word naming a category scopes the search to it.
