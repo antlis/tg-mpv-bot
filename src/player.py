@@ -73,6 +73,10 @@ def _mpv_base(settings: Settings) -> str:
     )
 
 
+# Prefer English audio and subtitles whenever a file/stream offers them.
+LANG_ARGS = ["--alang=en,eng", "--slang=en,eng"]
+
+
 def build_launch_command(settings: Settings, playlist: Path) -> list[str]:
     """Construct the argv for launching mpv on ``playlist``.
 
@@ -83,6 +87,7 @@ def build_launch_command(settings: Settings, playlist: Path) -> list[str]:
         f"--playlist={playlist}",
         f"--input-ipc-server={settings.mpv_socket}",
         "--force-window",
+        *LANG_ARGS,
         "--save-position-on-quit",  # resume each file where you left off
     ]
 
@@ -416,6 +421,7 @@ def build_file_command(settings: Settings, path: Path, title: str) -> list[str]:
         str(path),
         f"--input-ipc-server={settings.mpv_socket}",
         "--force-window",
+        *LANG_ARGS,
         "--save-position-on-quit",
         f"--force-media-title={title}",
     ]
@@ -822,6 +828,7 @@ def build_direct_command(
         urls[0],
         f"--input-ipc-server={settings.mpv_socket}",
         "--force-window",
+        *LANG_ARGS,
         f"--force-media-title={title}",
     ]
     if len(urls) > 1:
@@ -866,6 +873,7 @@ def build_pipe_player_command(
         f"fd://{video_fd}" if video_fd is not None else "-",
         f"--input-ipc-server={settings.mpv_socket}",
         "--force-window",
+        *LANG_ARGS,
         f"--force-media-title={title}",
         "--cache=yes",
         "--demuxer-max-bytes=600MiB",
@@ -1067,6 +1075,7 @@ def _build_mpv_ytdl_command(
         url,
         f"--input-ipc-server={settings.mpv_socket}",
         "--force-window",
+        *LANG_ARGS,
         "--network-timeout=120",
     ]
     if start and start > 0:
@@ -1132,6 +1141,7 @@ def build_resolved_command(
         media_url,
         f"--input-ipc-server={settings.mpv_socket}",
         "--force-window",
+        *LANG_ARGS,
         f"--force-media-title={title}",
     ]
     headers = dict(headers or {})

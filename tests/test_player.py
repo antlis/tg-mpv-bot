@@ -42,6 +42,8 @@ def test_falls_back_to_mpv_when_runner_absent(tmp_path):
         "--playlist=/media/show.m3u",
         "--input-ipc-server=/tmp/sock",
         "--force-window",
+        "--alang=en,eng",
+        "--slang=en,eng",
         "--save-position-on-quit",
     ]
 
